@@ -20,7 +20,14 @@ release = 'y'
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-extensions = []
+extensions = [
+    "sphinx.ext.autodoc",
+    "sphinx.ext.napoleon",     # Google/NumPy docstrings
+    "sphinx.ext.autosummary",
+    "sphinx.ext.viewcode",
+        "sphinx.ext.mathjax",    # render .. math:: and inline math
+]
+autosummary_generate = True
 
 templates_path = ['_templates']
 exclude_patterns = []

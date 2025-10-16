@@ -1,10 +1,10 @@
-mqed.configs package
-====================
+mqed package
+============
 
 Module contents
 ---------------
 
-.. automodule:: mqed.configs
+.. automodule:: mqed
    :members:
    :show-inheritance:
    :undoc-members:
