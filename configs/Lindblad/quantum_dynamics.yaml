@@ -1,0 +1,52 @@
+# Add this defaults list to integrate loguru with Hydra's logging
+defaults:
+  - hydra: default  # <-- This loads configs/Dyadic_GF/hydra/default.yaml
+  - _self_
+
+# ADD THIS SECTION to set a custom name for the output directory
+hydra:
+  job:
+    name: Lindblad
+# --- Our Application Configuration ---
+
+greens:
+  h5_path: ${hydra:runtime.cwd}/outputs/Dyadic_GF/last/gf.h5 # update as needed
+
+
+
+# Simulation controls
+simulation:
+# time grid in picoseconds
+  t_ps:
+    start: 0.0
+    stop: 10.0
+    output_step: 5e-3
+
+
+# system
+  Nmol: 100 # number of sites
+  d_nm: 3.0 # lattice spacing (nm)
+
+
+# dipoles / orientation
+  mu_D_debye: 3.0
+  mu_A_debye: 3.0
+  theta_deg: 90.0
+  phi_deg: magic # or a number
+  mode: stationary # or 'disorder'
+  # disorder_sigma_phi_deg: 15.0 # uncomment for disordered orientations
+
+
+# Initial condition
+  initial_state:
+    site_index: 1 # start the exciton at site |1>
+
+
+# Solver selection
+  solver:
+    method: Lindblad # 'Lindblad' or 'NonHermitian'
+
+
+  # Output file (goes under Hydra's run dir)
+  output:
+    filename: qdyn_results.h5
