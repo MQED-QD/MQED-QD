@@ -1,6 +1,6 @@
+from __future__ import annotations
 import numpy as np 
 from qutip import *
-from __future__ import annotations
 from dataclasses import dataclass, field
 from abc import ABC, abstractmethod
 from typing import Callable, Iterable, List, Optional, Sequence, Tuple, Dict, Any, Union
@@ -48,7 +48,7 @@ class QuantumDynamics(ABC):
     def build_hamiltonian(self,Green) -> Qobj:
         """
         Construct Hamiltonian of the system
-            ..math::
+        ..math::
             &\hat{H}_\mathrm{M} = \sum_{\alpha=1}^{N_\mathrm{M}} \hbar \omega_\mathrm{M} \hat{\sigma}^{(+)}_\alpha \hat{\sigma}^{(-)}_\alpha, \\
             &\hat{\mathcal{H}}_\mathrm{CP}^{\mathrm{Sc}} = \sum_{\alpha=1}^{N_\mathrm{M}} \Delta_{\alpha}^{\text{Sc}} \, \hat{\sigma}^{(+)}_\alpha \hat{\sigma}^{(-)}_\alpha , \\
             & \hat{\mathcal{H}}_\mathrm{RDDI} =  \sum_{\alpha,\beta (\alpha\neq \beta) }^{N_\mathrm{M}} V_{\alpha\beta} \, \hat{\sigma}^{(+)}_\alpha \hat{\sigma}^{(-)}_\beta. 
@@ -89,7 +89,27 @@ class QuantumDynamics(ABC):
     
     def build_collapse_ops(self) -> list[Qobj]:
         """
-        Build the standard Lindblad collapse operator from Gamma.
+        Build the standard Lindblad collapse operator from Gamma. Folow the https://en.wikipedia.org/wiki/Lindbladian,
+        the general Lindblad equation has the form:
+        ..math::
+            \dot{\rho} = -\frac{i}{\hbar}[H, \rho] + \sum_{n,m} h_{nm} \left( A_n \rho A_m^{\dagger} - \frac{1}{2} \{ A_m^{\dagger} A_n, \rho \} \right)
+        This can be diagonalized through unitary transformation u:
+        ..math::
+            u^{\dagger} h u = 
+            \begin{bmatrix} 
+            \gamma_1 & 0 & \cdots & 0 \\
+            0 & \gamma_2 & \cdots & 0 \\
+            \vdots & \vdots & \ddots & \vdots \\
+            0 & 0 & \cdots & \gamma_{N^2-1}
+            \end{bmatrix}
+        The eigenvalues are non-negative. If we define another orthonormal operator basis:
+        ..math::
+            L_i = \sum_{j} u_{ji} A_j
+        We can get the standard Lindblad equation:
+        ..math::
+            \dot{\rho} = -\frac{i}{\hbar}[H, \rho] + \sum_{i} \gamma_i \left( L_i \rho L_i^{\dagger} - \frac{1}{2} \{ L_i^{\dagger} L_i, \rho \} \right).
+        return:
+            c_ops: list[Qobj]: a list of collapse operator.
         """
 
             # ---- basis: |0>, |1>, ..., |N_mol| ; σ_j^- = |0><j|
@@ -160,7 +180,9 @@ class QuantumDynamics(ABC):
 
 class LindbladDynamics(QuantumDynamics):
     """
-    Standard Lindblad dynamics solver:
+    Standard Lindblad dynamics solver provide by qutip.mesolver(). 
+    ..math::
+        \dot{\rho} = -\frac{i}{\hbar}[H, \rho] + \sum_{i} \gamma_i \left( L_i \rho L_i^{\dagger} - \frac{1}{2} \{ L_i^{\dagger} L_i, \rho \} \right).
     """
     def __init__(self, config, GreensFunction):
         super().__init__(config)
@@ -179,7 +201,7 @@ class LindbladDynamics(QuantumDynamics):
         Args:
             rho_or_psi: Qobject, the initial density matrix or wavefunction.
             e_ops: expectation values of the operators.
-            options: optional restrict for differential equation solver. See ... 
+            options: optional restrict for differential equation solver.  
         """
 
         Hamiltonian = self.build_hamiltonian(self.GF)
@@ -193,7 +215,7 @@ class LindbladDynamics(QuantumDynamics):
             named = {name: np.asarray(result.expect[n]) for n, name in enumerate(e_ops.keys())}
         else:
             named = {}
-        return SimulationResult(tlist=self.cfg.tlist, expectations=named)
+        return SimulationResult(tlist=self.cfg.tlist, states=result.states ,expectations=named)
 
 class NonHermitianSchDynamics(QuantumDynamics):
     def __init__(self, config,GreensFunction):
@@ -230,7 +252,7 @@ class NonHermitianSchDynamics(QuantumDynamics):
                         options = options)
         
         named = {name: np.asarray(result.expect[n]) for n, name in enumerate(e_ops.keys())} if e_ops else {}
-        return SimulationResult(tlist=self.cfg.tlist , expectations=named)
+        return SimulationResult(tlist=self.cfg.tlist , states= result.states, expectations=named)
 
 
 
