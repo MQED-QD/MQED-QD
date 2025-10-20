@@ -1,6 +1,6 @@
 # Add this defaults list to integrate loguru with Hydra's logging
 defaults:
-  - hydra: default  # <-- This loads configs/Dyadic_GF/hydra/default.yaml
+  - hydra: default  # <-- This loads configs/Lindblad/hydra/default.yaml
   - _self_
 
 # ADD THIS SECTION to set a custom name for the output directory
@@ -13,13 +13,12 @@ greens:
   h5_path: ${hydra:runtime.cwd}/outputs/Dyadic_GF/last/gf.h5 # update as needed
 
 
-
 # Simulation controls
 simulation:
 # time grid in picoseconds
   t_ps:
     start: 0.0
-    stop: 10.0
+    stop: 1.0
     output_step: 5e-3
 
 
@@ -29,8 +28,8 @@ simulation:
 
 
 # dipoles / orientation
-  mu_D_debye: 3.0
-  mu_A_debye: 3.0
+  mu_D_debye: 3.8
+  mu_A_debye: 3.8
   theta_deg: 90.0
   phi_deg: magic # or a number
   mode: stationary # or 'disorder'
