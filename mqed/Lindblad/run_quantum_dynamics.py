@@ -5,30 +5,31 @@ import h5py
 from loguru import logger
 from pathlib import Path
 from qutip import fock, fock_dm
+from typing import Optional
 
 from mqed.Lindblad.quantum_dynamics import SimulationConfig, LindbladDynamics, NonHermitianSchDynamics
 from mqed.utils.dgf_data import load_gf_h5
 from hydra.core.hydra_config import HydraConfig
-from mqed.Lindblad.quantum_operator import msd_operator
+from mqed.Lindblad.quantum_operator import msd_operator, excitation_population_operator
 
-def save_qdyn_h5(outfile: Path, method: str, t_ps: np.ndarray, states, expectations: dict):
+def save_qdyn_h5(outfile: Path, method: str, t_ps: np.ndarray, expectations: dict):
     outfile.parent.mkdir(parents=True, exist_ok=True)
     with h5py.File(outfile, 'w') as f:
         f.attrs['method'] = method
         f.create_dataset('t_ps', data=np.asarray(t_ps))
 
 
-        # Save states (density matrices or kets)
-        if states is not None and len(states) > 0:
-            first = states[0]
-        if hasattr(first, 'isket') and first.isket:
-            arr = np.stack([s.full().ravel() for s in states], axis=0)
-            f.create_dataset('state_vectors_flat', data=arr)
-            f.attrs['state_format'] = 'ket_flat'
-        else:
-            arr = np.stack([s.full() for s in states], axis=0)
-            f.create_dataset('density_matrices', data=arr)
-            f.attrs['state_format'] = 'density_matrix'
+        # # Save states (density matrices or kets)
+        # if states is not None and len(states) > 0:
+        #     first = states[0]
+        # if hasattr(first, 'isket') and first.isket:
+        #     arr = np.stack([s.full().ravel() for s in states], axis=0)
+        #     f.create_dataset('state_vectors_flat', data=arr)
+        #     f.attrs['state_format'] = 'ket_flat'
+        # else:
+        #     arr = np.stack([s.full() for s in states], axis=0)
+        #     f.create_dataset('density_matrices', data=arr)
+        #     f.attrs['state_format'] = 'density_matrix'
 
 
         # Save expectations
@@ -39,8 +40,14 @@ def save_qdyn_h5(outfile: Path, method: str, t_ps: np.ndarray, states, expectati
 
         logger.success(f"Saved quantum dynamics results → {outfile}")
 
-def app_run(cfg:DictConfig):
-    output_dir = Path(HydraConfig.get().runtime.output_dir)
+def app_run(cfg:DictConfig, output_dir: Optional[Path]=None):
+    if output_dir is None:
+        try:
+            output_dir = Path(HydraConfig.get().runtime.output_dir)
+        except Exception:
+            output_dir = Path.cwd()
+
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     logger.info("--- Starting quantum dynamics simulation---")
 # 1) Load Green's function slice at the emitter energy
@@ -48,6 +55,8 @@ def app_run(cfg:DictConfig):
     G_slice  = data["G_total"]             # (M,N,3,3)
     E_eV  = data["energy_eV"]            # (M,)
     Rx_nm = data["Rx_nm"] 
+
+    G_slice = G_slice[0] # use the first energy slice for now
 
 
     # 2) Build SimulationConfig (unify with your abstractions)
@@ -88,9 +97,12 @@ def app_run(cfg:DictConfig):
         d_nm=sim_cfg.d_nm,
         Nmol=sim_cfg.Nmol,
         init_site_index=cfg.initial_state.site_index)
+    
+    excitation_population_ops = excitation_population_operator(dim =sim_cfg.Nmol + 1,
+                                                            Nmol=sim_cfg.Nmol)
 
 
-    e_ops = {'MSD_nm2': msd_op}
+    e_ops = {'MSD_nm2': msd_op, 'Excitation_Populations': excitation_population_ops}
 
 
     # 5) Evolve
@@ -99,8 +111,8 @@ def app_run(cfg:DictConfig):
 
     # 6) Save to HDF5
     outfile = output_dir / cfg.output.filename
-    states = getattr(result, 'states', None)
-    save_qdyn_h5(outfile, method=method, t_ps=result.tlist, states=states, expectations=result.expectations)
+    # states = getattr(result, 'states', None)
+    save_qdyn_h5(outfile, method=method, t_ps=result.tlist, expectations=result.expectations)
 
 
     logger.info("Done.")
