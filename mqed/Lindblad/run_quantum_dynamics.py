@@ -105,7 +105,7 @@ def app_run(cfg:DictConfig):
 
     logger.info("Done.")
 
-@hydra.main(config_path="../../configs/Lindblad", config_name="GF_analytical", version_base=None)
+@hydra.main(config_path="../../configs/Lindblad", config_name="quantum_dynamics", version_base=None)
 def run_quantum_dynamics(cfg:DictConfig):
     app_run(cfg)
 
