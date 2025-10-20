@@ -10,7 +10,7 @@ hydra:
 # --- Our Application Configuration ---
 
 greens:
-  h5_path: ${hydra:runtime.cwd}/outputs/Dyadic_GF/last/gf.h5 # update as needed
+  h5_path: ${hydra:runtime.cwd}/outputs/Dyadic_GF_analytical/last/result_Ag_2_nm.hdf5 # update as needed
 
 
 # Simulation controls
@@ -37,15 +37,15 @@ simulation:
 
 
 # Initial condition
-  initial_state:
-    site_index: 1 # start the exciton at site |1>
+initial_state:
+  site_index: 1 # start the exciton at site |1>
 
 
 # Solver selection
-  solver:
-    method: Lindblad # 'Lindblad' or 'NonHermitian'
+solver:
+  method: Lindblad # 'Lindblad' or 'NonHermitian'
 
 
   # Output file (goes under Hydra's run dir)
-  output:
-    filename: qdyn_results.h5
+output:
+  filename: qdyn_results.hdf5
