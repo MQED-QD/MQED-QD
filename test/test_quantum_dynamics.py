@@ -32,6 +32,7 @@ def test_lindblad_vs_nonhermitian():
         mu_A_debye= None,
         theta_deg=90.0,
         phi_deg='magic',
+        disorder_sigma_phi_deg=None,
         mode = 'stationary',
     )
 
