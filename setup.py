@@ -23,9 +23,9 @@ setup(
     entry_points={
         "console_scripts": [
             "mqed_GF = mqed.Dyadic_GF.main:run_simulation",
-            "mqed_RET = mqed.analysis.RET:main"
-            "mqed_lindblad = mqed.Lindblad.cli:mqed_lindblad"
-            "mqed_nhse = mqed.Lindblad.cli:mqed_nhse"
+            "mqed_RET = mqed.analysis.RET:main",
+            "mqed_lindblad = mqed.Lindblad.cli:mqed_lindblad",
+            "mqed_nhse = mqed.Lindblad.cli:mqed_nhse",
         ]
     },
 
