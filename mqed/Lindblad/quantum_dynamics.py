@@ -22,7 +22,7 @@ class SimulationConfig:
     Rx_nm: np.ndarray           # array of intermolecular distance, must contain 0, 1d, 2d, ...
     d_nm: float                 # intermolecular distance, unit is nm
     mu_D_debye: float           # donor dipole
-    mu_A_debye= None            # acceptor dipole, default is none
+    mu_A_debye: Union[None,float]            # acceptor dipole, default is none
     theta_deg: float            # polar angle of dipole
     phi_deg: str | float             # azimuthal angle of dipole, string used for magic angle
     disorder_sigma_phi_deg=None # standard deviation of azimuthal angle
