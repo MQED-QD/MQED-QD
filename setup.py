@@ -26,6 +26,7 @@ setup(
             "mqed_RET = mqed.analysis.RET:main",
             "mqed_lindblad = mqed.Lindblad.cli:mqed_lindblad",
             "mqed_nhse = mqed.Lindblad.cli:mqed_nhse",
+            "mqed_nhse_disorder = mqed.Lindblad.run_disorder:run_disorder",
         ]
     },
 
