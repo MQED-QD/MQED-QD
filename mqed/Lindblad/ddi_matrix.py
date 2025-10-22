@@ -2,6 +2,8 @@
 check this code first.
 '''
 import numpy as np
+from typing import Union
+
 from loguru import logger
 from mqed.utils.SI_unit import c, eps0, hbar, eV_to_J, D2CMM
 from mqed.utils.orientation import spherical_to_cartesian_dipole, resolve_angle_deg
@@ -20,8 +22,9 @@ def build_ddi_matrix_from_Gslice(
     mu_D_debye: float,        # donor dipole (Debye)
     mu_A_debye=None,   # acceptor dipole (Debye); if None → mu_D_debye
     *,
-    mode="stationary",    # "stationary" or "disorder"
-    uD=None, uA=None,     # used if mode="stationary": 1D (3,)
+    mode: str = "stationary",    # "stationary" or "disorder"
+    uD: Union[np.ndarray, None]=None,     # used if mode="stationary": 1D (3,)
+    uA: Union[np.ndarray, None]=None,     # used if mode="stationary": 1D (3,)
     U_list= None,          # optional per-molecule orientations (N,3); if provided, used in disorder mode
     theta_deg: None,     # used only if we need to generate U_list
     phi_deg: None,       # used only if we need to generate U_list
@@ -49,7 +52,6 @@ def build_ddi_matrix_from_Gslice(
     Returns:
         V_eV(np.ndarray): V matrix used for Lindblad dynamics.
         hbarGamma_eV(np.ndarray): ħΓ [eV] for Lindblad dynamics
-        U_list_used: Orientation array of the molecular emitters.
     """
     # --- sanity on Rx grid: we will look up exact distances s*d_nm
     Rx_nm = np.asarray(Rx_nm, dtype=float)
@@ -91,6 +93,8 @@ def build_ddi_matrix_from_Gslice(
             phi_deg = resolve_angle_deg(phi_deg) # allow magic angle. 
             phi_deg = _phi_wrapped_normal_deg(N_mol, phi_deg, disorder_sigma_phi_deg, seed=disorder_seed)
             U = spherical_to_cartesian_dipole(theta_deg, phi_deg)  # (N,3)
+            if U.shape != (N_mol, 3):
+                raise ValueError("U_list must have shape (N_mol,3).")
         # U_list_used = U
     else:
         raise ValueError("mode must be 'stationary' or 'disorder'.")
@@ -99,9 +103,26 @@ def build_ddi_matrix_from_Gslice(
     V_eV         = np.zeros((N_mol, N_mol), dtype=np.float64)
     hbarGamma_eV = np.zeros((N_mol, N_mol), dtype=np.float64)
 
+    G_slice = np.asarray(G_slice)
+    if G_slice.ndim != 3:
+        raise ValueError(f"G_slice must be 3D, got {G_slice.ndim}D {G_slice.shape}")
+
+    # Normalize to (K,3,3)
+    if G_slice.shape[-2:] == (3, 3):
+        # (K,3,3) → already good
+        GK33 = G_slice
+    elif G_slice.shape[0:2] == (3, 3):
+        # (3,3,K) → transpose to (K,3,3)
+        GK33 = np.transpose(G_slice, (2, 0, 1))
+    else:
+        raise ValueError(f"Unrecognized G_slice shape {G_slice.shape}; expected (K,3,3) or (3,3,K)")
+
+    K = GK33.shape[0]
+    if len(Rx_nm) != K:
+        raise ValueError(f"Rx_nm length {len(Rx_nm)} does not match K={K}")
     # pre-split re/im once
-    G_re_full = np.real(G_slice)
-    G_im_full = np.imag(G_slice)
+    G_re_full = np.real(GK33)
+    G_im_full = np.imag(GK33)
 
     idx = np.arange(N_mol)
 
@@ -110,6 +131,8 @@ def build_ddi_matrix_from_Gslice(
         k = dist_to_idx[float(s * d_nm)]  # exact Rx index
         Gre = G_re_full[k]                # (3,3)
         Gim = G_im_full[k]
+        if Gre.shape != (3, 3) or Gim.shape != (3, 3):
+            raise ValueError("G_slice must have shape (K,3,3).")
 
         if mode == "stationary":
             # same orientation for all pairs
