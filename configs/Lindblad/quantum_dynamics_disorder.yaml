@@ -1,0 +1,48 @@
+# Minimal defaults just to name the job
+defaults:
+  - hydra: default #<- This loads configs/Lindblad/hydra/default.yaml
+  - _self_
+
+hydra:
+  job:
+    name: NHSE_disorder
+
+# --- Inputs (adjust the path or use oc.env as needed) ---
+greens:
+  h5_path: ${oc.env:MQED_ROOT,${oc.env:PWD}}/outputs/Dyadic_GF_analytical/2025-10-13/11-29-07/result_Ag_2_nm.hdf5
+
+# --- Simulation controls ---
+simulation:
+  t_ps:
+    start: 0.0
+    stop: 1.0
+    output_step: 2e-3
+
+  Nmol: 100
+  d_nm: 3.0
+
+  # orientation
+  mu_D_debye: 3.8
+  mu_A_debye: 3.8
+  theta_deg: 90.0
+  phi_deg: magic
+  mode: disorder
+  disorder_sigma_phi_deg: 10.0   # <-- set your sigma here
+
+# Initial condition
+initial_state:
+  site_index: 1
+
+# NHSE is faster and sufficient
+solver:
+  method: NonHermitian
+
+# Ensemble averaging knobs
+disorder:
+  n_realizations: 80
+  seed: 2025
+  n_jobs: -1         # processes for parallel run (joblib). set to 1 to disable
+  save_each: false   # true = save per-realization files too
+
+output:
+  filename: qdyn_disorder_avg.hdf5
