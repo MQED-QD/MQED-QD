@@ -12,12 +12,14 @@ from mqed.Dyadic_GF.GF_analytical import Greens_function_analytical
 from mqed.utils.SI_unit import eV_to_J, hbar, c
 from mqed.utils.dgf_data import save_gf_h5
 from hydra.core.hydra_config import HydraConfig# Physical constants
+from mqed.utils.logging_utils import setup_loggers_hydra_aware
 
 
 @hydra.main(config_path="../../configs/Dyadic_GF", config_name="GF_analytical", version_base=None)
 def run_simulation(cfg: DictConfig) -> None:
     # --- Logging Setup ---
     output_dir = Path(HydraConfig.get().runtime.output_dir)
+    setup_loggers_hydra_aware()
 
     logger.info("--- Starting Green's Function Simulation ---")
     

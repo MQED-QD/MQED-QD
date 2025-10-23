@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from loguru import logger
 from mqed.utils.orientation import spherical_to_cartesian_dipole, resolve_angle_deg # NEW IMPORT
 from mqed.utils.dgf_data import load_gf_h5 # NEW IMPORT
+from mqed.utils.logging_utils import setup_loggers_hydra_aware
 from pathlib import Path
 from hydra.utils import get_original_cwd # <-- IMPORT THIS
 from hydra.core.hydra_config import HydraConfig
@@ -51,6 +52,7 @@ def calculate_enhancement(cfg: DictConfig):
     enhancement factor.
     """
     output_dir = Path(HydraConfig.get().runtime.output_dir)
+    setup_loggers_hydra_aware()
     
 
     input_path = Path(cfg.input_file)
@@ -171,11 +173,13 @@ def calculate_enhancement(cfg: DictConfig):
             fig.savefig(plot_filepath, dpi=ps.dpi, bbox_inches="tight")
             logger.info(f"Plot saved to {plot_filepath}")
         plt.close(fig)
+    logger.success(f"RET enhancement calculation complete. Logs saved to: {output_dir.absolute()}")
 
 @hydra.main(config_path="../../configs/analysis", config_name="RET", version_base=None)
 def main(cfg: DictConfig) -> None:
     # 1. Get the output directory managed by Hydra
     calculate_enhancement(cfg)
+
 
 if __name__ == "__main__":
     main()

@@ -9,6 +9,8 @@ from omegaconf import DictConfig, OmegaConf
 from hydra.core.hydra_config import HydraConfig
 from loguru import logger
 
+from mqed.utils.logging_utils import setup_loggers_hydra_aware
+
 
 def _resolve_path(p: str) -> Path:
     """Expand env vars and ~, return absolute Path."""
@@ -17,6 +19,7 @@ def _resolve_path(p: str) -> Path:
 
 def _find_newest(pattern: str) -> Path | None:
     """Return newest file matching a glob pattern, or None."""
+    logger.debug(f"Finding newest file matching pattern: {pattern}")
     from glob import glob
     hits = sorted(glob(pattern), key=lambda s: Path(s).stat().st_mtime, reverse=True)
     return Path(hits[0]).resolve() if hits else None
@@ -31,6 +34,7 @@ def _load_dx_and_time(h5_path: Path) -> tuple[np.ndarray, np.ndarray, dict]:
     Supports:
       - datasets: 'dx_mean_nm' (preferred), 'dx_nm', or expectations: X_shift, X_shift2 (compute Δx)
     """
+    logger.info(f"Loading Δx data from {h5_path}")
     meta = {}
     with h5py.File(str(h5_path), "r") as f:
         # time
@@ -102,6 +106,7 @@ def _resolve_input_path(curve_cfg) -> Path:
 @hydra.main(config_path="../../configs/plots", config_name="sqrt_msd", version_base=None)
 def main(cfg: DictConfig) -> None:
     outdir = Path(HydraConfig.get().runtime.output_dir)
+    setup_loggers_hydra_aware()
 
     ps = cfg.plot_settings
     fig, ax = plt.subplots(figsize=(ps.figsize[0], ps.figsize[1]) if getattr(ps, "figsize", None) else (7, 5))

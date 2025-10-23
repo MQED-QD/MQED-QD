@@ -13,6 +13,7 @@ from joblib import Parallel, delayed
 from qutip import Qobj
 
 # your modules
+from mqed.utils.logging_utils import setup_loggers_hydra_aware
 from mqed.Lindblad.quantum_operator import msd_operator, position_operator
 from mqed.Lindblad.quantum_dynamics import (
     SimulationConfig,
@@ -96,6 +97,7 @@ def _run_one(seed: int,
 @hydra.main(config_path="../../configs/Lindblad", config_name="quantum_dynamics_disorder", version_base=None)
 def run_disorder(cfg: DictConfig) -> None:
     outdir = Path(HydraConfig.get().runtime.output_dir)
+    setup_loggers_hydra_aware()
 
     logger.info("— NHSE disorder ensemble —")
     # data = load_gf_h5(cfg.greens.h5_path)
