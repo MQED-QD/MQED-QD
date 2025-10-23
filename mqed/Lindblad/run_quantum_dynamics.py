@@ -11,6 +11,7 @@ from hydra import compose
 
 from mqed.Lindblad.quantum_dynamics import SimulationConfig, LindbladDynamics, NonHermitianSchDynamics
 from mqed.utils.dgf_data import load_gf_h5
+from mqed.utils.logging_utils import setup_loggers_hydra_aware
 from hydra.core.hydra_config import HydraConfig
 from mqed.Lindblad.quantum_operator import msd_operator, excitation_population_operator, position_operator
 from mqed.utils.save_hdf5 import save_dx_h5
@@ -23,6 +24,7 @@ def app_run(cfg:DictConfig, output_dir: Optional[Path]=None):
             output_dir = Path.cwd()
 
     output_dir.mkdir(parents=True, exist_ok=True)
+    setup_loggers_hydra_aware()
 
     logger.info("--- Starting quantum dynamics simulation---")
 # 1) Load Green's function slice at the emitter energy
@@ -35,6 +37,7 @@ def app_run(cfg:DictConfig, output_dir: Optional[Path]=None):
 
 
     # 2) Build SimulationConfig (unify with your abstractions)
+    # breakpoint()
     tlist = np.arange(cfg.simulation.t_ps.start, cfg.simulation.t_ps.stop, cfg.simulation.t_ps.output_step)
 
 
@@ -104,12 +107,12 @@ def app_run(cfg:DictConfig, output_dir: Optional[Path]=None):
 
 @hydra.main(config_path="../../configs/Lindblad", config_name="quantum_dynamics", version_base=None)
 def mqed_lindblad(cfg:DictConfig):
-    cfg = compose(config_name="quantum_dynamics", overrides=["solver.method=Lindblad"])
+    cfg.solver.method = "Lindblad"
     app_run(cfg)
 
 @hydra.main(config_path="../../configs/Lindblad", config_name="quantum_dynamics", version_base=None)
 def mqed_nhse(cfg:DictConfig):
-    cfg = compose(config_name="quantum_dynamics", overrides=["solver.method=NonHermitian"])
+    cfg.solver.method = "NonHermitian"
     app_run(cfg)
 
 if __name__ == "__main__":
