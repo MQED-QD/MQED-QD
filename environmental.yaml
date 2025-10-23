@@ -5,20 +5,42 @@ channels:
   - defaults
 
 dependencies:
-  - python=3.13
+  # anchor the interpreter; change to 3.11 if you prefer that series
+  - python>=3.11
+
+  # numerics / data
   - numpy
   - scipy
   - pandas
+  - h5py
+  - lmdb
+
+  # viz / notebooks
   - matplotlib
   - seaborn
-  - h5py
-  - qutip
-  - pytest
   - jupyter
   - pillow
   - tqdm
   - pyqt
-  - lmdb
+
+  # quantum / simulation stack
+  - qutip
+  - mpb
+  - pymeep
+  - h5utils
+  - harminv
+  - fftw
+  - gsl
+  - cairo
+
+  # mpi
+  - openmpi
+  - mpi4py
+
+  # testing
+  - pytest
+
+  # pip (loose like your example; pin major if you want)
   - pip>=23
   - pip:
       - hydra-core=1.*
