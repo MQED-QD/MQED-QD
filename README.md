@@ -49,7 +49,7 @@ A Python package for macroscopic QED simulations (Dyadic Green’s functions, RE
 
 ```bash
 # clone project
-git clone <YOUR_REPO_URL>.git
+git clone https://github.com/MQED-transport/Macroscopic-Quantum-Electrodynamics.git
 cd MacroscopicQED
 ```
 
@@ -69,7 +69,7 @@ python -m venv .venv && source .venv/bin/activate
 pip install -e .                         # install package
 ```
 
-### MPI notes (optional)
+<!-- ### MPI notes (optional)
 
 To use the MPI‑based disorder sweeps you need an MPI implementation and `mpi4py` inside the same Python env.
 
@@ -78,7 +78,7 @@ To use the MPI‑based disorder sweeps you need an MPI implementation and `mpi4p
 pip install mpi4py
 # quick check
 mpirun --version
-```
+``` -->
 
 > **Tip:** If system MPI headers are unavailable on your machine, install via your package manager (e.g. `brew install open-mpi`, `apt install libopenmpi-dev openmpi-bin`).
 
@@ -113,38 +113,66 @@ mqed_GF
 Override parameters inline (Hydra style):
 
 ```bash
-mqed_GF geometry=Dyadic_GF/example.yaml output_dir=outputs/gf_run1
+mqed_GF simulation.energy=1.864
 ```
+If you want to simulate multiple frequencies, you can choose List or Dict input:
+```bash
+mqed_GF simulation.energy.min=1.0 simulation.energy.max=2.0 simulation.energy.points=11
+# This will simulate 11 energy sources betweeen (1.0, 1.1, 1.2, ... ,2.0 )eV
+```
+or:
+```bash
+mqed_GF simulation.energy=[1.0,1.5,2.0]
+#This will simulate 3 energy points as (1.0,1.5,2.0) eV
+```
+You can also change other simulation parameters in the configs/Dyadic_GF/GF_analytical.yaml:
+```bash
+    position:
+        zD: 2.0e-9 # The height of donor at z-axis
+        zD_nm: 2 # Key for name
+        zA: 2.0e-9 # The height of acceptor at z-axis, default same height with donor in simulation.
+        Rx_nm:  # This section defines the range of horizontal distances between donor and acceptor
+        start: 1.0
+        stop: 500.0
+        points: 501  # This will give you points 1, 2, 3, ..., 500, total 501 points.
+output:
+    filename: "result_${simulation.material}_${simulation.position.zD_nm}_nm.hdf5" 
+    #Or your own file name.
+```
+<!-- The output file will be saved to outputs/Dyadic_GF_analytical/%%Year-Month-Day/%%Hour-Min-S/.. -->
 
 Lindblad dynamics:
 
 ```bash
-mqed_lindblad system=Lindblad/default.yaml t.max=1000 dt=0.1 save=true
+mqed_lindblad simulation.t_ps.start=0.0 simulation.t_ps.stop=150.0 simulation.t_ps.output_step=2e-3
 ```
+You can also change the config files directly in configs/Lindblad/quantum_dynamics.yaml.
 
 NHSE dynamics:
 
 ```bash
-mqed_nhse system=Lindblad/nhse_default.yaml t.max=500 save=true
+mqed_nhse simulation.t_ps.start=0.0 simulation.t_ps.stop=150.0 simulation.t_ps.output_step=2e-3
 ```
+You can also change the config files directly in configs/Lindblad/quantum_dynamics.yaml.
 
-Disorder sweep (single process):
+Disorder sweep (multi process):
 
 ```bash
-mqed_nhse_disorder disorder.n_samples=50 seed=1234
+mqed_nhse_disorder simulation.disorder_sigma_phi_deg=8.0 initial_state.site_index=51
+# Give the std of azimuthal angle as 8.0 and the initial excitation at the middle of 100 molecules.
 ```
 
 Disorder sweep with MPI (8 ranks):
-
-```bash
+Not test yet.
+<!-- ```bash
 mpirun -n 8 mqed_nhse_disorder disorder.n_samples=400
-```
+``` -->
 
 Plot MSD and √MSD:
 
 ```bash
-mqed_plot_msd input_dir=outputs/nhse_run1 save=true
-mqed_plot_sqrt_msd input_dir=outputs/nhse_run1 save=true
+mqed_plot_msd 
+mqed_plot_sqrt_msd 
 ```
 
 ---
@@ -162,7 +190,7 @@ mqed_plot_sqrt_msd input_dir=outputs/nhse_run1 save=true
 Override any key from the CLI:
 
 ```bash
-mqed_lindblad +experiment=my_note t.max=2000 solver.method=expm save=true
+mqed_lindblad +experiment=my_note simulation.t_ps.stop=10.0 simulation.t_ps.output_step=1e-3
 ```
 
 Hydra organizes outputs under `outputs/` and keeps copies of the used configs for reproducibility. Heavy intermediates may be cached under `data/`.
@@ -182,7 +210,6 @@ MacroscopicQED/
 │  ├─ plotting/
 │  └─ utils/
 ├─ outputs/                 # run outputs (created at runtime)
-├─ plots/                   # generated figures (created at runtime)
 ├─ environmental.yaml       # environment specification
 ├─ pyproject.toml           # build metadata
 └─ setup.py                 # entry points and packaging
