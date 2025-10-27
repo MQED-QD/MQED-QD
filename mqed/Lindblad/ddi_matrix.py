@@ -7,11 +7,8 @@ from typing import Union
 from loguru import logger
 from mqed.utils.SI_unit import c, eps0, hbar, eV_to_J, D2CMM
 from mqed.utils.orientation import spherical_to_cartesian_dipole, resolve_angle_deg
+from mqed.utils.orientation_disorder import phi_wrapped_normal_deg as _phi_wrapped_normal_deg
 
-
-def _phi_wrapped_normal_deg(N, mu_deg, sigma_deg, seed=None):
-    rng = np.random.default_rng(seed)
-    return np.mod(rng.normal(mu_deg, sigma_deg, size=N), 360.0)
 
 def build_ddi_matrix_from_Gslice(
     G_slice: np.ndarray,           # (K,3,3) complex, K=len(Rx_nm) for one energy
