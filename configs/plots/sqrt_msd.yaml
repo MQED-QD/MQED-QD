@@ -18,6 +18,10 @@ curves:
     use_latest_glob: "${oc.env:MQED_ROOT,${oc.env:PWD}}/data/QDyn_cache/silver_sigma10_avg_latest.hdf5" # or using "outputs/NHSE_disorder/.../qdyn_disorder_avg.hdft"
     style: "-"         # e.g., "C1-"
     lw: 1.5
+  - label: "σ=30"
+    use_latest_glob: "${oc.env:MQED_ROOT,${oc.env:PWD}}/data/QDyn_cache/silver_sigma30_avg_latest.hdf5" # or using "outputs/NHSE_disorder/.../qdyn_disorder_avg.hdft"
+    style: "-"         # e.g., "C1-"
+    lw: 1.5
 
 plot_settings:
   save_plot: true
