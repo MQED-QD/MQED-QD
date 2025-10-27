@@ -123,8 +123,9 @@ def run_disorder(cfg: DictConfig) -> None:
     dx_std = np.std(stack, axis=0)
     # breakpoint()
 
+    outfile = outdir / cfg.output.filename
     save_dx_h5(
-    outfile=outdir / cfg.output.filename,
+    outfile=outfile,
     t_ps=tlist,
     dx_mean_nm=dx_mean,
     dx_std_nm=dx_std,
@@ -136,6 +137,7 @@ def run_disorder(cfg: DictConfig) -> None:
         "seed_base": int(cfg.disorder.seed),
     },
     )
+    logger.success(f"Simulation complete. Output saved to: {outfile.absolute()}")
 
 if __name__ == "__main__":
     run_disorder()
