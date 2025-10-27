@@ -100,7 +100,7 @@ This package installs the following command‑line tools (from `setup.py` entry 
 | `mqed_plot_msd`      | Plot mean‑squared displacement from results      |
 | `mqed_plot_sqrt_msd` | Plot square‑root MSD from results                |
 
-> All commands are configured via Hydra using YAML files under `configs/`. You can edit those files or override any key from the CLI, e.g. `t.max=1000`.
+> All commands are configured via Hydra using YAML files under `configs/`. You can edit those files or override any key from the CLI.
 
 ### Examples
 
