@@ -9,21 +9,9 @@ from omegaconf import DictConfig, OmegaConf
 from hydra.core.hydra_config import HydraConfig
 from loguru import logger
 
+from mqed.utils.file_utils import _resolve_input_path
+
 from mqed.utils.logging_utils import setup_loggers_hydra_aware
-
-
-def _resolve_path(p: str) -> Path:
-    """Expand env vars and ~, return absolute Path."""
-    return Path(os.path.expandvars(os.path.expanduser(p))).resolve()
-
-
-def _find_newest(pattern: str) -> Path | None:
-    """Return newest file matching a glob pattern, or None."""
-    logger.debug(f"Finding newest file matching pattern: {pattern}")
-    from glob import glob
-    hits = sorted(glob(pattern), key=lambda s: Path(s).stat().st_mtime, reverse=True)
-    return Path(hits[0]).resolve() if hits else None
-
 
 def _load_dx_and_time(h5_path: Path) -> tuple[np.ndarray, np.ndarray, dict]:
     """
@@ -85,22 +73,6 @@ def _select_x(t_ps: np.ndarray, cfg_ps) -> np.ndarray:
         xmin, xmax = float(cfg_ps.x_range_ps[0]), float(cfg_ps.x_range_ps[1])
         return (t_ps >= xmin) & (t_ps <= xmax)
     return np.ones_like(t_ps, dtype=bool)
-
-
-def _resolve_input_path(curve_cfg) -> Path:
-    """
-    Either use an absolute 'path', or if 'use_latest_glob' is set,
-    choose newest file matching the glob (relative to MQED_ROOT/PWD if present).
-    """
-    if getattr(curve_cfg, "path", None):
-        return _resolve_path(curve_cfg.path)
-    if getattr(curve_cfg, "use_latest_glob", None):
-        base = os.environ.get("MQED_ROOT", os.environ.get("PWD", "."))
-        newest = _find_newest(os.path.join(base, curve_cfg.use_latest_glob))
-        if newest is None:
-            raise FileNotFoundError(f"No files for pattern: {curve_cfg.use_latest_glob}")
-        return newest
-    raise ValueError("Each curve needs either 'path' or 'use_latest_glob'.")
 
 
 @hydra.main(config_path="../../configs/plots", config_name="sqrt_msd", version_base=None)
