@@ -57,7 +57,7 @@ def _load_dx_and_time(h5_path: Path) -> tuple[np.ndarray, np.ndarray, dict]:
             if k in f.attrs:
                 meta[k] = f.attrs[k]
 
-    if dx.shape != t_ps.shape:
+    if msd.shape != t_ps.shape:
         raise ValueError(f"{h5_path} msd shape {msd.shape} and t_ps shape {t_ps.shape} mismatch.")
 
     return t_ps, msd, meta
