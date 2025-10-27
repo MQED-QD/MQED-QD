@@ -43,7 +43,7 @@ dependencies:
   # pip (loose like your example; pin major if you want)
   - pip>=23
   - pip:
-      - hydra-core=1.*
+      - hydra-core
       - hydra-colorlog
       - hydra-optuna-sweeper
       - optuna
