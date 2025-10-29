@@ -6,7 +6,7 @@ channels:
 
 dependencies:
   # anchor the interpreter; change to 3.11 if you prefer that series
-  - python>=3.11
+  - python=3.11
 
   # numerics / data
   - numpy
