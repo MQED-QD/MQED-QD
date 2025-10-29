@@ -18,8 +18,8 @@ simulation:
 # time grid in picoseconds
   t_ps:
     start: 0.0
-    stop: 1.0
-    output_step: 2e-3
+    stop: 150.0
+    output_step: 5e-3
 
 
 # system
@@ -38,7 +38,7 @@ simulation:
 
 # Initial condition
 initial_state:
-  site_index: 1 # start the exciton at site |1>
+  site_index: 51 # start the exciton at site |51>
 
 
 # Solver selection
