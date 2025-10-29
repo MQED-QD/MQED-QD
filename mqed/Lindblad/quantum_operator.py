@@ -44,7 +44,7 @@ def position_operator(dim: int, d_nm: float, Nmol: int, init_site_index: int) ->
     Basis: |0> (ground), |1>,...,|N> (site excitations).
     Positions are 0 for ground and j*d for site j. 
     ..math::
-        |x(t)-x_{0}| = \langle X - x0 I \rangle (or Tr(X rho) - x0)
+        |x(t)-x_{0}| = \langle X - x_{0} I \rangle\ (or\ Tr(X \\rho) - x_{0})
     Args:
         dim (int): Dimension of the Hilbert space (Nmol + 1).
         d_nm (float): Distance between adjacent molecules in nm.

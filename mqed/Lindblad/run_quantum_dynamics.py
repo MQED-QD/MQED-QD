@@ -13,7 +13,7 @@ from mqed.Lindblad.quantum_dynamics import SimulationConfig, LindbladDynamics, N
 from mqed.utils.dgf_data import load_gf_h5
 from mqed.utils.logging_utils import setup_loggers_hydra_aware
 from hydra.core.hydra_config import HydraConfig
-from mqed.Lindblad.quantum_operator import msd_operator, excitation_population_operator, position_operator
+from mqed.Lindblad.quantum_operator import msd_operator, position_operator
 from mqed.utils.save_hdf5 import save_dx_h5
 
 def app_run(cfg:DictConfig, output_dir: Optional[Path]=None):
@@ -70,11 +70,6 @@ def app_run(cfg:DictConfig, output_dir: Optional[Path]=None):
         raise ValueError(f"Unknown solver.method = {method}")
 
 
-    
-    excitation_population_ops = excitation_population_operator(dim =sim_cfg.Nmol + 1,
-                                                            Nmol=sim_cfg.Nmol)
-
-
     e_ops = {"X_shift": position_operator(sim_cfg.Nmol + 1, sim_cfg.d_nm, sim_cfg.Nmol, cfg.initial_state.site_index),
             "X_shift2": msd_operator(sim_cfg.Nmol + 1, sim_cfg.d_nm, sim_cfg.Nmol, cfg.initial_state.site_index)}
 
@@ -83,6 +78,7 @@ def app_run(cfg:DictConfig, output_dir: Optional[Path]=None):
     result = dyn.evolve(rho_or_psi, e_ops=e_ops, options=None)
 
     #calculate dx from expectations
+    # breakpoint()
     ex1 = np.asarray(result.expectations["X_shift"])
     ex2 = np.asarray(result.expectations["X_shift2"])
     dx = np.sqrt(np.maximum(0.0, ex2 - ex1**2))
