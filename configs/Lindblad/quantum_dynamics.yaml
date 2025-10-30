@@ -10,7 +10,7 @@ hydra:
 # --- Our Application Configuration ---
 
 greens:
-  h5_path: ${hydra:runtime.cwd}/outputs/Dyadic_GF_analytical/2025-10-13/11-29-07/result_Ag_2_nm.hdf5 # update as needed
+  h5_path: ${oc.env:MQED_ROOT,${oc.env:PWD}}/data/GF_cache/result_Ag_2_nm_latest.hdf5 # update as needed
 
 
 # Simulation controls
