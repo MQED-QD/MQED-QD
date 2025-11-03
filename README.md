@@ -57,8 +57,8 @@ cd MacroscopicQED
 
 ```bash
 # choose one of: conda | mamba | micromamba
-mamba env create -f environmental.yaml   # create environment
-mamba activate mqed                      # activate environment
+conda env create -f environmental.yaml   # create environment
+conda activate mqed                      # activate environment
 pip install -e .                         # install as editable package
 ```
 
@@ -122,7 +122,7 @@ mqed_GF simulation.energy.min=1.0 simulation.energy.max=2.0 simulation.energy.po
 ```
 or:
 ```bash
-mqed_GF simulation.energy=[1.0,1.5,2.0]
+mqed_GF simulation.energy_eV=[1.0,1.5,2.0]
 #This will simulate 3 energy points as (1.0,1.5,2.0) eV
 ```
 You can also change other simulation parameters in the configs/Dyadic_GF/GF_analytical.yaml:
@@ -263,12 +263,12 @@ curves:
 
 ```bash
 curves:
-  - label: "Magic-Angle"
-    use_latest_glob: "${oc.env:MQED_ROOT,${oc.env:PWD}}/data/QDyn_cache/silver_stationary_latest.hdf5"  
+  - label: "YOUR LABEL"
+    use_latest_glob: "YOUR PATH"  
     style: "-"         # matplotlib line format
     lw: 1.5
-  - label: "σ=10"
-    use_latest_glob: "${oc.env:MQED_ROOT,${oc.env:PWD}}/data/QDyn_cache/silver_sigma10_avg_latest.hdf5" 
+  - label: "YOUR LABEL"
+    use_latest_glob: "YOUR PATH" 
     style: "-"         # e.g., "C1-"
     lw: 1.5
   - label: "YOUR LABEL"
@@ -295,7 +295,7 @@ plot_settings:
   # x_index_range: [0, 500]
 
   # axis labels, scales, limits
-  xlabel: "t (ps)"            # or "t (ps)" if you keep in ps
+  xlabel: "t (ps)"            # or "t (s)" if you keep in s
   ylabel: "$\\Delta x$ (nm)"
   title: "Silver; Middle Excitation"
   xscale: linear             # or "log"
@@ -316,10 +316,11 @@ plot_settings:
 * Base config directory: `configs/`
 * Notable groups:
 
-  * `configs/Lindblad/` — system and solver settings
-  * `configs/Dyadic_GF/` — geometry/material settings
-  * `configs/analysis/` — RET and plotting parameters
-  * Top‑level: `msd.yaml`, `sqrt_msd.yaml` for plotting defaults
+  * `configs/Lindblad/` — quantum dynamics solver settings, user can change simulation method ('Lindblad','NonHermitian'), evaluation time steps, intermolecular distance(d_nm), dipole orientations(theta_deg, phi_deg, dipole strength of donor and acceptor.). The stationary orientation simulation is controlled by 'quantum_dynamics.yaml' and disorder-orientation simulation is controlled by 'quantum_dynamics_disorder.yaml'. 
+  -Warning: The number of molecules (Nmol) times the intermolecular distance (d_nm) has to be less than the Dyadic Green's function simulation of horizental distance, i.e, if user's Dyadic Green's function simulates the horizental distance (Rx_nm) as 501 points starting from 0.0 to 500nm, (which is Rx_nm.start=0.0, Rx_nm.stop=500.0, Rx_nm.points=501) but user inputs 100 molecules(Nmol=100) of distance 6nm(d_nm=6.0), the program will abort since 100*6=600>= 500 (in Dyadic Green's function).
+  * `configs/Dyadic_GF/` — geometry/material settings for Dyadic Green's function simulation on planar surface. User can change the dipole source frequency as single value, dictionary of a range of values or list of some values for multi-frequency simulation. The position is referred to z-axis height of donor and acceptor on the surface. Rx_nm is the horizental distance between donor and acceptor, i.e, source and response. For the material of user's interest, user may fit a dielectric function by him- or herself and append to the current excel sheet or create new .xlsx file to overwrite the default path and sheet name for the simulation.
+  * `configs/analysis/` — RET and plotting parameters. User can change the parameter of donor and acceptor to evaluate the system of interest. Plot-setting parts can be customized by user's preference with the reference of matplotlib.
+  * `configs/plots/`: `msd.yaml`, `sqrt_msd.yaml` - The two plot settings for the mean square displacement (MSD) or root mean square displacement (RMSD). User can change the part of `curves` to customize the curves of interest with corresponding labels and data path. The plot settings can also be customized by user's preference.
 
 Override any key from the CLI:
 
@@ -356,7 +357,45 @@ MacroscopicQED/
 * **Command not found** after install: make sure the env is activated and `pip install -e .` completed without errors.
 * **MPI errors**: verify `mpirun` exists on PATH and `mpi4py` is installed in the active env.
 * **Missing config**: ensure the specified YAML exists under `configs/` or list available options in that folder.
-* **Plot scripts**: check that `input_dir` points to a completed run directory containing the expected logs/data.
+* **Plot scripts**: check that `curves` points to a completed run directory containing the expected logs/data.
+
+---
+
+## Beta Test:
+* **Prerequisite:** Install the package as introduced in **Installation**.
+* **Step1:** After install the package, run `mqed_GF simulation.energy_eV=1.864` in the ternimal, it will generate `result_Ag_2nm.hdf5` file under subdirectory `outputs/Dyadic_GF_analytical/Y-M-D/H-M-S/`. Create a new subdirectory named `data/GF_cache` under the root directory (See project layout), copy-paste the hdf5 file into `data/GF_cache/` and **rename it** as `result_Ag_2_nm_latest.hdf5`, which means simulation of donor on the height 2nm of silver planar surface. 
+* **Step2:** Run `mqed_RET` in the terminal, it will generate `enhancement_magic_angle_1.864eV.png` file under subdirectory `outputs/RET/Y-M-D/H-M-S/`. This result is the enhancement electric field of dipole emitting energy with value **1.864eV** with the azimuthal angle of both donor and acceptor is magic-angle(**arcos(1/sqrt(3))**). The X-axis is the horizental distance between donor and acceptor. You should get same result as `enhancement_magic_angle_1.864eV.png` under subdirectory `Beta_Test/`.
+* **Step3:** Run `mqed_nhse initial_state.site_index=51` in the terminal, it will generate `silver_stationary_latest.hdf5` file under subdirectory `outputs/Lindblad/Y-M-D/H-M-S/`. This result represents the quantum dynamics of molecular aggregate aligned on the silver surface with their azimuthal angle at magic angle. Copy-paste the`silver_stationary_latest.hdf5` file into subdirectory `data/QDyn_cache/`(**create this subdirectory first**) without rename the file.
+* **Step4** Run multiple different commands:
+```bash
+mqed_nhse_disorder simulation.disorder_sigma_phi_deg=10
+mqed_nhse_disorder simulation.disorder_sigma_phi_deg=30
+mqed_nhse_disorder simulation.disorder_sigma_phi_deg=50
+```
+After those commands, there will be multiple files name as `silver_sigma${disorder_sigma_phi_deg}_avg_latest.hdf5` (The **disorder_sigma_phi_deg** is the value of your input, i.e, **3,10,30,50**)generated under the subdirectories `outputs/NHSE/Y-M-D/H-M-S/`. The file path will show up in the terminal or you can find them under the file `outputs/NHSE/Y-M-D/H-M-S/NHSE_disorder.log`. Copy-paste those `silver_sigma${disorder_sigma_phi_deg}_avg_latest.hdf5` into subdirectory `data/QDyn_cache/`.
+* **Step5:** After **Step4**, you should have `silver_stationary_latest.hdf5` and multiple `silver_sigma${disorder_sigma_phi_deg}_avg_latest.hdf5` files under the `data/QDyn_cache/`. Make sure you have following `curves` part in the `configs/plots/sqrt_msd.yaml`:
+```bash
+curves:
+  - label: "Magic-Angle"
+    use_latest_glob: "${oc.env:MQED_ROOT,${oc.env:PWD}}/data/QDyn_cache/silver_stationary_latest.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+    style: "-"         # matplotlib line format
+    lw: 1.5
+  - label: "σ=10"
+    use_latest_glob: "${oc.env:MQED_ROOT,${oc.env:PWD}}/data/QDyn_cache/silver_sigma10_avg_latest.hdf5" # or using "outputs/NHSE_disorder/.../qdyn_disorder_avg.hdft"
+    style: "-"         # e.g., "C1-"
+    lw: 1.5
+  - label: "σ=30"
+    use_latest_glob: "${oc.env:MQED_ROOT,${oc.env:PWD}}/data/QDyn_cache/silver_sigma30_avg_latest.hdf5" # or using "outputs/NHSE_disorder/.../qdyn_disorder_avg.hdft"
+    style: "-"         # e.g., "C1-"
+    lw: 1.5
+  - label: "σ=50"
+    use_latest_glob: "${oc.env:MQED_ROOT,${oc.env:PWD}}/data/QDyn_cache/silver_sigma50_avg_latest.hdf5" # or using "outputs/NHSE_disorder/.../qdyn_disorder_avg.hdft"
+    style: "-"         # e.g., "C1-"
+    lw: 1.5
+```
+
+Run `mqed_plot_sqrt_msd` and you should get a file `silver_middle_sqrt_msd.png` under the subdirectory `outputs/plot_sqrt_msd/Y-M-D/H-M-S/`. You should get the same result under the `Beta_Test/silver_middle_sqrt_msd.png`.
+
 
 ---
 
