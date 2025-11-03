@@ -367,6 +367,11 @@ MacroscopicQED/
 * **Step1:** After install the package, run `mqed_GF simulation.energy_eV=1.864` in the ternimal, it will generate `result_Ag_2nm.hdf5` file under subdirectory `outputs/Dyadic_GF_analytical/Y-M-D/H-M-S/`. Create a new subdirectory named `data/GF_cache` under the root directory (See project layout), copy-paste the hdf5 file into `data/GF_cache/` and **rename it** as `result_Ag_2_nm_latest.hdf5`, which means simulation of donor on the height 2nm of silver planar surface. 
 * **Step2:** Run `mqed_RET` in the terminal, it will generate `enhancement_magic_angle_1.864eV.png` file under subdirectory `outputs/RET/Y-M-D/H-M-S/`. This result is the enhancement electric field of dipole emitting energy with value **1.864eV** with the azimuthal angle of both donor and acceptor is magic-angle(**arcos(1/sqrt(3))**). The X-axis is the horizental distance between donor and acceptor. You should get same result as `enhancement_magic_angle_1.864eV.png` under subdirectory `Beta_Test/`.
 * **Step3:** Run `mqed_nhse initial_state.site_index=51` in the terminal, it will generate `silver_stationary_latest.hdf5` file under subdirectory `outputs/Lindblad/Y-M-D/H-M-S/`. This result represents the quantum dynamics of molecular aggregate aligned on the silver surface with their azimuthal angle at magic angle. Copy-paste the`silver_stationary_latest.hdf5` file into subdirectory `data/QDyn_cache/`(**create this subdirectory first**) without rename the file.
+
+Here is the reference plot for this step:
+  <p align="center">
+    <img src="Beta_Test/enhancement_magic_angle_1.864eV.png" alt="Reference result for Step 3" width="400">
+  </p>
 * **Step4** Run multiple different commands:
 ```bash
 mqed_nhse_disorder simulation.disorder_sigma_phi_deg=10
@@ -397,6 +402,10 @@ curves:
 
 Run `mqed_plot_sqrt_msd` and you should get a file `silver_middle_sqrt_msd.png` under the subdirectory `outputs/plot_sqrt_msd/Y-M-D/H-M-S/`. You should get the same result under the `Beta_Test/silver_middle_sqrt_msd.png`.
 
+Here is the reference of the figure:
+  <p align="center">
+    <img src="Beta_Test/silver_middle_sqrt_msd.png" alt="Reference result for Step 3" width="400">
+  </p>
 
 ---
 
