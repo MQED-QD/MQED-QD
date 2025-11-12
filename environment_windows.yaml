@@ -13,7 +13,7 @@ dependencies:
   - pandas
   - h5py
   - lmdb
-  - no-mkl # Essential on Windows to prevent MKL/OpenBLAS conflicts
+  #- no-mkl # Essential on Windows to prevent MKL/OpenBLAS conflicts
 
   # viz / notebooks
   - matplotlib
@@ -25,7 +25,7 @@ dependencies:
 
   # quantum / simulation stack
   - qutip
-  - pymeep       # Main Meep package
+  #- pymeep       # Main Meep package
   # The components below are usually pulled in by pymeep, but listing them
   # might help the solver find the correct build for Windows dependencies.
   # - mpb
