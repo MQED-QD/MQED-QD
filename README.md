@@ -185,7 +185,7 @@ The program will read Green's function data from `/data/GF_cache/result_Ag_2_nm_
 ```bash
 mqed_lindblad greens.h5_path=YOUR_PATH
 ```
-Here the path directly comes from the absolute path after simulation `/.../MacroscopicQED/outputs/Dyadic_GF_analytical/Y-M-D/H-M-S/result_Ag_2_nm.hdf5` as mentioned in Dyadic Green's function simulation. Or you can manually overwrite the yaml file in configs/Lindblad/quantum_dynamics.yaml file.
+Here the path directly comes from the absolute path after simulation `/.../MacroscopicQED/outputs/Dyadic_GF_analytical/Y-M-D/H-M-S/result_Ag_2_nm.hdf5` as mentioned in Dyadic Green's function simulation. Or you can manually overwrite the yaml file in `configs/Lindblad/quantum_dynamics.yaml` file.
 
 **NHSE dynamics:**
 The equivalent **Non-Hermitian Schodinger equation(NHSE)** is implemented here which gives identical result with Lindblad dynamic as we tested. **We recommend NHSE for large simulation** since it is **much faster** than simulate density matrix in general.
@@ -230,7 +230,7 @@ Not test yet.
 mpirun -n 8 mqed_nhse_disorder disorder.n_samples=400
 ``` -->
 
-Plot MSD and √MSD:
+Plot MSD and RMSD:
 
 ```bash
 mqed_plot_msd 
