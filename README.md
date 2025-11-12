@@ -113,11 +113,11 @@ mqed_GF
 Override parameters inline (Hydra style):
 
 ```bash
-mqed_GF simulation.energy=1.864
+mqed_GF simulation.energy_eV=1.864
 ```
 If you want to simulate multiple frequencies, you can choose List or Dict input:
 ```bash
-mqed_GF simulation.energy.min=1.0 simulation.energy.max=2.0 simulation.energy.points=11
+mqed_GF simulation.energy_eV.min=1.0 simulation.energy_eV.max=2.0 simulation.energy_eV.points=11
 # This will simulate 11 energy sources betweeen (1.0, 1.1, 1.2, ... ,2.0 )eV
 ```
 or:
