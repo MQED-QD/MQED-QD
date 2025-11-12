@@ -11,19 +11,19 @@ hydra:
 # Each curve: either give absolute 'path', or set 'use_latest_glob' (relative to MQED_ROOT/PWD)
 curves:
   - label: "Magic-Angle"
-    use_latest_glob: "${oc.env:MQED_ROOT,${oc.env:PWD}}/data/QDyn_cache/silver_stationary_latest.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/silver_stationary_latest.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
     style: "-"         # matplotlib line format
     lw: 1.5
   - label: "σ=10"
-    use_latest_glob: "${oc.env:MQED_ROOT,${oc.env:PWD}}/data/QDyn_cache/silver_sigma10_avg_latest.hdf5" # or using "outputs/NHSE_disorder/.../qdyn_disorder_avg.hdft"
+    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/silver_sigma10_avg_latest.hdf5" # or using "outputs/NHSE_disorder/.../qdyn_disorder_avg.hdft"
     style: "-"         # e.g., "C1-"
     lw: 1.5
   - label: "σ=30"
-    use_latest_glob: "${oc.env:MQED_ROOT,${oc.env:PWD}}/data/QDyn_cache/silver_sigma30_avg_latest.hdf5" # or using "outputs/NHSE_disorder/.../qdyn_disorder_avg.hdft"
+    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/silver_sigma30_avg_latest.hdf5" # or using "outputs/NHSE_disorder/.../qdyn_disorder_avg.hdft"
     style: "-"         # e.g., "C1-"
     lw: 1.5
   - label: "σ=50"
-    use_latest_glob: "${oc.env:MQED_ROOT,${oc.env:PWD}}/data/QDyn_cache/silver_sigma50_avg_latest.hdf5" # or using "outputs/NHSE_disorder/.../qdyn_disorder_avg.hdft"
+    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/silver_sigma50_avg_latest.hdf5" # or using "outputs/NHSE_disorder/.../qdyn_disorder_avg.hdft"
     style: "-"         # e.g., "C1-"
     lw: 1.5
 

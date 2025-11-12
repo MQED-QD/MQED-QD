@@ -9,7 +9,7 @@ hydra:
 
 # --- Inputs (adjust the path or use oc.env as needed) ---
 greens:
-  h5_path: ${oc.env:MQED_ROOT,${oc.env:PWD}}/data/GF_cache/result_Ag_2_nm_latest.hdf5
+  h5_path: ${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/GF_cache/result_Ag_2_nm_latest.hdf5
 
 # Material information
 material:
