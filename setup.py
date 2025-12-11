@@ -29,6 +29,12 @@ setup(
             "mqed_nhse_disorder = mqed.Lindblad.run_disorder:run_disorder",
             "mqed_plot_sqrt_msd = mqed.plotting.plot_sqrt_msd:main",
             "mqed_plot_msd = mqed.plotting.plot_msd:main",
+            "mqed_BEM_compare = mqed.BEM.compare_const:main",
+            "mqed_BEM_compare_silver = mqed.BEM.compare_silver:main",
+            "mqed_BEM_compute_peff = mqed.BEM.compute_peff:main",
+            "mqed_BEM_compare_dyadic = mqed.BEM.compare_BEM_dyadic:main",
+            "mqed_BEM_reconstruct_GF = mqed.BEM.reconstruct_GF:main",
+            "mqed_plot_IPR = mqed.plotting.plot_ipr:main",
         ]
     },
 
