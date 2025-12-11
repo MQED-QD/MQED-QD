@@ -58,3 +58,27 @@ def position_operator(dim: int, d_nm: float, Nmol: int, init_site_index: int) ->
     X = Qobj(np.diag(positions), dims=[[dim], [dim]])
     x0 = positions[init_site_index]
     return (X - x0 * qeye(dim))
+
+def ipr_callable(t, state, *, Nmol):
+    """Inverse participation ratio (IPR) at time t.
+    ..math::
+        IPR = \sum_{j} (|c_{j}|^4) / (\sum_{j} |c_{j}|^2)^2
+    Args:
+        t (float): Time (not used here but required for callable signature).
+        state (Qobj): State of the system (ket or density matrix).
+        Nmol (int): Number of molecular emitters.
+    Returns:
+        float: IPR value.
+    """
+    if state.isket:
+        amp = state.full().ravel()              # length N+1
+        pop = np.abs(amp)**2
+    else:
+        rho = state.full()
+        pop = np.real(np.diag(rho))
+    pop_exc = pop[1:1+Nmol]
+    s = pop_exc.sum()
+    if s <= 0:
+        return 0.0
+    q = pop_exc / s
+    return float(np.dot(q, q))                  # IPR_site
