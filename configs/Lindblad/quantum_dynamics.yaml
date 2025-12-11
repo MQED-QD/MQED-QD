@@ -10,7 +10,7 @@ hydra:
 # --- Our Application Configuration ---
 
 greens:
-  h5_path: ${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/GF_cache/result_Ag_2_nm_latest.hdf5 # update as needed
+  h5_path: ${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/BEM_cache/BEM_GF_planar_Ag_665.hdf5 # update as needed
 
 #Material information
 material:
@@ -28,6 +28,12 @@ simulation:
 # system
   Nmol: 100 # number of sites
   d_nm: 3.0 # lattice spacing (nm)
+
+#emitter frequency
+  lambda_nm: 665        # wavelength of emitter in nm
+
+# Green's function data simulation method
+  gf_method: BEM  # 'BEM' or 'Frensel'
 
 
 # dipoles / orientation
@@ -51,4 +57,4 @@ solver:
 
   # Output file (goes under Hydra's run dir)
 output:
-  filename: ${material.name}_stationary_latest.hdf5
+  filename: ${simulation.gf_method}_${material.name}_stationary_${simulation.lambda_nm}.hdf5
