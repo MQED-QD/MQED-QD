@@ -92,7 +92,7 @@ def main(cfg: DictConfig):
 
     logger.info(f"lambda = {lam} nm")
     logger.info(f"p_eff  = {p_eff} C*m")
-    logger.success(f"Saved comparison CSV -> {output_dir.absolute()}")
+    logger.success(f"Saved comparison CSV -> {(output_dir / cfg.io.out_csv).absolute()}")
 
 
 if __name__ == "__main__":
