@@ -14,7 +14,7 @@ from mqed.utils.BEM_tools import read_bem_dyadic, read_peff, read_purcell_sheet
 from mqed.utils.dgf_data import save_gf_h5
 from mqed.BEM.compute_peff import omega_from_lambda_nm
 from mqed.utils.SI_unit import c, hbar, eV_to_J
-from mqed.Dyadic_GF.GF_analytical import Greens_function_analytical
+from mqed.Dyadic_GF.GF_Sommerfeld import Greens_function_analytical
 from mqed.utils.logging_utils import setup_loggers_hydra_aware
 
 def build_and_save(
