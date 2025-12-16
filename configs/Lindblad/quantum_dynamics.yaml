@@ -10,7 +10,7 @@ hydra:
 # --- Our Application Configuration ---
 
 greens:
-  h5_path: ${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/BEM_cache/BEM_GF_planar_Ag_665.hdf5 # update as needed
+  h5_path: ${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/BEM_cache/BEM_GF_nanorod_Ag_665nm.hdf5 # update as needed
 
 #Material information
 material:
@@ -57,4 +57,4 @@ solver:
 
   # Output file (goes under Hydra's run dir)
 output:
-  filename: ${simulation.gf_method}_${material.name}_stationary_${simulation.lambda_nm}.hdf5
+  filename: ${simulation.gf_method}_${material.name}_stationary_${simulation.lambda_nm}nm.hdf5
