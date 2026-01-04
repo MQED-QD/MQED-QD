@@ -1,0 +1,44 @@
+# Default input file, can be overridden from the command line
+defaults:
+  - hydra: default  # <-- This loads configs/Dyadic_GF/hydra/default.yaml
+  - _self_
+hydra:
+  job:
+    name: FE
+log_file: ${hydra:runtime.output_dir}/${hydra.job.name}.log
+
+input_file: ${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/GF_cache/Frensel_Ag_2_nm_665nm.hdf5 # 
+
+orientations:
+  donor:    { theta_deg: 90.0, phi_deg: "magic" }
+  acceptor: { theta_deg: 90.0, phi_deg: "magic" }
+
+plot_settings:
+  save_plot: true
+  dpi: 400
+
+  # choose x-range by value or by indices, not both  
+  x_range_nm: [0.0,500.0] #-> masks points where 1 ≤ Rx_nm ≤ 10
+  # x_index_range: [0, 9] #-> masks first 10 points (index 0 to 9)
+
+  components: ["real", "imag"]    # options: ["real"], ["imag"], ["real","imag"]
+  # Text & style
+  xlabel: "Donor–Acceptor Distance (nm)"
+  ylabel: "Enhancement"
+  title_template: "Emitter energy = {energy:.3f} eV"
+  legend:
+    real_label: "$V_{\\alpha\\beta}/ V_{0,\\alpha\\beta}$"
+    imag_label: "$\\Gamma_{\\alpha\\beta}/ \\Gamma_{0,\\alpha\\beta}$"
+  
+  lw: 1
+  real_style: "r--"
+  imag_style: "b--"
+
+  xscale: linear      # or "log"
+  yscale: linear      # or "log"
+
+  # Optional axis limits (override selection if you want)
+  xlim: [0, 50]  # e.g., [0, 500]
+  ylim: null  # e.g., [0, 10]
+  filename_prefix: "enhancement_magic_angle"
+  grid: true
