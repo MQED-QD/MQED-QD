@@ -35,10 +35,10 @@ A Python package for macroscopic QED simulations (Dyadic Green’s functions, RE
 ## Features
 
 * Dyadic Green’s function simulations.
-* Resonance energy transfer (RET) analysis.
+* Resonance energy transfer (RET) anf field enhancement (FE) analysis.
 * Lindblad and non‑Hermitian skin effect (NHSE) dynamics.
-* Disorder sweeps (single process or MPI).
-* Plotting utilities for MSD and √MSD.
+* Disorder sweeps (single process or MPI, will be implemented in the future).
+* Plotting utilities for MSD and root-MSD.
 * Reproducible runs via Hydra configs and on‑disk caching.
 
 ---
@@ -90,15 +90,16 @@ mpirun --version
 
 This package installs the following command‑line tools (from `setup.py` entry points):
 
-| Command              | What it does                                     |
-| -------------------- | ------------------------------------------------ |
-| `mqed_GF`            | Run Dyadic Green’s function simulation           |
-| `mqed_RET`           | Run RET analysis                                 |
-| `mqed_lindblad`      | Time evolution with Lindblad dynamics            |
-| `mqed_nhse`          | Time evolution with NHSE model                   |
-| `mqed_nhse_disorder` | Disorder sweep;                                  |
-| `mqed_plot_msd`      | Plot mean‑squared displacement from results      |
-| `mqed_plot_sqrt_msd` | Plot square‑root MSD from results                |
+| Command              | What it does                                       |
+| -------------------- | ---------------------------------------------------|
+| `mqed_G_Sommerfeld`  | Run Dyadic Green’s function simulation on planar.  |
+| `mqed_RET`           | Run RET analysis                                   |
+| `mqed_FE`            | Run Field Enhancement analysis                     |
+| `mqed_lindblad`      | Time evolution with Lindblad dynamics              |
+| `mqed_nhse`          | Time evolution with NHSE model                     |
+<!-- | `mqed_nhse_disorder` | Disorder sweep;                                    | -->
+| `mqed_plot_msd`      | Plot mean‑squared displacement from results        |
+| `mqed_plot_sqrt_msd` | Plot square‑root MSD from results                  |
 
 > All commands are configured via Hydra using YAML files under `configs/`. You can edit those files or override any key from the CLI.
 
@@ -107,25 +108,25 @@ This package installs the following command‑line tools (from `setup.py` entry 
 Run a **Dyadic Green's function simulation on planar surface** with defaults:
 
 ```bash
-mqed_GF
+mqed_GF_Sommerfeld
 ```
 
 Override parameters inline (Hydra style):
 
 ```bash
-mqed_GF simulation.energy_eV=1.864
+mqed_GF_Sommerfeld simulation.energy_eV=1.864
 ```
 If you want to simulate multiple frequencies, you can choose List or Dict input:
 ```bash
-mqed_GF simulation.energy_eV.min=1.0 simulation.energy_eV.max=2.0 simulation.energy_eV.points=11
+mqed_GF_Sommerfeld simulation.energy_eV.min=1.0 simulation.energy_eV.max=2.0 simulation.energy_eV.points=11
 # This will simulate 11 energy sources betweeen (1.0, 1.1, 1.2, ... ,2.0 )eV
 ```
 or:
 ```bash
-mqed_GF simulation.energy_eV=[1.0,1.5,2.0]
+mqed_GF_Sommerfeld simulation.energy_eV=[1.0,1.5,2.0]
 #This will simulate 3 energy points as (1.0,1.5,2.0) eV
 ```
-You can also change other simulation parameters in the `configs/Dyadic_GF/GF_analytical.yaml`:
+You can also change other simulation parameters in the `configs/Dyadic_GF/GF_Sommerfeld.yaml`:
 ```bash
     position:
         zD: 2.0e-9 # The height of donor at z-axis
@@ -140,14 +141,14 @@ output:
     #Or your own file name.
 ```
 <!-- The output file will be saved to outputs/Dyadic_GF_analytical/%%Year-Month-Day/%%Hour-Min-S/.. -->
-After simulation, either in terminal or in the `outputs/Dyadic_GF_analytical/.../Dyadic_GF_analytical.log` you will see:
+After simulation, either in terminal or in the `outputs/Dyadic_GF_Sommerfeld/.../Dyadic_GF_Sommerfeld.log` you will see:
 ```bash
-2025-10-24 11:40:02.818 | SUCCESS  | mqed.Dyadic_GF.main:run_simulation:114 - Simulation complete. Output saved to: /.../MacroscopicQED/outputs/Dyadic_GF_analytical/Y-M-D/H-M-S/result_Ag_2_nm.hdf5
+2025-10-24 11:40:02.818 | SUCCESS  | mqed.Dyadic_GF.main:run_simulation:114 - Simulation complete. Output saved to: /.../MacroscopicQED/outputs/Dyadic_GF_Sommerfeld/Y-M-D/H-M-S/YOUR_NAME.hdf5
 
 ```
 For post-process (Simulate QED or RET), the default path of Green's function is: `/data/GF_cache/result_Ag_2_nm_latest.hdf5`
 
-So you can create a subdirectory `data/GF_cache/` and copy-paste the hdf5 file from the path `/.../MacroscopicQED/outputs/Dyadic_GF_analytical/Y-M-D/H-M-S/result_Ag_2_nm.hdf5`.
+So you can create a subdirectory `data/GF_cache/` and copy-paste the hdf5 file from the path `/.../MacroscopicQED/outputs/Dyadic_GF_Sommerfeld/Y-M-D/H-M-S/YOUR_NAME.hdf5`.
 
 **Lindblad dynamics:**
 
@@ -157,7 +158,7 @@ mqed_lindblad simulation.t_ps.start=0.0 simulation.t_ps.stop=150.0 simulation.t_
 You can also change the config files directly in `configs/Lindblad/quantum_dynamics.yaml` :
 ```bash
 greens:
-  h5_path: ${oc.env:MQED_ROOT,${oc.env:PWD}}/data/GF_cache/result_Ag_2_nm_latest.hdf5 # update as needed
+  h5_path: ${oc.env:MQED_ROOT,${oc.env:PWD}}/data/GF_cache/YOUR_NAME.hdf5 # update as needed
 
 
 # Simulation controls
@@ -181,11 +182,11 @@ simulation:
   phi_deg: magic # or a number
   mode: stationary # or 'disorder'
 ```
-The program will read Green's function data from `/data/GF_cache/result_Ag_2_nm_latest.hdf5` for calculating dipole-dipole interaction matrix. However, you can also overrite the path for the parameter you are interested by command line:
+The program will read Green's function data from `/data/GF_cache/YOUR_NAME.hdf5` for calculating dipole-dipole interaction matrix. However, you can also overrite the path for the parameter you are interested by command line:
 ```bash
 mqed_lindblad greens.h5_path=YOUR_PATH
 ```
-Here the path directly comes from the absolute path after simulation `/.../MacroscopicQED/outputs/Dyadic_GF_analytical/Y-M-D/H-M-S/result_Ag_2_nm.hdf5` as mentioned in Dyadic Green's function simulation. Or you can manually overwrite the yaml file in `configs/Lindblad/quantum_dynamics.yaml` file.
+Here the path directly comes from the absolute path after simulation `/.../MacroscopicQED/outputs/Dyadic_GF_analytical/Y-M-D/H-M-S/YOUR_NAME.hdf5` as mentioned in Dyadic Green's function simulation. Or you can manually overwrite the yaml file in `configs/Lindblad/quantum_dynamics.yaml` file.
 
 **NHSE dynamics:**
 The equivalent **Non-Hermitian Schodinger equation(NHSE)** is implemented here which gives identical result with Lindblad dynamic as we tested. **We recommend NHSE for large simulation** since it is **much faster** than simulate density matrix in general.
@@ -240,11 +241,11 @@ The `configs/plots/sqrt_msd.yaml` and `configs/plots/msd.yaml` are configure fil
 ```bash
 curves:
   - label: "Magic-Angle"
-    use_latest_glob: "${oc.env:MQED_ROOT,${oc.env:PWD}}/data/QDyn_cache/silver_stationary_latest.hdf5"  
+    use_latest_glob: "${oc.env:MQED_ROOT,${oc.env:PWD}}/data/QDyn_cache/YOUR_NAME.hdf5"  
     style: "-"         # matplotlib line format
     lw: 1.5
   - label: "σ=10"
-    use_latest_glob: "${oc.env:MQED_ROOT,${oc.env:PWD}}/data/QDyn_cache/silver_sigma10_avg_latest.hdf5" 
+    use_latest_glob: "${oc.env:MQED_ROOT,${oc.env:PWD}}/data/QDyn_cache/YOUR_NAME.hdf5" 
     style: "-"         # e.g., "C1-"
     lw: 1.5
 ```
@@ -280,7 +281,7 @@ The plot settings can also be changed by users' preferences: (See matplotlib doc
 ```bash
 plot_settings:
   save_plot: true
-  filename: "silver_middle_sqrt_msd.png"
+  filename: "YOUR_NAME.png"
   dpi: 400
   show: false
   tight_layout: true
@@ -342,6 +343,7 @@ MacroscopicQED/
 │  ├─ Lindblad/
 │  ├─ analysis/
 │  ├─ plotting/
+│  ├─ BEM/                  # Run Boundary Element Method(BEM) for electric field simulation.
 │  └─ utils/
 ├─ outputs/                 # run outputs (created at runtime)
 ├─ environmental.yaml       # environment specification
@@ -362,14 +364,15 @@ MacroscopicQED/
 
 ## Beta Test:
 * **Prerequisite:** Install the package as introduced in **Installation**.
-* **Step1:** After install the package, run `mqed_GF simulation.energy_eV=1.864` in the ternimal, it will generate `result_Ag_2nm.hdf5` file under subdirectory `outputs/Dyadic_GF_analytical/Y-M-D/H-M-S/`. Create a new subdirectory named `data/GF_cache` under the root directory (See project layout), copy-paste the hdf5 file into `data/GF_cache/` and **rename it** as `result_Ag_2_nm_latest.hdf5`, which means simulation of donor on the height 2nm of silver planar surface. 
-* **Step2:** Run `mqed_RET` in the terminal, it will generate `enhancement_magic_angle_1.864eV.png` file under subdirectory `outputs/RET/Y-M-D/H-M-S/`. This result is the enhancement electric field of dipole emitting energy with value **1.864eV** with the azimuthal angle of both donor and acceptor is magic-angle(**arcos(1/sqrt(3))**). The X-axis is the horizental distance between donor and acceptor. You should get same result as `enhancement_magic_angle_1.864eV.png` under subdirectory `Beta_Test/`.
-* **Step3:** Run `mqed_nhse initial_state.site_index=51` in the terminal, it will generate `silver_stationary_latest.hdf5` file under subdirectory `outputs/Lindblad/Y-M-D/H-M-S/`. This result represents the quantum dynamics of molecular aggregate aligned on the silver surface with their azimuthal angle at magic angle. Copy-paste the`silver_stationary_latest.hdf5` file into subdirectory `data/QDyn_cache/`(**create this subdirectory first**) without rename the file.
-
+* **Step1:** After install the package, run `mqed_GF_Sommerfeld simulation.energy_eV=1.864` in the ternimal, it will generate `result_Ag_2nm.hdf5` file under subdirectory `outputs/Dyadic_GF_Sommerfeld/Y-M-D/H-M-S/`. Create a new subdirectory named `data/GF_cache` under the root directory (See project layout), copy-paste the hdf5 file into `data/GF_cache/` and **rename it** as `Frensel_Ag_2_nm_665nm.hdf5`, which means simulation of donor on the height 2nm of silver planar surface and emitting 665nm photon.
+* **Step2:** Run `mqed_FE` in the terminal, it will generate `enhancement_magic_angle_1.864eV.png` file under subdirectory `outputs/RET/Y-M-D/H-M-S/`. This result is the enhancement electric field of dipole emitting energy with value **1.864eV** with the azimuthal angle of both donor and acceptor is magic-angle(**arcos(1/sqrt(3))**). The X-axis is the horizental distance between donor and acceptor. You should get same result as `enhancement_magic_angle_1.864eV.png` under subdirectory `Beta_Test/`.
 Here is the reference plot for this step:
   <p align="center">
     <img src="Beta_Test/enhancement_magic_angle_1.864eV.png" alt="Reference result for Step 3" width="500">
   </p>
+
+<!-- * **Step3:** Run `mqed_nhse initial_state.site_index=51` in the terminal, it will generate `silver_stationary_latest.hdf5` file under subdirectory `outputs/Lindblad/Y-M-D/H-M-S/`. This result represents the quantum dynamics of molecular aggregate aligned on the silver surface with their azimuthal angle at magic angle. Copy-paste the`silver_stationary_latest.hdf5` file into subdirectory `data/QDyn_cache/`(**create this subdirectory first**) without rename the file.
+
 * **Step4** Run multiple different commands:
 
 ```bash
@@ -406,7 +409,7 @@ Run `mqed_plot_sqrt_msd` and you should get a file `silver_middle_sqrt_msd.png` 
 Here is the reference of the figure:
   <p align="center">
     <img src="Beta_Test/silver_middle_sqrt_msd.png" alt="Reference result for Step 3" width="500">
-  </p>
+  </p> -->
 
 ---
 
