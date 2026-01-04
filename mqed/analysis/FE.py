@@ -127,27 +127,23 @@ def calculate_enhancement(cfg: DictConfig):
             sel = np.ones_like(rx_nm, dtype=bool)
 
         x = rx_nm[sel]
-        # y_real = enhancement_field_real[i, sel]
-        # y_imag = enhancement_field_imag[i, sel]
-        y = enhancement_slice[ sel]
+        y_real = enhancement_field_real[i, sel]
+        y_imag = enhancement_field_imag[i, sel]
 
         # -------- choose components to plot --------
         # components can be: ["real"], ["imag"], or ["real","imag"]
-        # components = getattr(ps, "components", ["real", "imag"])
+        components = getattr(ps, "components", ["real", "imag"])
 
         fig, ax = plt.subplots(figsize=(8, 6))
 
-        # if "real" in components:
-        #     ax.plot(x, y_real, getattr(ps, "real_style", "r--"),
-        #         lw=getattr(ps, "lw", 1),
-        #         label=ps.legend.real_label)
-        # if "imag" in components:
-        #     ax.plot(x, y_imag, getattr(ps, "imag_style", "b--"),
-        #         lw=getattr(ps, "lw", 1),
-        #         label=ps.legend.imag_label)
-        ax.plot(x, y, getattr(ps, "line_style", "r--"),
+        if "real" in components:
+            ax.plot(x, y_real, getattr(ps, "real_style", "r--"),
                 lw=getattr(ps, "lw", 1),
-                label=ps.legend.label)
+                label=ps.legend.real_label)
+        if "imag" in components:
+            ax.plot(x, y_imag, getattr(ps, "imag_style", "b--"),
+                lw=getattr(ps, "lw", 1),
+                label=ps.legend.imag_label)
         # ax.plot(rx_nm, enhancement_field_real[i, :], 'r--', lw=1, label=ps.legend.real_label)
         # ax.plot(rx_nm, enhancement_field_imag[i, :], 'b--', lw=1, label=ps.legend.imag_label)
 
@@ -179,7 +175,7 @@ def calculate_enhancement(cfg: DictConfig):
         plt.close(fig)
     logger.success(f"RET enhancement calculation complete. Logs saved to: {plot_filepath.absolute()}")
 
-@hydra.main(config_path="../../configs/analysis", config_name="RET", version_base=None)
+@hydra.main(config_path="../../configs/analysis", config_name="FE", version_base=None)
 def main(cfg: DictConfig) -> None:
     # 1. Get the output directory managed by Hydra
     calculate_enhancement(cfg)
