@@ -1,12 +1,12 @@
 <div align="center">
 
-# MacroscopicQED
+# MQEDTP
 
 [![python](https://img.shields.io/badge/Python-3.9%2B-blue?logo=python\&logoColor=white)](#)
 [![hydra](https://img.shields.io/badge/Config-Hydra_1.x-89b8cd)](https://hydra.cc/)
 [![license](https://img.shields.io/badge/License-TBD-lightgrey)](#)
 
-A Python package for macroscopic QED simulations (Dyadic Green’s functions, RET analysis, and open‑system dynamics via Lindblad / NHSE), with Hydra-based configuration and small CLI wrappers for common workflows.
+A Python package for Macroscopic QED simulations (Dyadic Green’s functions, RET and FE analysis, and open‑system dynamics via Lindblad / NHSE) studying exciton-polariton and plasmon-polariton under the dielectric environment, with Hydra-based configuration and small CLI wrappers for common workflows.
 
 </div>
 
