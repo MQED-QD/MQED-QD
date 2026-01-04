@@ -1,5 +1,4 @@
-from numpy import np
-
+import numpy as np
 
 def compute_enhancement(p_donor,p_acceptor,g_total, g_vac):
     """
