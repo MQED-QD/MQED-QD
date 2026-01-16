@@ -16,7 +16,7 @@ parameters:
   material: 'Ag'
 
 io:
-  xlsx_path: ${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/BEM_cache/YOUR_FILE.xlsx
-  peff_path: ${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/BEM_cache/YOUR_FILE.csv
+  xlsx_path: ${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/BEM_cache/dipole_silver_nanorod_2nm_GF_665_middle.xlsx
+  peff_path: ${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/BEM_cache/peff_vs_lambda_665nm.csv
 
-  output_file: BEM_GF_${parameters.geometry}_${parameters.material}_${parameters.lambda_nm}.hdf5
+  output_file: BEM_GF_${parameters.geometry}_${parameters.material}_${parameters.lambda_nm}nm.hdf5
