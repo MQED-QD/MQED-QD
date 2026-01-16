@@ -21,4 +21,5 @@ build/
 dist/
 *.egg-info/
 
-mqed/disorder/
+#disorder files
+mqed/disorder 
