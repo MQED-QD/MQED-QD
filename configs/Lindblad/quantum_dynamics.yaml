@@ -10,11 +10,12 @@ hydra:
 # --- Our Application Configuration ---
 
 greens:
-  h5_path: ${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/BEM_cache/BEM_GF_nanorod_Ag_665nm.hdf5 # update as needed
+  h5_path: ${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/YOUR_PATH # update as needed
 
 #Material information
 material:
   name: silver
+  geometry: planar # or 'sphere', 'planar', match with your simulation to avoid confusion.
 
 # Simulation controls
 simulation:
@@ -26,28 +27,28 @@ simulation:
 
 
 # system
-  Nmol: 100 # number of sites
+  Nmol: 50 # number of sites
   d_nm: 3.0 # lattice spacing (nm)
 
 #emitter frequency
   lambda_nm: 665        # wavelength of emitter in nm
 
 # Green's function data simulation method
-  gf_method: BEM  # 'BEM' or 'Frensel'
+  gf_method: Frensel  # 'BEM' or 'Frensel'
 
 
 # dipoles / orientation
   mu_D_debye: 3.8
   mu_A_debye: 3.8
-  theta_deg: 90.0
-  phi_deg: magic # or a number
+  theta_deg: 0.0
+  phi_deg: 0.0 # or a number
   mode: stationary # or 'disorder'
   # disorder_sigma_phi_deg: 15.0 # uncomment for disordered orientations
 
 
 # Initial condition
 initial_state:
-  site_index: 51 # start the exciton at site |51>
+  site_index: 1 # start the exciton at site |1>
 
 
 # Solver selection
@@ -57,4 +58,4 @@ solver:
 
   # Output file (goes under Hydra's run dir)
 output:
-  filename: ${simulation.gf_method}_${material.name}_stationary_${simulation.lambda_nm}nm.hdf5
+  filename: ${simulation.gf_method}_${material.name}_${material.geometry}_${simulation.lambda_nm}nm_N${simulation.Nmol}.hdf5
