@@ -48,7 +48,12 @@ def build_and_save(
     # --- vacuum dyadic (optional) ---
     # If you don't have vacuum for Rx>0, you can set it to zeros or compute analytically elsewhere.
     
-
+    logger.info("Preparing total Green's function array...")
+    # breakpoint()
+    if rx_nm_pos[0] != 0.0:
+        logger.info("The first position is not zero, shift positions accordingly.")
+        rx_nm_pos = rx_nm_pos - rx_nm_pos[0]
+    logger.info(f"Final positions (nm): {rx_nm_pos}")
     # --- prepend Rx=0 ---
     Rxnm = np.concatenate(([0.0], rx_nm_pos))
     Gtot = np.zeros((1, len(Rxnm), 3, 3), dtype=np.complex128)
