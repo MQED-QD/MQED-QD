@@ -1,0 +1,101 @@
+defaults:
+  - _self_
+  - hydra: default
+
+hydra:
+  job:
+    name: compare_planar_vs_nanorod
+
+log_file: ${hydra:runtime.output_dir}/${hydra.job.name}.log
+
+paths:
+  root: ${oc.env:MQED_ROOT,${hydra:runtime.cwd}}
+  # data_dir: ${paths.root}/mqed/BEM
+
+  planar_h5: ${paths.root}/data/GF_cache/Frensel_Ag_2_nm_665nm.hdf5  # <- your existing planar GF file
+  nanorod_h5: ${paths.root}/data/BEM_cache/BEM_GF_nanorod_Ag_665nm.hdf5  # <- your existing nanorod GF file
+
+dipole_frequency: 1.864
+
+data:
+  x_key: Rx_nm
+  energy_index: 0
+  use_planar_x_as_reference: true
+  interp_to_reference_x: true
+
+dipoles:
+  donor: {theta_deg: 0.0, phi_deg: 0.0}
+  acceptor: {theta_deg: 0.0, phi_deg: 0.0}
+
+plot:
+  dpi: 140
+  figsize: [11, 6]
+  save: true
+  save_path: planar_vs_nanorod_enhancement.png
+
+  rcParams:
+    font.size: 12
+    axes.labelsize: 16
+    axes.titlesize: 12
+    legend.fontsize: 12
+    xtick.labelsize: 12
+    ytick.labelsize: 12
+
+  axes:
+    title: " $\\omega_0 = {dipole_frequency} ~\\mathrm{{eV}}$"
+    xlabel: "Distance $R_x$ (nm)"
+    ylabel: "$Enhancement\\ (Normalized)$"
+    xlim: [0, 100]
+    ylim: null
+    grid: false
+    spine_width: 1.2
+    yscale: "log"
+
+    ticks:
+      direction: "in"
+      top: true
+      right: true
+      labelsize: 12
+      length: 6
+      width: 1.2
+
+  legend:
+    loc: "best"
+    frameon: true
+    fancybox: false
+    framealpha: 1.0
+    fontsize: 12
+    edgecolor: "0.5"
+
+  series_order: [planar_real, planar_imag, nanorod_real, nanorod_imag]
+
+  series:
+    planar_real:
+      source: "planar_real"
+      label: "$V/V^{0}$ (Planar)"
+      linestyle: "-"
+      linewidth: 2.7
+
+    planar_imag:
+      source: "planar_imag"
+      label: "$\\Gamma/\\Gamma^{0}$ (Planar)"
+      linestyle: "-"
+      linewidth: 2.7
+
+    nanorod_real:
+      source: "nanorod_real"
+      label: "$V/V^{0}$ (Nanorod)"
+      linestyle: "None"
+      marker: "o"
+      markersize: 7
+      markerfacecolor: "none"
+      markeredgewidth: 1.6
+
+    nanorod_imag:
+      source: "nanorod_imag"
+      label: "$\\Gamma/\\Gamma^{0}$ (Nanorod)"
+      linestyle: "None"
+      marker: "s"
+      markersize: 7
+      markerfacecolor: "none"
+      markeredgewidth: 1.6
