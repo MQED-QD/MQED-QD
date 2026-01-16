@@ -92,7 +92,7 @@ This package installs the following command‑line tools (from `setup.py` entry 
 
 | Command              | What it does                                       |
 | -------------------- | ---------------------------------------------------|
-| `mqed_G_Sommerfeld`  | Run Dyadic Green’s function simulation on planar.  |
+| `mqed_GF_Sommerfeld` | Run Dyadic Green’s function simulation on planar.  |
 | `mqed_RET`           | Run RET analysis                                   |
 | `mqed_FE`            | Run Field Enhancement analysis                     |
 | `mqed_lindblad`      | Time evolution with Lindblad dynamics              |
