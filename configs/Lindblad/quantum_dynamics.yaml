@@ -10,12 +10,12 @@ hydra:
 # --- Our Application Configuration ---
 
 greens:
-  h5_path: ${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/YOUR_PATH # update as needed
+  h5_path: ${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/BEM_cache/BEM_GF_nanorod_Ag_665nm_height_8nm.hdf5 # update as needed
 
 #Material information
 material:
   name: silver
-  geometry: planar # or 'sphere', 'planar', match with your simulation to avoid confusion.
+  geometry: nanorod # or 'sphere', 'planar', match with your simulation to avoid confusion.
 
 # Simulation controls
 simulation:
@@ -34,7 +34,7 @@ simulation:
   lambda_nm: 665        # wavelength of emitter in nm
 
 # Green's function data simulation method
-  gf_method: Frensel  # 'BEM' or 'Frensel'
+  gf_method: BEM  # 'BEM' or 'Frensel'
 
 
 # dipoles / orientation
