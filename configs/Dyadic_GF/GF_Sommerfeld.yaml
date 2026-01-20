@@ -21,7 +21,7 @@ material:
   # This section is used only if source_type is 'excel'
   excel_config:
     filepath: "DielectricFunction/dielectric function.xlsx"
-    sheet_name: "Ag_OMNN"
+    sheet_name: "Ag_BEM"
 
 simulation:
   material: "Ag" # Material surface
@@ -36,18 +36,18 @@ simulation:
     max: 1.0 # Set min and max to the same value for a single point
     points: 1
   
-  wavelength_nm:
+  wavelength_nm: # same usage as energy_eV
     min: 500.0
     max: 500.0
     points: 1
   position:
-    zD: 2.0e-9
-    zD_nm: 2 # Key for name
-    zA: 2.0e-9
+    zD: 8.0e-9
+    zD_nm: 8 # Key for name
+    zA: 8.0e-9
     Rx_nm: # New section to define the range of horizontal distances
       start: 0.0
-      stop: 500.0
-      points: 501 # This will give you points 1, 2, 3, ..., 1000
+      stop: 300.0
+      points: 301 # This will give you points 1, 2, 3, ..., 1000
 
 output:
-  filename: "result_${simulation.material}_${simulation.position.zD_nm}_nm.hdf5"
+  filename: "Frensel_GF_planar_${simulation.material}_height_${simulation.position.zD_nm}nm.hdf5"
