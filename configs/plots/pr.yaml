@@ -26,6 +26,11 @@ curves:
     use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/height_8nm/BEM_silver_nanorod_665nm_N50.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
     style: "--"         # matplotlib line format
     lw: 1.5
+  
+  - label: "free space"
+    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/height_8nm/Frensel_vacuum_planar_665nm_N50.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+    style: "D"         # matplotlib line format
+    lw: 0.5
 
 plot_settings:
   save_plot: true
