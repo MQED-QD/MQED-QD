@@ -38,34 +38,39 @@ curves:
   #   style: "--"         # matplotlib line format
   #   lw: 1.5
 
-  - label: "planar Frensel"
-    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/height_8nm/Frensel_silver_planar_665nm_N50.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+  - label: "planar"
+    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/intermol_8nm/Frensel_silver_planar_665nm_N30.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
     style: "-"         # matplotlib line format
     lw: 1.5
 
-  - label: "nanorod BEM"
-    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/height_8nm/BEM_silver_nanorod_665nm_N50.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
-    style: "--"         # matplotlib line format
-    lw: 1.5
+  # - label: "nanorod"
+  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/intermol_8nm/BEM_silver_nanorod_665nm_N30.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+  #   style: "--"         # matplotlib line format
+  #   lw: 1.5
+  
+  # - label: "nanorod_NN"
+  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/intermol_8nm/BEM_silver_nanorod_665nm_N30_NN.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+  #   style: "-."         # matplotlib line format
+  #   lw: 1.5
 
-  - label: "free space"
-    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/height_8nm/Frensel_vacuum_planar_665nm_N50.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
-    style: "o-"         # matplotlib line format
-    lw: 1.5
+  # - label: "free space"
+  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/height_8nm/Frensel_vacuum_planar_665nm_N50.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+  #   style: "-."         # matplotlib line format
+  #   lw: 1.5
 
 
 plot_settings:
   save_plot: true
-  geometry: nanorod # or other geometries, 'sphere', 'planar', etc.
+  geometry: planar # or other geometries, 'sphere', 'planar', etc.
   material: silver
   excitation_position_nm: initial # or 'initial', 'middle', etc.
-  filename: "${plot_settings.geometry}_${plot_settings.material}_${plot_settings.excitation_position_nm}_msd.png"
+  filename: "${plot_settings.geometry}_${plot_settings.material}_${plot_settings.excitation_position_nm}_msd_comparison.png"
   dpi: 400
   show: false
   tight_layout: true
   grid: false # Enable grid for true, or False to disable
   legend: true # set to true to show legend
-  figsize: [8.0, 6.0] # width, height in inches (1 inch = 2.54 cm)
+  figsize: [8.0, 6.0] # width, height in inches (1 inch = 2.54 cm) [3.35,2.4] for ACS
 
   # x selection (time). Choose one: x_range_ps or x_index_range
   x_range_ps: [0.0, 150.0]   # in picoseconds
@@ -73,12 +78,12 @@ plot_settings:
 
   # axis labels, scales, limits
   xlabel: "t (ps)"            # or "t (ps)" if you keep in ps
-  ylabel: "$MSD$ (nm$^2$)"
+  ylabel: "MSD (nm$^2$)"
   title: null # or make your own title, "Silver; Middle Excitation"
   xscale: linear             # or "log"
   yscale: linear
-  xlim: null
-  ylim: null
+  xlim: [0,150]     # e.g., [0, 100]; use Null for automatic limit  
+  ylim: [0, Null]        # e.g., [0, 100]; use Null for automatic limit
 
   font:
     family: null        # e.g. "DejaVu Sans", "Times New Roman"; null keeps default
