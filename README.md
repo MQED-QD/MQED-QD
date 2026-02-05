@@ -370,12 +370,195 @@ MacroscopicQED/
 
 ## Beta Test:
 * **Prerequisite:** Install the package as introduced in **Installation**.
-* **Step1:** After install the package, run `mqed_GF_Sommerfeld simulation.energy_eV=1.864` in the ternimal, it will generate `result_Ag_2nm.hdf5` file under subdirectory `outputs/Dyadic_GF_Sommerfeld/Y-M-D/H-M-S/`. Create a new subdirectory named `data/GF_cache` under the root directory (See project layout), copy-paste the hdf5 file into `data/GF_cache/` and **rename it** as `Frensel_Ag_2_nm_665nm.hdf5`, which means simulation of donor on the height 2nm of silver planar surface and emitting 665nm photon.
-* **Step2:** Run `mqed_FE` in the terminal, it will generate `enhancement_magic_angle_1.864eV.png` file under subdirectory `outputs/FE/Y-M-D/H-M-S/`. This result is the enhancement electric field of dipole emitting energy with value **1.864eV** with the azimuthal angle of both donor and acceptor is magic-angle(**arcos(1/sqrt(3))**). The X-axis is the horizental distance between donor and acceptor. You should get same result as `enhancement_magic_angle_1.864eV.png` under subdirectory `Beta_Test/`.
+* **Step1:** After install the package, run `mqed_GF_Sommerfeld simulation.energy_eV=1.864` in the ternimal, it will generate `Frensel_GF_planar_Ag_height_8nm.hdf5` file under subdirectory `outputs/Dyadic_GF_Sommerfeld/Y-M-D/H-M-S/`. Create a new subdirectory named `data/GF_cache` under the root directory (See project layout), copy-paste the hdf5 file into `data/GF_cache/` and **rename it** as `Frensel_GF_planar_Ag_height_8nm_665nm.hdf5`, which means simulation of dipole on the height 8nm of silver planar surface and emitting 665nm photon.
+The relavent configs under `configs/Dyadic_GF/GF_Sommerfeld.yaml`is:
+```bash
+material:
+  source_type: excel
+  constant_value: 9.0+0.0j
+  excel_config:
+    filepath: DielectricFunction/dielectric function.xlsx
+    sheet_name: Ag_BEM
+simulation:
+  material: Ag
+  spectral_param: energy_eV
+  energy_eV: 1.864
+  wavelength_nm:
+    min: 500.0
+    max: 500.0
+    points: 1
+  position:
+    zD: 8.0e-09
+    zD_nm: 8
+    zA: 8.0e-09
+    Rx_nm:
+      start: 0.0
+      stop: 300.0
+      points: 301
+output:
+  filename: Frensel_GF_planar_${simulation.material}_height_${simulation.position.zD_nm}nm.hdf5
+```
+We provided the result in the `Beta_Test/GF_Sommerfeld` subdirectory for reference.
+* **Step2:** Run `mqed_FE` in the terminal, it will generate `enhancement_magic_angle_1.864eV.png` file under subdirectory `outputs/FE/Y-M-D/H-M-S/`. This result is the enhancement electric field of dipole emitting energy with value **1.864eV** with the azimuthal angle of both donor and acceptor is magic-angle(**arcos(1/sqrt(3))**). The X-axis is the horizental distance between donor and acceptor. You should get same result as `enhancement_magic_angle_height_8nm_1.864eV.png` under subdirectory `Beta_Test/FE`.
+The reference configs under `configs/analysis/FE.yaml`is:
+```bash
+input_file: ${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/GF_cache/Frensel_GF_planar_Ag_height_8nm_665nm.hdf5 # 
+
+orientations:
+  donor:    { theta_deg: 90.0, phi_deg: "magic" }
+  acceptor: { theta_deg: 90.0, phi_deg: "magic" }
+
+plot_settings:
+  save_plot: true
+  dpi: 400
+
+  # choose x-range by value or by indices, not both  
+  x_range_nm: [0.0,100.0] #-> masks points where 1 ≤ Rx_nm ≤ 100
+  # x_index_range: [0, 9] #-> masks first 10 points (index 0 to 9)
+
+  components: ["real", "imag"]    # options: ["real"], ["imag"], ["real","imag"]
+  # Text & style
+  xlabel: "Donor–Acceptor Distance (nm)"
+  ylabel: "Enhancement"
+  title_template: "Emitter energy = {energy:.3f} eV"
+  legend:
+    real_label: "$V_{\\alpha\\beta}/ V_{0,\\alpha\\beta}$"
+    imag_label: "$\\Gamma_{\\alpha\\beta}/ \\Gamma_{0,\\alpha\\beta}$"
+  
+  lw: 1
+  real_style: "r--"
+  imag_style: "b--"
+
+  xscale: linear      # or "log"
+  yscale: linear      # or "log"
+
+  # Optional axis limits (override selection if you want)
+  xlim: [0, 50]  # e.g., [0, 500]
+  ylim: null  # e.g., [0, 10]
+  filename_prefix: "enhancement_magic_angle"
+  grid: true
+```
 Here is the reference plot for this step:
   <p align="center">
-    <img src="Beta_Test/enhancement_magic_angle_1.864eV.png" alt="Reference result for Step 3" width="500">
+    <img src="Beta_Test/FE/enhancement_magic_angle_height_8nm_1.864eV.png" alt="Reference result for Step 2" width="500">
   </p>
+
+* **Step3:** Run `mqed_nhse` in terminal, it will generate `Frensel_silver_planar_665nm_N30.hdf5` file under subdirectory `outputs/NonHermitian/Y-M-D/H-M-S/`. This result 
+represents the quantum dynamics of 30 (N30) z-oriented molecular aggregates (H-aggregates) with emitter frequency=665nm (1.864eV). The dipole intensity is 3.8 Debye (showed in configs) 
+and we did not do nearest-neighbor approximation (coupling_limit.enable=false, if 'true' and V_hop_radius=1, the nearest-neighbor approximation is turned on.) If user wants to study 
+the middle excitation of diffusion behavior of molecular aggregate, user could change the inital_state to value of N/2. Create a new subdirectory `data/QDyn_cache` to store the temporary 
+quantum dynamics result and create another subdirectory `intermol_8nm` under the `data/QDyn_cache` to remind user the result is from 8nm intermolecular distance simulation. Copy-Paste the
+`Frensel_silver_planar_665nm_N30.hdf5` to `data/QDyn_cache/intermol_8nm` for further process.
+
+The relavent configs under `configs/Lindblad/quantum_dynamics_nhse.yaml` is: 
+```bash
+greens:
+  h5_path: ${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/GF_cache/Frensel_GF_planar_Ag_height_8nm_665nm.hdf5 # update as needed
+
+#Material information
+material:
+  name: silver
+  geometry: planar # or 'sphere', 'planar', match with your simulation to avoid confusion.
+
+observables:
+  - name: X_shift
+    kind: operator
+
+  - name: X_shift2
+    kind: operator
+
+  - name: IPR_site
+    kind: callable
+    params:
+      Nmol: ${simulation.Nmol}    # pass through from your sim config
+
+  # # Optionally: one or many site populations
+  # - name: pop_site
+  #   kind: operator
+  #   params:
+  #     site: 1                     # 1-based site index (your code uses +1 internally)
+
+  # Add more site populations by repeating the item:
+  # - { name: pop_site, kind: operator, params: { site: 10 } }
+# Simulation controls
+simulation:
+# time grid in picoseconds
+  t_ps:
+    start: 0.0
+    stop: 150.0
+    output_step: 5e-3
+
+  coupling_limit:
+    enable: false
+    V_hop_radius: 1
+    keep_V_on_site: false
+    Gamma_rule: leave # "leave" | "same_as_V" | "diagonal_only" | "limit_by_hops"
+    Gamma_hop_radius: None
+    keep_Gamma_on_site: true
+
+# system
+  Nmol: 30 # number of sites
+  d_nm: 8.0 # lattice spacing (nm)
+
+#emitter frequency
+  lambda_nm: 665        # wavelength of emitter in nm
+
+# Green's function data simulation method
+  gf_method: Frensel  # 'BEM' or 'Frensel'
+
+
+# dipoles / orientation
+  mu_D_debye: 3.8
+  mu_A_debye: 3.8
+  theta_deg: 0.0
+  phi_deg: 0.0 # or a number
+  mode: stationary # or 'disorder'
+  # disorder_sigma_phi_deg: 15.0 # uncomment for disordered orientations
+
+
+# Initial condition
+initial_state:
+  site_index: 1 # start the exciton at site |1>
+
+
+# Solver selection
+solver:
+  method: NonHermitian # 'Lindblad' or 'NonHermitian'
+
+
+  # Output file (goes under Hydra's run dir)
+output:
+  filename: ${simulation.gf_method}_${material.name}_${material.geometry}_${simulation.lambda_nm}nm_N${simulation.Nmol}.hdf5
+```
+The Result is under the `Beta_Test/Qdyn/Frensel_silver_planar_665nm_N30/hdf5` as reference.
+
+**Step4** Run `mqed_plot_msd`, this command will generate a Mean Square Displacement (MSD) under the subdirectory `outputs/plot_msd/Y-M-D/H-M-S/`. User can modify the file name as their preference. The relavent configs under `configs/plots/msd.yaml` is:
+```bash
+  - label: "planar"
+    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/intermol_8nm/Frensel_silver_planar_665nm_N30.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+    style: "-"         # matplotlib line format
+    lw: 1.5
+```
+If user want to compare multiple plots, just need to copy-paste same format but change the data resource in `use_last_glob`. The reference for the plot result is:
+  <p align="center">
+    <img src="Beta_Test/msd/planar_silver_initial_msd_comparison.png" alt="Reference result for Step 4" width="500">
+  </p>
+
+If user wants to change the plot setting, like fontsize, label size etc, modify directly in the yaml file.
+
+**Step5** Run `mqed_plot_PR`, this command will generate a Participation Ratio (PR) under the subdirectory `outputs/plot_msd/Y-M-D/H-M-S/`. User can modify the file name similar as introduced in Step 4. The relavent configs under `configs/plots/pr.yaml` is: 
+```bash
+  - label: "planar"
+    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/intermol_8nm/Frensel_silver_planar_665nm_N30.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+    style: "-"         # matplotlib line format
+    lw: 1.5
+```
+If user want to compare multiple plots, just need to copy-paste same format but change the data resource in `use_last_glob` as introduced in Step 4. The reference for the plot result is:
+  <p align="center">
+    <img src="Beta_Test/PR/planar_silver_initial_pr_comparison.png" alt="Reference result for Step 5" width="500">
+  </p>
+
+User can modify the plot settings same as in Step 4. 
 
 <!-- * **Step3:** Run `mqed_nhse initial_state.site_index=51` in the terminal, it will generate `silver_stationary_latest.hdf5` file under subdirectory `outputs/Lindblad/Y-M-D/H-M-S/`. This result represents the quantum dynamics of molecular aggregate aligned on the silver surface with their azimuthal angle at magic angle. Copy-paste the`silver_stationary_latest.hdf5` file into subdirectory `data/QDyn_cache/`(**create this subdirectory first**) without rename the file.
 
@@ -389,7 +572,7 @@ mqed_nhse_disorder simulation.disorder_sigma_phi_deg=50
 
 After those commands, there will be multiple files name as `silver_sigma${disorder_sigma_phi_deg}_avg_latest.hdf5` (The **disorder_sigma_phi_deg** is the value of your input, i.e, **3,10,30,50**)generated under the subdirectories `outputs/NHSE/Y-M-D/H-M-S/`. The file path will show up in the terminal or you can find them under the file `outputs/NHSE/Y-M-D/H-M-S/NHSE_disorder.log`. Copy-paste those `silver_sigma${disorder_sigma_phi_deg}_avg_latest.hdf5` into subdirectory `data/QDyn_cache/`.
 * **Step5:** After **Step4**, you should have `silver_stationary_latest.hdf5` and multiple `silver_sigma${disorder_sigma_phi_deg}_avg_latest.hdf5` files under the `data/QDyn_cache/`. Make sure you have following `curves` part in the `configs/plots/sqrt_msd.yaml`:
-
+ 
 ```bash
 curves:
   - label: "Magic-Angle"
