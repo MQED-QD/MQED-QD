@@ -1,3 +1,8 @@
+# MacroscopicQED/mqed/Lindblad/quantum_operator.py
+'''
+This module defines quantum operators as Qobj instances for use in quantum dynamics simulations.
+User can create operators for mean-square displacement, position, and inverse participation ratio (IPR).
+'''
 from qutip import Qobj, qeye, projection
 import numpy as np
 
