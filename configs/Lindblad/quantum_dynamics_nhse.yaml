@@ -1,0 +1,88 @@
+# Add this defaults list to integrate loguru with Hydra's logging
+defaults:
+  - hydra: default  # <-- This loads configs/Lindblad/hydra/default.yaml
+  - _self_
+
+# ADD THIS SECTION to set a custom name for the output directory
+hydra:
+  job:
+    name: NonHermitian
+# --- Our Application Configuration ---
+
+greens:
+  h5_path: ${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/GF_cache/Frensel_GF_planar_Ag_height_8nm_665nm.hdf5 # update as needed
+
+#Material information
+material:
+  name: silver
+  geometry: planar # or 'sphere', 'planar', match with your simulation to avoid confusion.
+
+observables:
+  - name: X_shift
+    kind: operator
+
+  - name: X_shift2
+    kind: operator
+
+  - name: IPR_site
+    kind: callable
+    params:
+      Nmol: ${simulation.Nmol}    # pass through from your sim config
+
+  # # Optionally: one or many site populations
+  # - name: pop_site
+  #   kind: operator
+  #   params:
+  #     site: 1                     # 1-based site index (your code uses +1 internally)
+
+  # Add more site populations by repeating the item:
+  # - { name: pop_site, kind: operator, params: { site: 10 } }
+# Simulation controls
+simulation:
+# time grid in picoseconds
+  t_ps:
+    start: 0.0
+    stop: 150.0
+    output_step: 5e-3
+
+  coupling_limit:
+    enable: false
+    V_hop_radius: 1
+    keep_V_on_site: false
+    Gamma_rule: leave # "leave" | "same_as_V" | "diagonal_only" | "limit_by_hops"
+    Gamma_hop_radius: None
+    keep_Gamma_on_site: true
+
+# system
+  Nmol: 30 # number of sites
+  d_nm: 8.0 # lattice spacing (nm)
+
+#emitter frequency
+  lambda_nm: 665        # wavelength of emitter in nm
+
+# Green's function data simulation method
+  gf_method: Frensel  # 'BEM' or 'Frensel'
+
+
+# dipoles / orientation
+  mu_D_debye: 3.8
+  mu_A_debye: 3.8
+  theta_deg: 0.0
+  phi_deg: 0.0 # or a number
+  mode: stationary # or 'disorder'
+  # disorder_sigma_phi_deg: 15.0 # uncomment for disordered orientations
+
+
+# Initial condition
+initial_state:
+  site_index: 1 # start the exciton at site |1>
+
+
+# Solver selection
+solver:
+  method: NonHermitian # 'Lindblad' or 'NonHermitian'
+
+
+  # Output file (goes under Hydra's run dir)
+output:
+  filename: ${simulation.gf_method}_${material.name}_${material.geometry}_${simulation.lambda_nm}nm_N${simulation.Nmol}.hdf5
