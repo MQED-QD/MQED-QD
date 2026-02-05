@@ -5,16 +5,40 @@ import h5py
 from loguru import logger
 from pathlib import Path
 from qutip import fock, fock_dm
-from typing import Optional
+from typing import Dict, Optional, Tuple, Any
 
-from hydra import compose
+
 
 from mqed.Lindblad.quantum_dynamics import SimulationConfig, LindbladDynamics, NonHermitianSchDynamics
 from mqed.utils.dgf_data import load_gf_h5
 from mqed.utils.logging_utils import setup_loggers_hydra_aware
 from hydra.core.hydra_config import HydraConfig
-from mqed.Lindblad.quantum_operator import msd_operator, position_operator, ipr_callable
+from mqed.Lindblad.quantum_operator import msd_operator, position_operator, ipr_callable, site_population_operator
 from mqed.utils.save_hdf5 import save_dx_h5
+
+def build_observable(item: Dict[str, Any], *, dim: int, d_nm: float, Nmol: int, init_site: int) -> Tuple[str, object]:
+    """
+    Turn one YAML 'observables' item into (key, obj_or_callable) for QuTiP.
+    - If 'kind' == 'operator'  -> return Qobj
+    - If 'kind' == 'callable'  -> return f(t, state) callable
+    """
+    name   = str(item["name"])
+    kind   = str(item.get("kind", "operator"))
+    params = dict(item.get("params", {}) or {})
+
+    if name == "X_shift":
+        return name, position_operator(dim, d_nm, Nmol, init_site)
+    if name == "X_shift2":
+        return name, msd_operator(dim, d_nm, Nmol, init_site)
+    if name == "pop_site":
+        site = int(params.get("site", 1))
+        return f"pop_site_{site}", site_population_operator(dim, site)  # label includes site
+    if name == "IPR_site":
+        # bind Nmol (required); any extra params are ignored safely
+        Nmol_local = int(params.get("Nmol", Nmol))
+        return name, (lambda t, st: ipr_callable(t, st, Nmol=Nmol_local))
+
+    raise ValueError(f"Unknown observable name: {name!r}")
 
 def app_run(cfg:DictConfig, output_dir: Optional[Path]=None):
     if output_dir is None:
@@ -53,6 +77,7 @@ def app_run(cfg:DictConfig, output_dir: Optional[Path]=None):
         phi_deg=cfg.simulation.phi_deg,
         disorder_sigma_phi_deg=cfg.simulation.get('disorder_sigma_phi_deg', None),
         mode=cfg.simulation.mode,
+        coupling_limit=cfg.simulation.get('coupling_limit', None),
     )
 
 
@@ -73,9 +98,21 @@ def app_run(cfg:DictConfig, output_dir: Optional[Path]=None):
         raise ValueError(f"Unknown solver.method = {method}")
 
 
-    e_ops = {"X_shift": position_operator(sim_cfg.Nmol + 1, sim_cfg.d_nm, sim_cfg.Nmol, cfg.initial_state.site_index),
-            "X_shift2": msd_operator(sim_cfg.Nmol + 1, sim_cfg.d_nm, sim_cfg.Nmol, cfg.initial_state.site_index),
-            "IPR_site": lambda t, st: ipr_callable(t, st, Nmol=sim_cfg.Nmol),}
+    # e_ops = {"X_shift": position_operator(sim_cfg.Nmol + 1, sim_cfg.d_nm, sim_cfg.Nmol, cfg.initial_state.site_index),
+    #         "X_shift2": msd_operator(sim_cfg.Nmol + 1, sim_cfg.d_nm, sim_cfg.Nmol, cfg.initial_state.site_index),
+    #         "IPR_site": lambda t, st: ipr_callable(t, st, Nmol=sim_cfg.Nmol),}
+
+    obs_cfg = getattr(cfg, "observables", []) or []
+    e_ops: dict[str, object] = {}
+    for item in obs_cfg:
+        key, obj = build_observable(
+            item,
+            dim=sim_cfg.Nmol + 1,
+            d_nm=sim_cfg.d_nm,
+            Nmol=sim_cfg.Nmol,
+            init_site=cfg.initial_state.site_index,
+        )
+        e_ops[key] = obj
 
 
     # 5) Evolve
@@ -83,9 +120,15 @@ def app_run(cfg:DictConfig, output_dir: Optional[Path]=None):
 
     #calculate dx from expectations
     # breakpoint()
-    ex1 = np.asarray(result.expectations["X_shift"])
-    ex2 = np.asarray(result.expectations["X_shift2"])
-    dx = np.sqrt(np.maximum(0.0, ex2 - ex1**2))
+    # ex1 = np.asarray(result.expectations["X_shift"])
+    # ex2 = np.asarray(result.expectations["X_shift2"])
+    # dx = np.sqrt(np.maximum(0.0, ex2 - ex1**2))
+
+    extras = {}
+    if "X_shift" in result.expectations and "X_shift2" in result.expectations:
+        x  = np.asarray(result.expectations["X_shift"])
+        x2 = np.asarray(result.expectations["X_shift2"])
+        dx = np.sqrt(np.maximum(0.0, x2 - x**2))
 
 
     # 6) Save to HDF5
@@ -111,7 +154,7 @@ def mqed_lindblad(cfg:DictConfig):
     cfg.solver.method = "Lindblad"
     app_run(cfg)
 
-@hydra.main(config_path="../../configs/Lindblad", config_name="quantum_dynamics", version_base=None)
+@hydra.main(config_path="../../configs/Lindblad", config_name="quantum_dynamics_nhse", version_base=None)
 def mqed_nhse(cfg:DictConfig):
     cfg.solver.method = "NonHermitian"
     app_run(cfg)
