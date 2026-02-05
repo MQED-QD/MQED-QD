@@ -10,13 +10,33 @@ hydra:
 # --- Our Application Configuration ---
 
 greens:
-  h5_path: ${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/BEM_cache/BEM_GF_nanorod_Ag_665nm_height_8nm.hdf5 # update as needed
+  h5_path: ${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/BEM_cache/BEM_GF_nanorod_Ag665nm_height_8nm_pos_500nm.hdf5 # update as needed
 
 #Material information
 material:
   name: silver
   geometry: nanorod # or 'sphere', 'planar', match with your simulation to avoid confusion.
 
+observables:
+  - name: X_shift
+    kind: operator
+
+  - name: X_shift2
+    kind: operator
+
+  - name: IPR_site
+    kind: callable
+    params:
+      Nmol: ${simulation.Nmol}    # pass through from your sim config
+
+  # # Optionally: one or many site populations
+  # - name: pop_site
+  #   kind: operator
+  #   params:
+  #     site: 1                     # 1-based site index (your code uses +1 internally)
+
+  # Add more site populations by repeating the item:
+  # - { name: pop_site, kind: operator, params: { site: 10 } }
 # Simulation controls
 simulation:
 # time grid in picoseconds
@@ -25,16 +45,23 @@ simulation:
     stop: 150.0
     output_step: 5e-3
 
+  coupling_limit:
+    enable: true
+    V_hop_radius: 1
+    keep_V_on_site: false
+    Gamma_rule: leave # "leave" | "same_as_V" | "diagonal_only" | "limit_by_hops"
+    Gamma_hop_radius: None
+    keep_Gamma_on_site: true
 
 # system
-  Nmol: 50 # number of sites
-  d_nm: 3.0 # lattice spacing (nm)
+  Nmol: 30 # number of sites
+  d_nm: 8.0 # lattice spacing (nm)
 
 #emitter frequency
   lambda_nm: 665        # wavelength of emitter in nm
 
 # Green's function data simulation method
-  gf_method: BEM  # 'BEM' or 'Frensel'
+  gf_method: Frensel  # 'BEM' or 'Frensel'
 
 
 # dipoles / orientation
