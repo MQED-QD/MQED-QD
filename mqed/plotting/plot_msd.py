@@ -131,6 +131,11 @@ def main(cfg: DictConfig) -> None:
 
     # ticks
     ax.tick_params(axis="both", which="both", labelsize=ticksize)
+    
+    # NEW: bold tick labels if requested (fallback to labelweight if tickweight not set)
+    tickweight = str(getattr(font, "tickweight", labelweight)) if font else labelweight
+    for ticklabel in ax.get_xticklabels() + ax.get_yticklabels():
+        ticklabel.set_fontweight(tickweight)
 
     # legend
     if getattr(ps, "legend", True):
