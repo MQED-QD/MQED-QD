@@ -91,7 +91,7 @@ mpirun --version
 This package installs the following command‑line tools (from `setup.py` entry points):
 
 | Command                   | What it does                                          |
-| --------------------      | ---------------------------------------------------   |
+| --------------------------| ------------------------------------------------------|
 | `mqed_GF_Sommerfeld`      | Run Dyadic Green’s function simulation on planar.     |
 | `mqed_RET`                | Run RET analysis                                      |
 | `mqed_FE`                 | Run Field Enhancement analysis                        |   
