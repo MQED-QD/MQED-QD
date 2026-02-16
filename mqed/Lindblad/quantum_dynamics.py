@@ -45,10 +45,7 @@ class SimulationResult:
     expectations: Dict[str, np.ndarray] = field(default_factory=dict)
 
 class QuantumDynamics(ABC):
-    """
-    Abstract base for quantum dynamics solvers sharing parameters and Hamiltonian building.
-    Subclasses implement the actual propogation method in the 'evolve'.
-    """
+    """Abstract base for quantum dynamics solvers (Hamiltonian, collapse ops, evolution)."""
 
     def __init__(self, config:SimulationConfig):
         self.cfg = config
@@ -56,13 +53,7 @@ class QuantumDynamics(ABC):
         self.omega_M = self.cfg.emitter_frequency /au_to_eV
     
     def build_hamiltonian(self,Green, seed:Union[int,None] = None) -> Qobj:
-        """
-        Construct Hamiltonian of the system
-        ..math::
-            &\hat{H}_\mathrm{M} = \sum_{\alpha=1}^{N_\mathrm{M}} \hbar \omega_\mathrm{M} \hat{\sigma}^{(+)}_\alpha \hat{\sigma}^{(-)}_\alpha, \\
-            &\hat{\mathcal{H}}_\mathrm{CP}^{\mathrm{Sc}} = \sum_{\alpha=1}^{N_\mathrm{M}} \Delta_{\alpha}^{\text{Sc}} \, \hat{\sigma}^{(+)}_\alpha \hat{\sigma}^{(-)}_\alpha , \\
-            & \hat{\mathcal{H}}_\mathrm{RDDI} =  \sum_{\alpha,\beta (\alpha\neq \beta) }^{N_\mathrm{M}} V_{\alpha\beta} \, \hat{\sigma}^{(+)}_\alpha \hat{\sigma}^{(-)}_\beta. 
-        """
+        """Build Hamiltonian from the Green's tensor, dipoles, and coupling limits."""
 
         H_np = np.zeros((self.dim,self.dim), dtype=complex)
         
@@ -133,28 +124,16 @@ class QuantumDynamics(ABC):
         return self.Hamiltonian
     
     def build_collapse_ops(self) -> list[Qobj]:
-        """
-        Build the standard Lindblad collapse operator from Gamma. Folow the https://en.wikipedia.org/wiki/Lindbladian,
-        the general Lindblad equation has the form:
-        ..math::
-            \dot{\rho} = -\frac{i}{\hbar}[H, \rho] + \sum_{n,m} h_{nm} \left( A_n \rho A_m^{\dagger} - \frac{1}{2} \{ A_m^{\dagger} A_n, \rho \} \right)
-        This can be diagonalized through unitary transformation u:
-        ..math::
-            u^{\dagger} h u = 
-            \begin{bmatrix} 
-            \gamma_1 & 0 & \cdots & 0 \\
-            0 & \gamma_2 & \cdots & 0 \\
-            \vdots & \vdots & \ddots & \vdots \\
-            0 & 0 & \cdots & \gamma_{N^2-1}
-            \end{bmatrix}
-        The eigenvalues are non-negative. If we define another orthonormal operator basis:
-        ..math::
-            L_i = \sum_{j} u_{ji} A_j
-        We can get the standard Lindblad equation:
-        ..math::
-            \dot{\rho} = -\frac{i}{\hbar}[H, \rho] + \sum_{i} \gamma_i \left( L_i \rho L_i^{\dagger} - \frac{1}{2} \{ L_i^{\dagger} L_i, \rho \} \right).
-        return:
-            c_ops: list[Qobj]: a list of collapse operator.
+        r"""Diagonalize ``Gamma`` and build Lindblad collapse operators ``L_k``.
+
+        Lindblad master equation:
+
+        .. math::
+
+           \dot{\rho} = -\tfrac{i}{\hbar}[H,\rho] + \sum_{i} \gamma_i \Big( L_i \rho L_i^{\dagger} - \tfrac{1}{2} \{ L_i^{\dagger} L_i, \rho \} \Big),
+
+        where the jump operators come from the eigendecomposition of the Hermitian rate matrix
+        ``Gamma' = 0.5*(Gamma + Gamma^\dagger)``.
         """
 
             # ---- basis: |0>, |1>, ..., |N_mol| ; σ_j^- = |0><j|
@@ -224,11 +203,7 @@ class QuantumDynamics(ABC):
 
 
 class LindbladDynamics(QuantumDynamics):
-    """
-    Standard Lindblad dynamics solver provide by qutip.mesolver(). 
-    ..math::
-        \dot{\rho} = -\frac{i}{\hbar}[H, \rho] + \sum_{i} \gamma_i \left( L_i \rho L_i^{\dagger} - \frac{1}{2} \{ L_i^{\dagger} L_i, \rho \} \right).
-    """
+    """Lindblad dynamics via ``qutip.mesolver`` using Gamma-derived jumps."""
     def __init__(self, config, GreensFunction, seed: Union[int, None]=None):
         super().__init__(config)
         self.cfg = config
@@ -271,8 +246,13 @@ class NonHermitianSchDynamics(QuantumDynamics):
         self.t_evaluation = self.cfg.tlist * ps_to_au
         self.seed = seed
     def eff_Hamiltonian(self) -> Qobj:
-        """
-        Construct effective non-Hermitian Hamiltonian by:
+        r"""Construct the effective non-Hermitian Hamiltonian.
+
+        .. math::
+
+           \hat{H}_\mathrm{eff} = \begin{pmatrix} 0 & 0^\top \\ 0 & H - \tfrac{i}{2}\,\Gamma' \end{pmatrix}, \quad
+           \Gamma' = \tfrac{1}{2}(\Gamma + \Gamma^{\dagger}).
+
         """
         H = self.build_hamiltonian(self.GF,seed = self.seed)
 
@@ -299,6 +279,3 @@ class NonHermitianSchDynamics(QuantumDynamics):
         
         named = {name: np.asarray(result.expect[n]) for n, name in enumerate(e_ops.keys())} if e_ops else {}
         return SimulationResult(tlist=self.cfg.tlist, expectations=named)
-
-
-

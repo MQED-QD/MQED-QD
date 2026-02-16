@@ -9,10 +9,18 @@ MacroscopicQED documentation
 Welcome to the docs for *MacroscopicQED*.
 
 .. toctree::
-   :maxdepth: 2
-   :caption: Contents:
+   :maxdepth: 1
+   :caption: Installation
 
    getting-started
-   api/modules
 
+.. toctree::
+   :maxdepth: 1
+   :caption: Package Reference
 
+   api/index
+
+.. toctree::
+   :hidden:
+
+   api/reference/mqed

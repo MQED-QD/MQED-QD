@@ -49,5 +49,13 @@ simulation:
       stop: 300.0
       points: 301 # This will give you points 1, 2, 3, ..., 1000
 
+  # Numerical integration controls
+  integration:
+    qmax: null          # optional finite cutoff for evanescent tail; null -> inf
+    epsabs: 1.0e-10     # absolute tolerance for quadrature
+    epsrel: 1.0e-10     # relative tolerance for quadrature
+    limit: 400          # max subintervals for quad_vec
+    split_propagating: true  # if true, split at k0 to treat propagating/evanescent separately
+
 output:
   filename: "Frensel_GF_planar_${simulation.material}_height_${simulation.position.zD_nm}nm.hdf5"

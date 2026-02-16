@@ -77,7 +77,7 @@ def build_and_save(
     save_gf_h5(out_h5, Gtot, Gvac, E, Rxnm, zD_m, zA_m)
     
 
-@hydra.main(config_path="../../configs/BEM", config_name="reconstruct_GF")
+@hydra.main(config_path="../../configs/BEM", config_name="reconstruct_GF",version_base=None)
 def main(cfg: DictConfig):
     '''
     Main function to run the reconstruction of the Green's function.

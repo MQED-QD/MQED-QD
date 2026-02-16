@@ -6,7 +6,7 @@
 [![hydra](https://img.shields.io/badge/Config-Hydra_1.x-89b8cd)](https://hydra.cc/)
 [![license](https://img.shields.io/badge/License-TBD-lightgrey)](#)
 
-A Python package for Macroscopic QED simulations (Dyadic Green’s functions, RET and FE analysis, and open‑system dynamics via Lindblad / NHSE) studying exciton-polariton and plasmon-polariton under the dielectric environment, with Hydra-based configuration and small CLI wrappers for common workflows.
+A Python package for Macroscopic QED simulations (Dyadic Green’s functions, RET and FE analysis, and open‑system dynamics via Lindblad / NHSE) studying exciton- and plasmon-polaritons in dielectric environments, with Hydra-based configuration and small CLI wrappers for common workflows.
 
 </div>
 
@@ -35,7 +35,7 @@ A Python package for Macroscopic QED simulations (Dyadic Green’s functions, RE
 ## Features
 
 * Dyadic Green’s function simulations.
-* Resonance energy transfer (RET) anf field enhancement (FE) analysis.
+* Resonance energy transfer (RET) and field enhancement (FE) analysis.
 * Lindblad and non‑Hermitian skin effect (NHSE) dynamics.
 * Disorder sweeps (single process or MPI, will be implemented in the future).
 * Plotting utilities for MSD and root-MSD.
@@ -57,7 +57,7 @@ cd MacroscopicQED
 
 ```bash
 # choose one of: conda | mamba | micromamba
-conda env create -f environmental.yaml   # create environment
+conda env create -f environment.yaml     # create environment
 conda activate mqed                      # activate environment
 pip install -e .                         # install as editable package
 ```
@@ -100,10 +100,10 @@ This package installs the following command‑line tools (from `setup.py` entry 
 | `mqed_plot_msd`           | Plot mean‑squared displacement from results           |
 | `mqed_plot_sqrt_msd`      | Plot square‑root MSD from results                     |
 | `mqed_BEM_compute_peff`   | Compute the effective dipole momentum intensity       |
-| `mqed_BEM_reconstruct_GF` | Reconsctruct dyadic GF from BEM simulation            |
-| `mqed_plot_IPR`           | Plot Inverse Paricipation Ratio(IPR)                  |
+| `mqed_BEM_reconstruct_GF` | Reconstruct dyadic GF from BEM simulation             |
+| `mqed_plot_IPR`           | Plot Inverse Participation Ratio (IPR)                |
 | `mqed_plot_PR`            | Plot Participation Ratio(PR)                          |
-| `mqed_BEM_compare_silver` | Compare the BEM and Frensel result for silver planar  |
+| `mqed_BEM_compare_silver` | Compare BEM and Fresnel results for a silver planar interface |
 
 > All commands are configured via Hydra using YAML files under `configs/`. You can edit those files or override any key from the CLI.
 
@@ -133,13 +133,13 @@ mqed_GF_Sommerfeld simulation.energy_eV=[1.0,1.5,2.0]
 You can also change other simulation parameters in the `configs/Dyadic_GF/GF_Sommerfeld.yaml`:
 ```bash
     position:
-        zD: 2.0e-9 # The height of donor at z-axis
-        zD_nm: 2 # Key for name
-        zA: 2.0e-9 # The height of acceptor at z-axis, default same height with donor in simulation.
-        Rx_nm:  # This section defines the range of horizontal distances between donor and acceptor
-        start: 1.0
-        stop: 500.0
-        points: 501  # This will give you points 1, 2, 3, ..., 500, total 501 points.
+         zD: 2.0e-9  # The height of donor at z-axis
+         zD_nm: 2    # Key for name
+         zA: 2.0e-9  # The height of acceptor at z-axis, default same height as donor.
+         Rx_nm:      # Range of horizontal distances between donor and acceptor
+           start: 1.0
+           stop: 500.0
+           points: 501  # Gives points 1, 2, 3, ..., 500 (total 501 points).
 output:
     filename: "result_${simulation.material}_${simulation.position.zD_nm}_nm.hdf5" 
     #Or your own file name.
@@ -193,7 +193,7 @@ mqed_lindblad greens.h5_path=YOUR_PATH
 Here the path directly comes from the absolute path after simulation `/YOUR_PATH/YOUR_NAME.hdf5` as mentioned in Dyadic Green's function simulation. Or you can manually overwrite the yaml file in `configs/Lindblad/quantum_dynamics.yaml` file.
 
 **NHSE dynamics:**
-The equivalent **Non-Hermitian Schodinger equation(NHSE)** is implemented here which gives identical result with Lindblad dynamic as we tested. **We recommend NHSE for large simulation** since it is **much faster** than simulate density matrix in general.
+The equivalent **Non-Hermitian Schrödinger equation (NHSE)** is implemented here and matches the Lindblad result. **NHSE is recommended for large simulations** because it is much faster than evolving the full density matrix.
 You can overwrite the simulation parameter as:
 ```bash
 mqed_nhse simulation.t_ps.start=0.0 simulation.t_ps.stop=100.0 simulation.t_ps.output_step=2e-3
@@ -230,7 +230,7 @@ mqed_nhse_disorder simulation.disorder_sigma_phi_deg=8.0 initial_state.site_inde
 ```
 
 Disorder sweep with MPI (8 ranks):
-Not test yet.
+Not tested yet.
 <!-- ```bash
 mpirun -n 8 mqed_nhse_disorder disorder.n_samples=400
 ``` -->
@@ -321,8 +321,8 @@ plot_settings:
 
   * `configs/Lindblad/` — quantum dynamics solver settings, user can change simulation method (`Lindblad`,`NonHermitian`), evaluation time steps, intermolecular distance(`d_nm`), dipole orientations(`theta_deg`, `phi_deg`, dipole strength of donor and acceptor.). The stationary orientation simulation is controlled by 'quantum_dynamics.yaml' and disorder-orientation simulation is controlled by 'quantum_dynamics_disorder.yaml'. 
 
-  -Warning: The number of molecules (`Nmol`) times the intermolecular distance (`d_nm`) has to be less than the Dyadic Green's function simulation of horizental distance, i.e, if user's Dyadic Green's function simulates the horizental distance (`Rx_nm`) as 501 points starting from 0.0 to 500nm, (which is `Rx_nm.start=0.0, Rx_nm.stop=500.0, Rx_nm.points=501`) but user inputs 100 molecules(`Nmol=100`) of distance 6nm(`d_nm=6.0`), the program will **abort** since 100*6=600>= 500 (in Dyadic Green's function).
-  * `configs/Dyadic_GF/` — geometry/material settings for Dyadic Green's function simulation on planar surface. User can change the dipole source frequency as **single value**, **dictionary of a range of values** or **list of some values** for multi-frequency simulation. The position is referred to **z-axis height** of donor and acceptor on the surface. `Rx_nm` is the *horizental distance* between donor and acceptor, i.e, source and response. For the material of user's interest, user may fit a dielectric function by him- or herself and append to the current excel sheet or create new .xlsx file to overwrite the default path and sheet name for the simulation.
+  -Warning: The number of molecules (`Nmol`) times the intermolecular distance (`d_nm`) must be less than the Dyadic Green's function simulated horizontal distance. If the Green's function simulates `Rx_nm` with 501 points from 0.0 to 500 nm (`start=0.0, stop=500.0, points=501`) but you set 100 molecules (`Nmol=100`) spaced 6 nm apart (`d_nm=6.0`), the program will **abort** because 100*6 = 600 >= 500.
+  * `configs/Dyadic_GF/` — geometry/material settings for Dyadic Green's function simulation on planar surface. User can change the dipole source frequency as **single value**, **dictionary of a range of values** or **list of some values** for multi-frequency simulation. The position is the **z-axis height** of donor and acceptor. `Rx_nm` is the *horizontal distance* between donor and acceptor. For new materials, fit a dielectric function and add it to the Excel sheet or supply a new .xlsx file.
   * `configs/analysis/` — RET and plotting parameters. User can change the parameter of donor and acceptor to evaluate the system of interest. Plot-setting parts can be customized by user's preference with the reference of matplotlib.
   * `configs/plots/`: `msd.yaml`, `sqrt_msd.yaml` - The two plot settings for the **mean square displacement (MSD)** or **root mean square displacement (RMSD)**. User can change the part of `curves` to customize the curves of interest with corresponding labels and data path. The plot settings can also be customized by user's preference.
 
@@ -343,14 +343,14 @@ MacroscopicQED/
 ├─ configs/                 # Hydra configs (Dyadic_GF, Lindblad, analysis, plotting)
 ├─ data/                    # caches (e.g., GF_cache, QDyn_cache)
 ├─ mqed/                    # package source
-│  ├─ Dyadic_GF/            # Implementation of Frensel/Sommerfeld integral for planar system.
-│  ├─ Lindblad/             # Implementation of standard Lindblad equation and non-Schodinger equation.
+│  ├─ Dyadic_GF/            # Implementation of Fresnel/Sommerfeld integrals for planar systems.
+│  ├─ Lindblad/             # Implementation of standard Lindblad equation and non-Schrödinger equation.
 │  ├─ analysis/             # Calculate and plot FE, REF.
 │  ├─ plotting/             # Plot MSD, IPR, RMSD, PR 
 │  ├─ BEM/                  # Run Boundary Element Method(BEM) for electric field simulation.
 │  └─ utils/                # Tools for different programs, such as building dipole unit direction, process hdf5 file.
 ├─ outputs/                 # run outputs (created at runtime)
-├─ environmental.yaml       # environment specification
+├─ environment.yaml         # environment specification
 ├─ pyproject.toml           # build metadata
 └─ setup.py                 # entry points and packaging
 ```
@@ -369,8 +369,8 @@ MacroscopicQED/
 
 ## Beta Test:
 * **Prerequisite:** Install the package as introduced in **Installation**.
-* **Step1:** After install the package, run `mqed_GF_Sommerfeld simulation.energy_eV=1.864` in the ternimal, it will generate `Frensel_GF_planar_Ag_height_8nm.hdf5` file under subdirectory `outputs/Dyadic_GF_Sommerfeld/Y-M-D/H-M-S/`. Create a new subdirectory named `data/GF_cache` under the root directory (See project layout), copy-paste the hdf5 file into `data/GF_cache/` and **rename it** as `Frensel_GF_planar_Ag_height_8nm_665nm.hdf5`, which means simulation of dipole on the height 8nm of silver planar surface and emitting 665nm photon.
-The relavent configs under `configs/Dyadic_GF/GF_Sommerfeld.yaml`is:
+* **Step1:** After installing the package, run `mqed_GF_Sommerfeld simulation.energy_eV=1.864` in the terminal; it will generate `Frensel_GF_planar_Ag_height_8nm.hdf5` under `outputs/Dyadic_GF_Sommerfeld/Y-M-D/H-M-S/`. Create `data/GF_cache` under the project root, copy the HDF5 there, and **rename it** to `Frensel_GF_planar_Ag_height_8nm_665nm.hdf5` (height 8 nm, Ag planar, 665 nm photon).
+The relevant configs under `configs/Dyadic_GF/GF_Sommerfeld.yaml` are:
 ```bash
 material:
   source_type: excel
@@ -398,7 +398,7 @@ output:
   filename: Frensel_GF_planar_${simulation.material}_height_${simulation.position.zD_nm}nm.hdf5
 ```
 We provided the result in the `Beta_Test/GF_Sommerfeld` subdirectory for reference.
-* **Step2:** Run `mqed_FE` in the terminal, it will generate `enhancement_magic_angle_1.864eV.png` file under subdirectory `outputs/FE/Y-M-D/H-M-S/`. This result is the enhancement electric field of dipole emitting energy with value **1.864eV** with the azimuthal angle of both donor and acceptor is magic-angle(**arcos(1/sqrt(3))**). The X-axis is the horizental distance between donor and acceptor. You should get same result as `enhancement_magic_angle_height_8nm_1.864eV.png` under subdirectory `Beta_Test/FE`.
+* **Step2:** Run `mqed_FE` in the terminal; it will generate `enhancement_magic_angle_1.864eV.png` under `outputs/FE/Y-M-D/H-M-S/`. This is the field enhancement for a dipole at 1.864 eV with both dipoles at the magic angle (arccos(1/√3)). The x-axis is the horizontal donor–acceptor distance. You should get the same result as `enhancement_magic_angle_height_8nm_1.864eV.png` in `Beta_Test/FE`.
 The reference configs under `configs/analysis/FE.yaml`is:
 ```bash
 input_file: ${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/GF_cache/Frensel_GF_planar_Ag_height_8nm_665nm.hdf5 # 
@@ -442,14 +442,9 @@ Here is the reference plot for this step:
     <img src="Beta_Test/FE/enhancement_magic_angle_height_8nm_1.864eV.png" alt="Reference result for Step 2" width="500">
   </p>
 
-* **Step3:** Run `mqed_nhse` in terminal, it will generate `Frensel_silver_planar_665nm_N30.hdf5` file under subdirectory `outputs/NonHermitian/Y-M-D/H-M-S/`. This result 
-represents the quantum dynamics of 30 (N30) z-oriented molecular aggregates (H-aggregates) with emitter frequency=665nm (1.864eV). The dipole intensity is 3.8 Debye (showed in configs) 
-and we did not do nearest-neighbor approximation (coupling_limit.enable=false, if 'true' and V_hop_radius=1, the nearest-neighbor approximation is turned on.) If user wants to study 
-the middle excitation of diffusion behavior of molecular aggregate, user could change the inital_state to value of N/2. Create a new subdirectory `data/QDyn_cache` to store the temporary 
-quantum dynamics result and create another subdirectory `intermol_8nm` under the `data/QDyn_cache` to remind user the result is from 8nm intermolecular distance simulation. Copy-Paste the
-`Frensel_silver_planar_665nm_N30.hdf5` to `data/QDyn_cache/intermol_8nm` for further process.
+* **Step3:** Run `mqed_nhse` in the terminal; it will generate `Frensel_silver_planar_665nm_N30.hdf5` under `outputs/NonHermitian/Y-M-D/H-M-S/`. This is the quantum dynamics of 30 z-oriented molecules at 665 nm (1.864 eV) with dipole 3.8 D; nearest-neighbor approximation is off (`coupling_limit.enable=false`). For mid-chain excitation set `initial_state.site_index` to `N/2`. Copy the HDF5 to `data/QDyn_cache/intermol_8nm` for reuse.
 
-The relavent configs under `configs/Lindblad/quantum_dynamics_nhse.yaml` is: 
+The relevant configs under `configs/Lindblad/quantum_dynamics_nhse.yaml` are: 
 ```bash
 greens:
   h5_path: ${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/GF_cache/Frensel_GF_planar_Ag_height_8nm_665nm.hdf5 # update as needed
@@ -603,14 +598,14 @@ Here is the reference of the figure:
 
 ## Documentation
 
-Documentation build is not set up yet. When ready, add a `docs/` tree and wire a `Makefile` target:
+Sphinx docs are included. Build locally:
 
 ```bash
-make docs           # build docs
-# make docs-clean   # optional clean rebuild
+cd docs
+make html  # output in docs/build/html
 ```
 
-For now, this README is the primary user guide.
+Open `docs/build/html/index.html` in a browser. (You can also host these on Read the Docs or GitHub Pages later.)
 
 ---
 

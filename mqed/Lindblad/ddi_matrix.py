@@ -1,6 +1,4 @@
-'''
-check this code first.
-'''
+r"""Dipole-dipole interaction (DDI) helpers for Lindblad dynamics."""
 import numpy as np
 from typing import Union
 
@@ -28,27 +26,32 @@ def build_ddi_matrix_from_Gslice(
     disorder_sigma_phi_deg=None,    # used only if we need to generate U_list
     disorder_seed=None              # used only if we need to generate U_list
 ):
-    """
-    Compute arrays off-diagonal coupling V [eV] and generalized dissipation rate ħΓ [eV] for a 1D Rx slice at one frequency.
-    ..math::
-            V_{\alpha\beta} = \frac{- \omega_\mathrm{M}^2}{ \epsilon_0 c^2}  \boldsymbol{\mu}_{\alpha} \cdot \mathrm{Re} \overline{\overline{\mathbf{G}}}(\mathbf{r}_\alpha,\mathbf{r}_\beta,\omega_\mathrm{M}) \cdot \boldsymbol{\mu}_{\beta},
-            \hbar \Gamma_{\alpha\beta} = \frac{2 \omega_\mathrm{M}^2}{ \epsilon_0 c^2}  \boldsymbol{\mu}_{\alpha} \cdot \mathrm{Im} \overline{\overline{\mathbf{G}}}(\mathbf{r}_\alpha,\mathbf{r}_\beta,\omega_\mathrm{M}) \cdot \boldsymbol{\mu}_{\beta}.
+    r"""Compute coupling ``V`` [eV] and ``\hbar\Gamma`` [eV] from a dyadic Green's slice.
+
+    Physics:
+
+    .. math::
+
+       V_{\alpha\beta} \,=\, -\frac{\omega_\mathrm{M}^2}{\epsilon_0 c^2}\, \boldsymbol{\mu}_\alpha \cdot \Re\,\overline{\overline{\mathbf{G}}}(\mathbf{r}_\alpha,\mathbf{r}_\beta,\omega_\mathrm{M}) \cdot \boldsymbol{\mu}_\beta,
+
+    .. math::
+
+       \hbar\,\Gamma_{\alpha\beta} \,=\, \frac{2\,\omega_\mathrm{M}^2}{\epsilon_0 c^2}\, \boldsymbol{\mu}_\alpha \cdot \Im\,\overline{\overline{\mathbf{G}}}(\mathbf{r}_\alpha,\mathbf{r}_\beta,\omega_\mathrm{M}) \cdot \boldsymbol{\mu}_\beta.
+
     Args:
-        G_slice (np.ndarray): Dyadic Green's function slice at one energy, shape (K, 3, 3) for K Rx values.
-        energy_emmiter (float): energy of molecular emitter in eV.
-        uD (np.ndarray): Donor dipole orientation unit vector, shape (3,).
-        uA (np.ndarray): Acceptor dipole orientation unit vector, shape (3,).
-        mu_D_debye (float): Donor dipole moment in Debye.
-        mu_A_debye (float): Acceptor dipole moment in Debye.
-        mode (bool): Stationary or disorder, used to generate the matrix for ordered angles or orientation-disordered system.
-        U_list: pre-molecule orientations, (N,3) array. If provided, use for orientation-disordered system
-        theta_deg(float): polar orientation of the donor,only used when need to generate orientation-disordered matrix.
-        phi_deg(float): azimuthal orientation of the donor, only used when need to generate orientation-disordered matrix.
-        disorder_sigma_phi_deg(float): standard deviation of disorder, only used when need to generate orientation-disordered matrix.
-        disorder_seed: Only used when need to generate orientation-disordered matrix.
+        G_slice: Dyadic Green's function slice (K,3,3) for K separations.
+        Rx_nm: Distances (nm), must include ``0, d, 2d, ..., (N-1)d``.
+        energy_emitter: Emitter energy in eV.
+        N_mol: Number of molecules.
+        d_nm: Lattice spacing in nm.
+        mu_D_debye: Donor dipole moment (Debye).
+        mu_A_debye: Acceptor dipole (Debye); defaults to donor value.
+        mode: ``"stationary"`` uses uD/uA; ``"disorder"`` generates orientations.
+        uD/uA: Dipole orientation unit vectors (stationary mode).
+        U_list/theta_deg/phi_deg/disorder_*: Orientation controls for disorder mode.
+
     Returns:
-        V_eV(np.ndarray): V matrix used for Lindblad dynamics.
-        hbarGamma_eV(np.ndarray): ħΓ [eV] for Lindblad dynamics
+        tuple[np.ndarray, np.ndarray]: ``(V_eV, hbarGamma_eV)`` matrices.
     """
     # --- sanity on Rx grid: we will look up exact distances s*d_nm
     Rx_nm = np.asarray(Rx_nm, dtype=float)

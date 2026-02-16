@@ -65,13 +65,12 @@ def _compute_enhancement_from_h5(
     acc_theta_deg: float,
     acc_phi_deg: float,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """
+    """Compute enhancement curves from stored Green's tensors.
+
     Returns:
-      x_nm, enh_real, enh_imag
-    Enhancement definition:
-      enh_real = Re(g_tot)/Re(g_vac)  -> V/V0
-      enh_imag = Im(g_tot)/Im(g_vac)  -> Gamma/Gamma0
-    where g = p_acc^T G p_donor.
+        tuple[np.ndarray, np.ndarray, np.ndarray]: ``(x_nm, enh_real, enh_imag)`` with
+        ``enh_real = Re(g_tot)/Re(g_vac)`` and ``enh_imag = Im(g_tot)/Im(g_vac)``, where
+        ``g = p_acc^T G p_donor``.
     """
     data = load_gf_h5(h5_path)
     Gtot = np.asarray(data["G_total"])  # (M,N,3,3)

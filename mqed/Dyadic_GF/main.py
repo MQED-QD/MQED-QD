@@ -35,13 +35,16 @@ def build_grid(config):
         raise TypeError(f"Unsupported spectral config type: {type(config)}")
 
 def compute_gf_grid(energy_J, target_lambdas_m, rx_values_m, sim_params, data_provider):
-    """Computes the Green's function grid over specified energies and Rx values.
-    1. Initializes result arrays for total and vacuum Green's functions.
-    2. Loops over each energy to compute the corresponding Green's functions.
-    3. Stores results in pre-allocated arrays.
+    """Compute the Green's function grid over energies and Rx values.
+
+    Steps:
+      1. Initialize result arrays for total and vacuum Green's functions.
+      2. Loop over energy, evaluate tensors for each Rx.
+      3. Store into pre-allocated arrays.
+
     Returns:
-        results_total: 4D numpy array [M,N,3,3] of total Green's functions.
-        results_vacuum: 4D numpy array [M,N,3,3] of vacuum Green's functions.
+        results_total: 4D array [M, N, 3, 3] of total Green's functions.
+        results_vacuum: 4D array [M, N, 3, 3] of vacuum Green's functions.
     """
     nE = len(energy_J)
     nR = len(rx_values_m)
@@ -53,7 +56,16 @@ def compute_gf_grid(energy_J, target_lambdas_m, rx_values_m, sim_params, data_pr
         epsilon = data_provider.get_epsilon(omega)
         logger.info(f"Energy {i+1}/{nE}: {(energy_J[i]/eV_to_J):.3f} eV")
 
-        calculator = Greens_function_analytical(omega=omega, metal_epsi=epsilon)
+        integ_cfg = getattr(sim_params, "integration", None)
+        calculator = Greens_function_analytical(
+            omega=omega,
+            metal_epsi=epsilon,
+            qmax=None if integ_cfg is None else integ_cfg.qmax,
+            epsabs=1e-10 if integ_cfg is None else integ_cfg.epsabs,
+            epsrel=1e-10 if integ_cfg is None else integ_cfg.epsrel,
+            limit=400 if integ_cfg is None else int(integ_cfg.limit),
+            split_propagating=True if integ_cfg is None else bool(integ_cfg.split_propagating),
+        )
 
         for j, rx_m in enumerate(
             tqdm(rx_values_m, desc=f"Rx @ E[{i+1}/{nE}]", leave=False, ncols=100)
