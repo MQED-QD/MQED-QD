@@ -14,9 +14,9 @@ io:
   out_csv: bem_vs_fresnel.csv
 
 sim:
-  lambda_nm: 665
+  lambda_nm: 1000
   zD_nm: 2
-  Rx_min_nm: 1
+  Rx_min_nm: 7
   interpolate_rx: true
 
 compare:

@@ -15,8 +15,8 @@ io:
   output_csv: peff_vs_lambda_${sim.lambdas_nm}nm_${sim.Rx_min_nm}nm.csv
 
 sim:
-  Rx_min_nm: 5
-  lambdas_nm: 665          # can be a list, e.g., [600.0, 665.0, 700.0]; single value: 665; or range dict {start:600.0, stop:700.0, points:11}
+  Rx_min_nm: 7
+  lambdas_nm: 1000          # can be a list, e.g., [600.0, 665.0, 700.0]; single value: 665; or range dict {start:600.0, stop:700.0, points:11}
   y_nm: 0.0
   zD_nm: 2.0
   zA_nm: 3.0                  # use zD+1 nm for calibration to avoid symmetry zeros
