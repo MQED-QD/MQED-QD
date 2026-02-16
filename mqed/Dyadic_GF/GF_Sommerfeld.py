@@ -2,7 +2,7 @@ import numpy as np
 from scipy.integrate import quad_vec
 from scipy.special import jv # Bessel function of the first kind
 from loguru import logger
-from mqed.utils.SI_unit import eps0, c, hbar, eV_to_J
+from mqed.utils.SI_unit import  c, hbar, eV_to_J
 
 class Greens_function_analytical:
     """
@@ -34,7 +34,7 @@ class Greens_function_analytical:
         self.metal_epsi = metal_epsi
         self.omega = omega
         self.eps_0 = eps_0
-        self.c = 299792458 # speed of light in SI unit
+        self.c = c# speed of light in SI unit
         self.k0 = self.omega/self.c  # free space wavenumber
 
         # Pre-define the Fresnel equations for reflection coefficients
@@ -249,7 +249,7 @@ class Greens_function_analytical:
         I5 = self.complex_quad(integrand, a=0)
         return I5
     
-    def I6_inregral(self,
+    def I6_integral(self,
         rho: float,
         z1: float,
         z2: float,):
@@ -319,7 +319,7 @@ class Greens_function_analytical:
         I3 = self.I3_integral(rho, z1, z2)
         I4 = self.I4_integral(rho, z1, z2)
         I5 = self.I5_integral(rho, z1, z2)
-        I6 = self.I6_inregral(rho, z1, z2)
+        I6 = self.I6_integral(rho, z1, z2)
 
         Mp = np.array([[ -I3 + np.cos(2*phi)*I4, np.sin(2*phi)*I4,  -np.cos(phi) * I5],
                         [np.sin(2*phi)*I4, -I3 - np.cos(2*phi)*I4, -np.sin(phi) * I5],
