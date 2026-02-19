@@ -61,6 +61,9 @@ def app_run(cfg:DictConfig, output_dir: Optional[Path]=None):
     G_slice  = data["G_total"]             # (M,N,3,3)
     E_eV  = data["energy_eV"]            # (M,)
     Rx_nm = data["Rx_nm"] 
+    
+    logger.info(f"Dipole heights (nm): zD={data['zD']}  zA={data['zA']}")
+    logger.info(f"inter-site distance (nm): {cfg.simulation.d_nm}")
 
     G_slice = G_slice[0] # use the first energy slice for now
 
