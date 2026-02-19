@@ -16,11 +16,18 @@ gf_settings:
 
 curves:
   - label: "Plane"
-    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/GF_cache/Frensel_GF_planar_Ag_height_8nm.hdf5"
+    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/GF_cache/Fresnel_GF_planar_Ag_height_8nm_665nm.hdf5"
     components: [real]
     style_real: "-"
     style_imag: "-"
     lw: 2.0
+  
+  # - label: "Plane_newSimulation"
+  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/GF_cache/Fresnel_GF_planar_Ag_height_8nm_665nm_2.hdf5"
+  #   components: [real]
+  #   style_real: "-."
+  #   style_imag: "-."
+  #   lw: 2.0
 
   - label: "Nanorod"
     use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/BEM_cache/BEM_GF_nanorod_Ag_665nm_height_8nm_pos_500nm.hdf5"
