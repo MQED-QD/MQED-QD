@@ -10,8 +10,9 @@ hydra:
 # --- Our Application Configuration ---
 
 greens:
-  h5_path: ${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/GF_cache/Frensel_GF_planar_Ag_height_8nm_665nm.hdf5 # update as needed
+  h5_path: ${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/BEM_cache/BEM_GF_planar_Ag_665nm_height_2nm.hdf5 # update as needed
 
+height: 2 # nm, for naming purposes only, the actual height is read from the GF file
 #Material information
 material:
   name: silver
@@ -54,14 +55,14 @@ simulation:
     keep_Gamma_on_site: true
 
 # system
-  Nmol: 30 # number of sites
-  d_nm: 8.0 # lattice spacing (nm)
+  Nmol: 100 # number of sites
+  d_nm: 3 # lattice spacing (nm)
 
 #emitter frequency
   lambda_nm: 665        # wavelength of emitter in nm
 
 # Green's function data simulation method
-  gf_method: Frensel  # 'BEM' or 'Frensel'
+  gf_method: BEM  # 'BEM' or 'Fresnel'
 
 
 # dipoles / orientation
@@ -85,4 +86,4 @@ solver:
 
   # Output file (goes under Hydra's run dir)
 output:
-  filename: ${simulation.gf_method}_${material.name}_${material.geometry}_${simulation.lambda_nm}nm_N${simulation.Nmol}.hdf5
+  filename: ${simulation.gf_method}_${material.name}_${material.geometry}_${simulation.lambda_nm}nm_N${simulation.Nmol}_height_${height}nm_inter_${simulation.d_nm}nm.hdf5
