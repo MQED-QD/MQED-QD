@@ -29,34 +29,34 @@ curves:
   #   lw: 1.5
 
 
-  # - label: "Frensel"
-  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/Frensel_silver_stationary_665nm_N100.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+  - label: "Fresnel"
+    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/height_2nm/Fresnel_silver_planar_665nm_N100_height_2nm_inter_3nm.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+    style: "-"         # matplotlib line format
+    lw: 2
+  - label: "BEM"
+    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/height_2nm/BEM_silver_planar_665nm_N100_height_2nm_inter_3nm.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+    style: "r--"         # matplotlib line format
+    lw: 2
+
+  # - label: "planar"
+  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/intermol_8nm/Frensel_silver_planar_665nm_N30.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
   #   style: "-"         # matplotlib line format
   #   lw: 2
-  # - label: "BEM"
-  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/BEM_silver_stationary_665nm_N100.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+
+  # - label: "planar_NN"
+  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/intermol_8nm/Frensel_silver_planar_665nm_N30_NN.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
   #   style: "--"         # matplotlib line format
   #   lw: 2
 
-  - label: "planar"
-    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/intermol_8nm/Frensel_silver_planar_665nm_N30.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
-    style: "-"         # matplotlib line format
-    lw: 2
-
-  - label: "planar_NN"
-    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/intermol_8nm/Frensel_silver_planar_665nm_N30_NN.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
-    style: "--"         # matplotlib line format
-    lw: 2
-
-  - label: "nanorod"
-    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/intermol_8nm/BEM_silver_nanorod_665nm_N30.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
-    style: "-"         # matplotlib line format
-    lw: 2
+  # - label: "nanorod"
+  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/intermol_8nm/BEM_silver_nanorod_665nm_N30.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+  #   style: "-"         # matplotlib line format
+  #   lw: 2
   
-  - label: "nanorod_NN"
-    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/intermol_8nm/BEM_silver_nanorod_665nm_N30_NN.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
-    style: "-."         # matplotlib line format
-    lw: 2
+  # - label: "nanorod_NN"
+  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/intermol_8nm/BEM_silver_nanorod_665nm_N30_NN.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+  #   style: "-."         # matplotlib line format
+    # lw: 2
 
   # - label: "free space"
   #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/height_8nm/Frensel_vacuum_planar_665nm_N50.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
