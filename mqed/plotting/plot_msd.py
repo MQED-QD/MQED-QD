@@ -103,8 +103,9 @@ def main(cfg: DictConfig) -> None:
         style = getattr(curve, "style", "-")
         lw = getattr(curve, "lw", ps.get("lw", 1.5))
         label = getattr(curve, "label", path.stem)
+        color = getattr(curve, "color", None)
 
-        ax.plot(x, y, style, lw=lw, label=label)
+        ax.plot(x, y, style, lw=lw, label=label, color=color)
 
         logger.info(f"Plotted {label} from {path.name} (source={meta.get('source','?')})")
 
@@ -131,6 +132,7 @@ def main(cfg: DictConfig) -> None:
 
     # ticks
     ax.tick_params(axis="both", which="both", labelsize=ticksize)
+
     
     # NEW: bold tick labels if requested (fallback to labelweight if tickweight not set)
     tickweight = str(getattr(font, "tickweight", labelweight)) if font else labelweight
@@ -152,6 +154,23 @@ def main(cfg: DictConfig) -> None:
     # limits
     if getattr(ps, "xlim", None): ax.set_xlim(ps.xlim[0], ps.xlim[1])
     if getattr(ps, "ylim", None): ax.set_ylim(ps.ylim[0], ps.ylim[1])
+
+
+    ysc = getattr(ps, "y_sci", None)
+    if ysc and getattr(ysc, "enabled", False):
+        logger.info("Use scientific visualization on y axis.")
+        if getattr(ysc, "style", "sci") == "sci":
+            ax.ticklabel_format(
+                axis="y",
+                style="sci",
+                scilimits=tuple(getattr(ysc, "scilimits", (-2,2))),
+                useMathText=bool(getattr(ysc, "use_math_text", True)),
+                
+            )
+            off = ax.yaxis.get_offset_text()
+            off.set_fontsize(int(getattr(ysc,"offset_text_size",ticksize)))
+        else:
+            ax.ticklabel_format(axis="y", style="plain")
 
     if getattr(ps, "grid", True):
         ax.grid(True, which="both", ls="--", alpha=0.5)

@@ -129,8 +129,9 @@ def main(cfg: DictConfig) -> None:
         style = getattr(curve, "style", "-")
         lw = getattr(curve, "lw", ps.get("lw", 1.6))
         label = getattr(curve, "label", path.stem)
+        color = getattr(curve, "color", None)
 
-        ax.plot(x, y, style, lw=lw, label=label)
+        ax.plot(x, y, style, lw=lw, label=label, color=color)
 
         # Optional shading if ipr_std exists
         if ipr_std is not None and getattr(ps, "shade_std", True):

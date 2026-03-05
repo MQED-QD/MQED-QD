@@ -19,44 +19,76 @@ curves:
   #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/silver_sigma10_avg_latest.hdf5" # or using "outputs/NHSE_disorder/.../qdyn_disorder_avg.hdft"
   #   style: "-"         # e.g., "C1-"
   #   lw: 1.5
-  # - label: "σ=30"
-  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/silver_sigma30_avg_latest.hdf5" # or using "outputs/NHSE_disorder/.../qdyn_disorder_avg.hdft"
-  #   style: "-"         # e.g., "C1-"
-  #   lw: 1.5
-  # - label: "σ=50"
-  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/silver_sigma50_avg_latest.hdf5" # or using "outputs/NHSE_disorder/.../qdyn_disorder_avg.hdft"
-  #   style: "-"         # e.g., "C1-"
-  #   lw: 1.5
 
-
-  - label: "Fresnel"
-    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/height_2nm/Fresnel_silver_planar_665nm_N100_height_2nm_inter_3nm.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
-    style: "-"         # matplotlib line format
-    lw: 2
-  - label: "BEM"
-    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/height_2nm/BEM_silver_planar_665nm_N100_height_2nm_inter_3nm.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
-    style: "r--"         # matplotlib line format
-    lw: 2
-
-  # - label: "planar"
-  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/intermol_8nm/Fresnel_silver_planar_665nm_N30.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+  # - label: "Fresnel"
+  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/height_2nm/Fresnel_silver_planar_665nm_N100_height_2nm_inter_3nm_magic.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
   #   style: "-"         # matplotlib line format
   #   lw: 2
-
-  # - label: "planar_NN"
-  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/intermol_8nm/Fresnel_silver_planar_665nm_N30_NN.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+  #   color: "blue"
+  # - label: "BEM"
+  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/height_2nm/BEM_silver_planar_665nm_N100_height_2nm_inter_3nm_magic.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
   #   style: "--"         # matplotlib line format
   #   lw: 2
+  #   color: "orange"
 
-  # - label: "nanorod"
-  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/intermol_8nm/BEM_silver_nanorod_665nm_N30.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+  # - label: "Fresnel 2nm"
+  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/height_2nm/Fresnel_silver_planar_665nm_N100_height_2nm_inter_3nm.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
   #   style: "-"         # matplotlib line format
   #   lw: 2
+  #   color: "blue"
+  # - label: "BEM 2nm"
+  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/height_2nm/BEM_silver_planar_665nm_N100_height_2nm_inter_3nm.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+  #   style: "--"         # matplotlib line format
+  #   lw: 2
+  #   color: "blue"
   
-  # - label: "nanorod_NN"
-  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/intermol_8nm/BEM_silver_nanorod_665nm_N30_NN.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
-  #   style: "-."         # matplotlib line format
-    # lw: 2
+  # - label: "Fresnel 5nm"
+  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/height_5nm/Fresnel_silver_planar_665nm_N100_height_5nm_inter_3nm.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+  #   style: "-"         # matplotlib line format
+  #   lw: 2
+  #   color: "orange"
+  # - label: "BEM 5nm"
+  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/height_5nm/BEM_silver_planar_665nm_N100_height_5nm_inter_3nm.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+  #   style: "--"         # matplotlib line format
+  #   lw: 2
+  #   color: "orange"
+  
+  # - label: "Fresnel 8nm"
+  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/height_8nm/Fresnel_silver_planar_665nm_N100_height_8nm_inter_3nm.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+  #   style: "-"         # matplotlib line format
+  #   lw: 2
+  #   color: "red"
+  # - label: "BEM 8nm"
+  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/height_8nm/BEM_silver_planar_665nm_N100_height_8nm_inter_3nm.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+  #   style: "--"         # matplotlib line format
+  #   lw: 2
+  #   color: "red"
+
+
+
+  - label: "Planar(All)"
+    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/intermol_8nm/Fresnel_silver_planar_665nm_N30.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+    style: "-"         # matplotlib line format
+    lw: 2
+    color: "blue" # optional color specification (e.g., "blue", "C0", "#1f77b4")
+
+  - label: "Planar(NN)"
+    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/intermol_8nm/Fresnel_silver_planar_665nm_N30_NN.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+    style: "--"         # matplotlib line format
+    lw: 2
+    color: "blue"
+
+  - label: "Nanorod(All)"
+    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/intermol_8nm/BEM_silver_nanorod_665nm_N30.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+    style: "-"         # matplotlib line format
+    lw: 2
+    color: "orange"
+  
+  - label: "Nanorod(NN)"
+    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/intermol_8nm/BEM_silver_nanorod_665nm_N30_NN.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+    style: "--"         # matplotlib line format
+    lw: 2
+    color: "orange"
 
   # - label: "free space"
   #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/height_8nm/Fresnel_vacuum_planar_665nm_N50.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
@@ -66,10 +98,10 @@ curves:
 
 plot_settings:
   save_plot: true
-  geometry: planar # or other geometries, 'sphere', 'planar', etc.
+  geometry: nanorod # or other geometries, 'sphere', 'planar', etc.
   material: silver
   excitation_position_nm: initial # or 'initial', 'middle', etc.
-  filename: "${plot_settings.geometry}_${plot_settings.material}_${plot_settings.excitation_position_nm}_msd_comparison.png"
+  filename: "${plot_settings.geometry}_${plot_settings.material}_${plot_settings.excitation_position_nm}_msd_comparison_NN.png"
   dpi: 400
   show: false
   tight_layout: true
@@ -85,20 +117,28 @@ plot_settings:
   xlabel: "t (ps)"            # or "t (ps)" if you keep in ps
   ylabel: "MSD (nm$^2$)"
   title: null # or make your own title, "Silver; Middle Excitation"
-  xscale: linear             # or "log"
-  yscale: linear
+  xscale: linear            # or "log"
+  yscale: linear            # or "linear"
   xlim: [0,150]     # e.g., [0, 100]; use Null for automatic limit  
-  ylim: [0, Null]        # e.g., [0, 100]; use Null for automatic limit
+  ylim: [0, null]        # e.g., [0, 100]; use Null for automatic limit
 
   font:
     family: null        # e.g. "DejaVu Sans", "Times New Roman"; null keeps default
     labelsize: 18
-    ticksize: 18
+    ticksize: 22
     legendsize: 18
-    titlesize: 18
+    titlesize: 22
     labelweight: bold   # "normal" or "bold"
     legendweight: bold  # "normal" or "bold"
     tickweight: bold     # "normal" or "bold"
+  
+  y_sci:
+    enabled: True
+    style: "sci"       #"sci" -> 1e5, "plain" -> normal
+    scilimits: [0, 0]   # use sci notation when components <= first or >= second, [0,0] is always scientific
+    use_math_text: false  #nicer LaTeX-like, 10^n on some backends.
+    offset_text_size: 20 # for visualization
+    offset_text_weight: "bold"
 
   # optional multiply time axis (e.g., to show ×10^-10 s visually):
   x_scale_factor: 1.0        # keep 1.0 if you already saved 't_ps' in seconds; use 1e-12 to convert ps→s

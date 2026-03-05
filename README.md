@@ -4,7 +4,7 @@
 
 [![python](https://img.shields.io/badge/Python-3.9%2B-blue?logo=python\&logoColor=white)](#)
 [![hydra](https://img.shields.io/badge/Config-Hydra_1.x-89b8cd)](https://hydra.cc/)
-[![license](https://img.shields.io/badge/License-Unspecified-lightgrey)](#)
+[![license](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
 A Python package for Macroscopic QED simulations (Dyadic Green’s functions, RET and FE analysis, and open‑system dynamics via Lindblad / NHSE) studying exciton- and plasmon-polaritons in dielectric environments, with Hydra-based configuration and small CLI wrappers for common workflows.
 

@@ -15,11 +15,28 @@ gf_settings:
     acceptor: {theta_deg: 0.0, phi_deg: 0.0}
 
 curves:
-  - label: "Plane"
+  - label: "Plane 2nm"
+    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/GF_cache/Fresnel_GF_planar_Ag_height_2nm_665nm.hdf5"
+    components: [real]
+    style_real: "-"
+    style_imag: "--"
+    color: "blue"
+    lw: 2.0
+
+  - label: "Plane 5nm"
+    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/GF_cache/Fresnel_GF_planar_Ag_height_5nm_665nm.hdf5"
+    components: [real]
+    style_real: "-"
+    style_imag: "--"
+    color: "orange"
+    lw: 2.0
+
+  - label: "Plane 8nm"
     use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/GF_cache/Fresnel_GF_planar_Ag_height_8nm_665nm.hdf5"
     components: [real]
     style_real: "-"
-    style_imag: "-"
+    style_imag: "--"
+    color: "red"
     lw: 2.0
   
   # - label: "Plane_newSimulation"
@@ -29,12 +46,13 @@ curves:
   #   style_imag: "-."
   #   lw: 2.0
 
-  - label: "Nanorod"
-    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/BEM_cache/BEM_GF_nanorod_Ag_665nm_height_8nm_pos_500nm.hdf5"
-    components: [real]
-    style_real: "o-"
-    style_imag: "s-"
-    lw: 2.0
+  # - label: "Nanorod"
+  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/BEM_cache/BEM_GF_nanorod_Ag_665nm_height_8nm_pos_500nm.hdf5"
+  #   components: [real]
+  #   style_real: "o-"
+  #   style_imag: "--"
+  #   color: "orange"
+  #   lw: 2.0
 
   # - label: "Nanorod_const"
   #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/BEM_cache/BEM_GF_nanorod_const_665nm_height_8nm_pos_500nm.hdf5"
@@ -60,7 +78,7 @@ curves:
 
 plot_settings:
   save_plot: true
-  filename: nanorod_enhancement_compare_V_Gamma.png
+  filename: planar_enhancement_compare_V_three_heights.png
   dpi: 300
   show: false
   tight_layout: true
@@ -68,8 +86,8 @@ plot_settings:
   legend: true
   figsize: [8, 6]
 
-  xlabel: "Distance $R_x$ (nm)"
-  ylabel: "Ratio"
+  xlabel: "$\\Delta x$ (nm)"
+  ylabel: "DDI ratio"
   title: null
 
   xscale: linear
@@ -83,11 +101,19 @@ plot_settings:
 
   font:
     family: null
-    labelsize: 14
-    ticksize: 14
-    legendsize: 14
-    titlesize: 14
-    labelweight: bold
-    legendweight: bold
+    labelsize: 16
+    ticksize: 24
+    legendsize: 16
+    titlesize: 24
+    labelweight: normal
+    legendweight: normal
+
+  vlines:
+    enabled: True
+    xs: [3,6]
+    colors: ["tab:red", "tab:green"]
+    style: "--"
+    lw: 1.5
+    alpha: 0.8
 
   lw: 2.5

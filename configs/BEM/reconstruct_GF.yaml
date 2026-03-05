@@ -17,7 +17,7 @@ parameters:
   dipole_position_nm: 500    # dipole position along the nanorod axis in nm
 
 io:
-  xlsx_path: ${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/BEM_cache/dipole_silver_nanorod_GF_665nm_pos_500_height_8nm_D_20nm_1.xlsx
+  xlsx_path: ${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/BEM_cache/dipole_silver_nanorod_height_8nm_GF_665nm_pos_500nm.xlsx
   peff_path: ${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/BEM_cache/peff_vs_lambda_665nm.csv
 
   output_file: BEM_GF_${parameters.geometry}_${parameters.material}_${parameters.lambda_nm}nm_height_${parameters.zD_nm}nm_pos_${parameters.dipole_position_nm}nm.hdf5

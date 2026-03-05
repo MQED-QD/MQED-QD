@@ -10,22 +10,38 @@ hydra:
 # One or more curves to draw on the same axes
 # Each curve: either give absolute 'path', or set 'use_latest_glob' (relative to MQED_ROOT/PWD)
 curves:
-  - label: "Magic-Angle"
-    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/silver_stationary_latest.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+  # - label: "Magic-Angle"
+  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/silver_stationary_latest.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+  #   style: "-"         # matplotlib line format
+  #   lw: 1.5
+  # - label: "σ=10"
+  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/silver_sigma10_avg_latest.hdf5" # or using "outputs/NHSE_disorder/.../qdyn_disorder_avg.hdft"
+  #   style: "-"         # e.g., "C1-"
+  #   lw: 1.5
+
+  - label: "planar"
+    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/intermol_8nm/Fresnel_silver_planar_665nm_N30.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
     style: "-"         # matplotlib line format
-    lw: 1.5
-  - label: "σ=10"
-    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/silver_sigma10_avg_latest.hdf5" # or using "outputs/NHSE_disorder/.../qdyn_disorder_avg.hdft"
-    style: "-"         # e.g., "C1-"
-    lw: 1.5
-  - label: "σ=30"
-    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/silver_sigma30_avg_latest.hdf5" # or using "outputs/NHSE_disorder/.../qdyn_disorder_avg.hdft"
-    style: "-"         # e.g., "C1-"
-    lw: 1.5
-  - label: "σ=50"
-    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/silver_sigma50_avg_latest.hdf5" # or using "outputs/NHSE_disorder/.../qdyn_disorder_avg.hdft"
-    style: "-"         # e.g., "C1-"
-    lw: 1.5
+    lw: 2
+    color: "blue" # optional color specification (e.g., "blue", "C0", "#1f77b4")
+
+  - label: "planar_NN"
+    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/intermol_8nm/Fresnel_silver_planar_665nm_N30_NN.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+    style: "--"         # matplotlib line format
+    lw: 2
+    color: "blue"
+
+  - label: "nanorod"
+    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/intermol_8nm/BEM_silver_nanorod_665nm_N30.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+    style: "-"         # matplotlib line format
+    lw: 2
+    color: "orange"
+  
+  - label: "nanorod_NN"
+    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/intermol_8nm/BEM_silver_nanorod_665nm_N30_NN.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+    style: "--"         # matplotlib line format
+    lw: 2
+    color: "orange"
 
 plot_settings:
   save_plot: true

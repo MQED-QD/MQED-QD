@@ -1,4 +1,6 @@
 # A test program for the run_quantum_dynamics module
+import os
+
 import numpy as np
 import hydra
 
@@ -7,15 +9,16 @@ from mqed.utils.dgf_data import load_gf_h5
 from mqed.Lindblad.ddi_matrix import build_ddi_matrix_from_Gslice
 from mqed.utils.orientation import resolve_angle_deg, spherical_to_cartesian_dipole
 from mqed.Lindblad.quantum_dynamics import SimulationConfig, LindbladDynamics, NonHermitianSchDynamics
-from mqed.Lindblad.quantum_operator import msd_operator
+from mqed.Lindblad.quantum_operator import msd_operator, x_shift2_conditional_callable
 
 from omegaconf import DictConfig
 
+dir_path = os.path.dirname(os.path.abspath(__file__))
 # Test the result of Lindblad and non-Hermitian dynamics for MQED setup
 # The test is to ensure that both methods give consistent results for the same physical setup
 def test_lindblad_vs_nonhermitian():
     # Load Green's function data:
-    data = load_gf_h5('/home/guangmingliu/Documents/Notre_Dame/2025Fall/MacroscopicQED/outputs/Dyadic_GF_analytical/2025-10-13/11-29-07/result_Ag_2_nm.hdf5')   # {"G_total","G_vac","energy_eV","Rx_nm","zD","zA"}
+    data = load_gf_h5(os.path.join(dir_path, 'GF_Sommerfeld_data/Fresnel_GF_planar_Ag_height_2nm_665nm.hdf5'))   # {"G_total","G_vac","energy_eV","Rx_nm","zD","zA"}
     G_slice  = data["G_total"]             # (M,N,3,3)
     E_eV  = data["energy_eV"]            # (M,)
     Rx_nm = data["Rx_nm"]
@@ -46,10 +49,10 @@ def test_lindblad_vs_nonhermitian():
     psi_init = fock(sim_cfg.Nmol + 1, 1)     # State vector for Non-Hermitian
 
     # Evolve both systems
-    e_ops = {'MSD_nm2': msd_operator(dim=sim_cfg.Nmol + 1,
-                                    d_nm=sim_cfg.d_nm,
-                                    Nmol=sim_cfg.Nmol,
-                                    init_site_index=1)}
+    X_shift2_op = msd_operator(dim=sim_cfg.Nmol + 1, d_nm=sim_cfg.d_nm, Nmol=sim_cfg.Nmol, init_site_index=1)
+    e_ops = {'MSD_nm2': lambda t, st, X2=X_shift2_op, N=sim_cfg.Nmol:
+                x_shift2_conditional_callable(t, st, X_shift2=X2, Nmol=N),
+            'MSD_noncond_nm2': X_shift2_op}
     
     options = {'atol': 1e-9, 'rtol': 1e-6}
 
@@ -59,7 +62,9 @@ def test_lindblad_vs_nonhermitian():
     # Compare the mean-square displacement results
     msd_lindblad = lindblad_result.expectations['MSD_nm2']
     msd_nonherm = nonherm_result.expectations['MSD_nm2']
+    msd_noncond = nonherm_result.expectations['MSD_noncond_nm2']
 
     # Assert that the results are close
+    assert np.allclose(msd_nonherm, msd_noncond, atol=1e-6), "Conditional and non-conditional MSD results differ significantly!"
     assert np.allclose(msd_lindblad, msd_nonherm, atol=1e-2), "Lindblad and Non-Hermitian results differ significantly!"
 

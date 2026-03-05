@@ -8,34 +8,73 @@ hydra:
 
 curves:
   # Example 
-  - label: "Fresnel"
-    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/height_2nm/Fresnel_silver_planar_665nm_N100_height_2nm_inter_3nm.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
-    style: "-"         # matplotlib line format
-    lw: 2
-  - label: "BEM"
-    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/height_2nm/BEM_silver_planar_665nm_N100_height_2nm_inter_3nm.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
-    style: "r--"         # matplotlib line format
-    lw: 2
 
-  # - label: "planar"
-  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/intermol_8nm/Fresnel_silver_planar_665nm_N30.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+  # - label: "Fresnel"
+  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/height_2nm/Fresnel_silver_planar_665nm_N100_height_2nm_inter_3nm_magic.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
   #   style: "-"         # matplotlib line format
   #   lw: 2
-
-  # - label: "planar_NN"
-  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/intermol_8nm/Fresnel_silver_planar_665nm_N30_NN.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+  #   color: "blue"
+  # - label: "BEM"
+  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/height_2nm/BEM_silver_planar_665nm_N100_height_2nm_inter_3nm_magic.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
   #   style: "--"         # matplotlib line format
   #   lw: 2
-
-  # - label: "nanorod"
-  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/intermol_8nm/BEM_silver_nanorod_665nm_N30.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+  #   color: "orange"
+  # - label: "Fresnel 2nm"
+  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/height_2nm/Fresnel_silver_planar_665nm_N100_height_2nm_inter_3nm.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
   #   style: "-"         # matplotlib line format
   #   lw: 2
-  
-  # - label: "nanorod_NN"
-  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/intermol_8nm/BEM_silver_nanorod_665nm_N30_NN.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
-  #   style: "-."         # matplotlib line format
+  #   color: "blue"
+  # - label: "BEM 2nm"
+  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/height_2nm/BEM_silver_planar_665nm_N100_height_2nm_inter_3nm.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+  #   style: "--"         # matplotlib line format
   #   lw: 2
+  #   color: "blue"
+  
+  # - label: "Fresnel 5nm"
+  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/height_5nm/Fresnel_silver_planar_665nm_N100_height_5nm_inter_3nm.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+  #   style: "-"         # matplotlib line format
+  #   lw: 2
+  #   color: "orange"
+  # - label: "BEM 5nm"
+  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/height_5nm/BEM_silver_planar_665nm_N100_height_5nm_inter_3nm.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+  #   style: "--"         # matplotlib line format
+  #   lw: 2
+  #   color: "orange"
+  
+  # - label: "Fresnel 8nm"
+  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/height_8nm/Fresnel_silver_planar_665nm_N100_height_8nm_inter_3nm.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+  #   style: "-"         # matplotlib line format
+  #   lw: 2
+  #   color: "red"
+  # - label: "BEM 8nm"
+  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/height_8nm/BEM_silver_planar_665nm_N100_height_8nm_inter_3nm.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+  #   style: "--"         # matplotlib line format
+  #   lw: 2
+  #   color: "red"
+
+  - label: "Planar(All)"
+    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/intermol_8nm/Fresnel_silver_planar_665nm_N30.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+    style: "-"         # matplotlib line format
+    lw: 2
+    color: "blue" # optional color specification (e.g., "blue", "C0", "#1f77b4")
+
+  - label: "Planar(NN)"
+    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/intermol_8nm/Fresnel_silver_planar_665nm_N30_NN.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+    style: "--"         # matplotlib line format
+    lw: 2
+    color: "blue"
+
+  - label: "Nanorod(All)"
+    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/intermol_8nm/BEM_silver_nanorod_665nm_N30.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+    style: "-"         # matplotlib line format
+    lw: 2
+    color: "orange"
+  
+  - label: "Nanorod(NN)"
+    use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/intermol_8nm/BEM_silver_nanorod_665nm_N30_NN.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+    style: "--"         # matplotlib line format
+    lw: 2
+    color: "orange"
   
   # - label: "free space"
   #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/height_8nm/Fresnel_vacuum_planar_665nm_N50.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
@@ -47,7 +86,7 @@ plot_settings:
   geometry: nanorod # or other geometries, 'sphere', 'nanorod', etc.
   material: silver
   excitation_position_nm: initial # or 'initial', 'middle', etc.
-  filename: "${plot_settings.geometry}_${plot_settings.material}_${plot_settings.excitation_position_nm}_pr_comparison.png"
+  filename: "${plot_settings.geometry}_${plot_settings.material}_${plot_settings.excitation_position_nm}_pr_comparison_NN.png"
   dpi: 400
   show: false
   tight_layout: true
@@ -65,14 +104,14 @@ plot_settings:
   xscale: linear
   yscale: linear
   xlim: [0,150]
-  ylim: [0, null]
+  ylim: [1, null]
 
   font:
     family: null        # e.g. "DejaVu Sans", "Times New Roman"; null keeps default
     labelsize: 18
-    ticksize: 18
+    ticksize: 22
     legendsize: 18
-    titlesize: 18
+    titlesize: 22
     labelweight: bold   # "normal" or "bold"
     legendweight: bold  # "normal" or "bold"
     tickweight: bold     # "normal" or "bold"

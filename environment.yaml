@@ -54,7 +54,7 @@ dependencies:
       - gitpython
       - loguru
       - sphinx
-      - sphinx-rtd-theme
+      - furo
       - rich
       - pyvista[all]
       - sqlalchemy

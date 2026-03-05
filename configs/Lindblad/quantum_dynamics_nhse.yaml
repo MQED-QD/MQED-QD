@@ -28,6 +28,13 @@ observables:
 
   - name: X_shift2
     kind: operator
+  
+  # conditional versions (recommended for NHSE transport comparison)
+  - name: X_shift_cond
+    type: callable
+
+  - name: X_shift2_cond
+    type: callable
 
   - name: IPR_site
     kind: callable
@@ -72,8 +79,8 @@ simulation:
 # dipoles / orientation
   mu_D_debye: 3.8
   mu_A_debye: 3.8
-  theta_deg: 0.0
-  phi_deg: 0.0 # or a number
+  theta_deg: 90.0
+  phi_deg: 'magic' # or a number
   mode: stationary # or 'disorder'
   # disorder_sigma_phi_deg: 15.0 # uncomment for disordered orientations
 

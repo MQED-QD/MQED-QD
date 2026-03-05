@@ -94,8 +94,9 @@ def main(cfg: DictConfig) -> None:
         style = getattr(curve, "style", "-")
         lw = getattr(curve, "lw", ps.get("lw", 1.5))
         label = getattr(curve, "label", path.stem)
+        color = getattr(curve, "color", None)
 
-        ax.plot(x, y, style, lw=lw, label=label)
+        ax.plot(x, y, style, lw=lw, label=label, color=color)
 
         logger.info(f"Plotted {label} from {path.name} (source={meta.get('source','?')})")
 

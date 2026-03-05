@@ -8,18 +8,43 @@ hydra:
 
 curves:
   # Example stationary vs disorder-avg
-  - label: "Fresnel (stationary)"
+  - label: "Fresnel"
     use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/Fresnel_silver_stationary_665nm.hdf5"
     style: "-"
-    lw: 1.6
-  - label: "BEM (stationary)"
+    lw: 2
+    color: "blue"
+  - label: "BEM"
     use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/BEM_silver_stationary_665nm.hdf5"
     style: "--"
-    lw: 1.6
+    lw: 2
+    color: "orange"
   # - label: "σ=10 disorder"
   #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/silver_sigma10_avg_latest.hdf5"
   #   style: "C1-"
   #   lw: 1.6
+  # - label: "planar"
+  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/intermol_8nm/Fresnel_silver_planar_665nm_N30.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+  #   style: "-"         # matplotlib line format
+  #   lw: 2
+  #   color: "blue" # optional color specification (e.g., "blue", "C0", "#1f77b4")
+
+  # - label: "planar_NN"
+  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/intermol_8nm/Fresnel_silver_planar_665nm_N30_NN.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+  #   style: "--"         # matplotlib line format
+  #   lw: 2
+  #   color: "blue"
+
+  # - label: "nanorod"
+  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/intermol_8nm/BEM_silver_nanorod_665nm_N30.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+  #   style: "-"         # matplotlib line format
+  #   lw: 2
+  #   color: "orange"
+  
+  # - label: "nanorod_NN"
+  #   use_latest_glob: "${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/QDyn_cache/intermol_8nm/BEM_silver_nanorod_665nm_N30_NN.hdf5"  # or using "outputs/Lindblad/.../qdyn_result.hdft"
+  #   style: "--"         # matplotlib line format
+  #   lw: 2
+  #   color: "orange"
 
 plot_settings:
   save_plot: true

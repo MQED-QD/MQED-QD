@@ -41,9 +41,9 @@ simulation:
     max: 500.0
     points: 1
   position:
-    zD: 8.0e-9
-    zD_nm: 8 # Key for name
-    zA: 8.0e-9
+    zD: 5.0e-9
+    zD_nm: 5 # Key for name
+    zA: 5.0e-9
     Rx_nm: # New section to define the range of horizontal distances
       start: 0.0
       stop: 300.0

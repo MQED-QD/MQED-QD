@@ -9,7 +9,7 @@ from loguru import logger
 from omegaconf import DictConfig
 
 from mqed.Lindblad.quantum_dynamics import LindbladDynamics, NonHermitianSchDynamics, SimulationConfig
-from mqed.Lindblad.quantum_operator import ipr_callable, msd_operator, position_operator, site_population_operator
+from mqed.Lindblad.quantum_operator import ipr_callable, msd_operator, position_operator, site_population_operator, x_shift_conditional_callable, x_shift2_conditional_callable
 from mqed.utils.dgf_data import load_gf_h5
 from mqed.utils.logging_utils import setup_loggers_hydra_aware
 from mqed.utils.save_hdf5 import save_dx_h5
@@ -23,6 +23,9 @@ def build_observable(item: Dict[str, Any], *, dim: int, d_nm: float, Nmol: int, 
     name   = str(item["name"])
     kind   = str(item.get("kind", "operator"))
     params = dict(item.get("params", {}) or {})
+    if name in {"X_shift_cond", "X_shift2_cond", "IPR_site"} and kind != "callable":
+        logger.warning(f"{name} is usually used with kind='callable' (got {kind!r})")
+
 
     if name == "X_shift":
         logger.info(f"Adding observable: position operator (X_shift)")
@@ -39,6 +42,24 @@ def build_observable(item: Dict[str, Any], *, dim: int, d_nm: float, Nmol: int, 
         logger.info(f"Adding observable: Inverse Participation Ratio (requires Nmol param)")
         Nmol_local = int(params.get("Nmol", Nmol))
         return name, (lambda t, st: ipr_callable(t, st, Nmol=Nmol_local))
+
+    if name == "X_shift_cond":
+        logger.info("Adding observable: conditional position expectation (X_shift_cond)")
+        Nmol_local = int(params.get("Nmol", Nmol))
+        X_shift_op = position_operator(dim, d_nm, Nmol, init_site)  # fixed operator, normalization in callable
+        return name, (
+            lambda t, st, X=X_shift_op, N=Nmol_local:
+                x_shift_conditional_callable(t, st, X_shift=X, Nmol=N)
+        )
+
+    if name == "X_shift2_cond":
+        logger.info("Adding observable: conditional MSD moment (X_shift2_cond)")
+        Nmol_local = int(params.get("Nmol", Nmol))
+        X_shift2_op = msd_operator(dim, d_nm, Nmol, init_site)
+        return name, (
+            lambda t, st, X2=X_shift2_op, N=Nmol_local:
+                x_shift2_conditional_callable(t, st, X_shift2=X2, Nmol=N)
+        )
 
     logger.error(f"Unknown observable name: {name!r}")
     raise ValueError(f"Unknown observable name: {name!r}")
@@ -161,13 +182,24 @@ def app_run(cfg: DictConfig, output_dir: Optional[Path] = None):
     dx = None
     dx_std = None
     if compute_root_msd:
-        if "X_shift" not in result.expectations or "X_shift2" not in result.expectations:
+        # Prefer conditional moments if they exist (best for NHSE / fair comparisons)
+        if "X_shift_cond" in result.expectations and "X_shift2_cond" in result.expectations:
+            logger.info("Computing root_MSD from conditional moments: X_shift_cond, X_shift2_cond")
+            x = np.asarray(result.expectations["X_shift_cond"])
+            x2 = np.asarray(result.expectations["X_shift2_cond"])
+
+        # Fallback to raw moments
+        elif "X_shift" in result.expectations and "X_shift2" in result.expectations:
+            logger.info("Computing root_MSD from raw moments: X_shift, X_shift2")
+            x = np.asarray(result.expectations["X_shift"])
+            x2 = np.asarray(result.expectations["X_shift2"])
+
+        else:
             raise ValueError(
-                "root_MSD requested, but both 'X_shift' and 'X_shift2' observables are required."
+                "root_MSD requested, but need either "
+                "('X_shift_cond','X_shift2_cond') or ('X_shift','X_shift2')."
             )
 
-        x = np.asarray(result.expectations["X_shift"])
-        x2 = np.asarray(result.expectations["X_shift2"])
         dx = np.sqrt(np.maximum(0.0, x2 - x**2))
         dx_std = np.zeros_like(dx)
 

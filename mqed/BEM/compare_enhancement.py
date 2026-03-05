@@ -139,6 +139,8 @@ def main(cfg: DictConfig) -> None:
         lw_imag = float(getattr(curve, "lw_imag", getattr(curve, "lw", getattr(ps, "lw", 2.5))))
         style_real = getattr(curve, "style_real", getattr(curve, "style", "-"))
         style_imag = getattr(curve, "style_imag", getattr(curve, "style", "--"))
+        color_real = getattr(curve, "color_real", getattr(curve, "color", None))
+        color_imag = getattr(curve, "color_imag", getattr(curve, "color", None))
 
         # optional label suffixes
         real_suffix = getattr(ps, "real_label_suffix", " $V/V^{0}$")
@@ -149,15 +151,34 @@ def main(cfg: DictConfig) -> None:
         if "real" in want:
             x, y = _clip_xy(x_nm, enh_real, xlim)
             x, y = _drop_nonfinite(x, y)
-            ax.plot(x, y, style_real, lw=lw_real, label=base_label + real_suffix)
+            ax.plot(x, y, style_real, lw=lw_real, label=base_label + real_suffix, color=color_real)
 
         if "imag" in want:
             x, y = _clip_xy(x_nm, enh_imag, xlim)
             x, y = _drop_nonfinite(x, y)
-            ax.plot(x, y, style_imag, lw=lw_imag, label=base_label + imag_suffix)
+            ax.plot(x, y, style_imag, lw=lw_imag, label=base_label + imag_suffix, color=color_imag)
 
         logger.info(f"Plotted {base_label} from {path.name} (components={want})")
 
+    # add vlines:
+    vcfg = getattr(ps, "vlines", None)
+    if vcfg and getattr(vcfg, "enabled", False):
+        logger.info("Add a verticle line.")
+        xs = list(getattr(vcfg, "xs",[]))
+        
+        # either a list of colors or one fallback
+        colors = getattr(vcfg, "colors", None)
+        default_color = getattr(vcfg, "color", "k")
+        
+        for i, xv in enumerate(xs):
+            col = colors[i] if colors is not None and i < len(colors) else default_color
+            ax.axvline(
+                xv,
+                linestyle = getattr(vcfg, "style", "--"),
+                linewidth = float(getattr(vcfg, "lw", 1.5)),
+                alpha = float(getattr(vcfg, "alpha", 0.8)),
+                color=col,
+            )
     # axis style
     ax.set_xlabel(ps.xlabel)
     ax.set_ylabel(ps.ylabel)
@@ -194,6 +215,8 @@ def main(cfg: DictConfig) -> None:
         data_path = figpath.with_suffix(".csv")
         df.to_csv(data_path, index=False)
         logger.success(f"Saved data → {data_path}")
+    
+
 
     if getattr(ps, "show", False):
         plt.show()

@@ -1,26 +1,51 @@
-.. MacroscopicQED documentation master file, created by
-   sphinx-quickstart on Mon Sep 29 13:48:32 2025.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
+MQED-QD Documentation
+=====================
 
-MacroscopicQED documentation
-============================
+**MQED-QD** is a Python toolkit for simulating exciton-polariton transport
+near plasmonic interfaces using macroscopic quantum electrodynamics.
 
-Welcome to the docs for *MacroscopicQED*.
+.. image:: _static/workflow_diagram.png
+   :width: 600
+   :align: center
+   :alt: MQED-QD Workflow
+
+Key Features
+------------
+
+- Dyadic Green's functions via Sommerfeld integrals
+- Resonance energy transfer (RET) and field enhancement (FE) analysis
+- Open-system dynamics: Lindblad master equation & NHSE
+- Boundary Element Method (BEM) for arbitrary geometries
+- Hydra-based configuration for reproducible workflows
 
 .. toctree::
    :maxdepth: 1
-   :caption: Installation
+   :caption: Getting Started
 
+   installation
    getting-started
 
 .. toctree::
    :maxdepth: 1
-   :caption: Package Reference
+   :caption: Tutorials
 
-   api/index
+   tutorials/index
+   tutorials/GF_Sommerfeld
+   tutorials/field-enhancement
+   tutorials/quantum-dynamics
+   tutorials/plotting
+   tutorials/bem
 
 .. toctree::
-   :hidden:
+   :maxdepth: 1
+   :caption: Theory
 
-   api/reference/mqed
+   theory/two_layer
+   theory/RET
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Reference
+
+   configuration
+   api/index

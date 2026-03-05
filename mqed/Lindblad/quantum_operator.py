@@ -1,6 +1,6 @@
 # MacroscopicQED/mqed/Lindblad/quantum_operator.py
 """Quantum operators (MSD, position, IPR) for dynamics simulations."""
-from qutip import Qobj, qeye, projection
+from qutip import Qobj, qeye, projection, expect
 import numpy as np
 
 
@@ -55,3 +55,33 @@ def ipr_callable(t, state, *, Nmol):
         return 0.0
     q = pop_exc / s
     return float(np.dot(q, q))                  # IPR_site
+
+def excited_population_norm(state, *, Nmol: int) -> float:
+    """Total excited-manifold population (sum over sites |1>...|N|)."""
+    if state.isket:
+        amp = state.full().ravel()
+        pop = np.abs(amp)**2
+    else:
+        rho = state.full()
+        pop = np.real(np.diag(rho))
+
+    s = float(np.sum(pop[1:1+Nmol]))
+    return max(s, 0.0)
+
+
+def x_shift_conditional_callable(t, state, *, X_shift: Qobj, Nmol: int) -> float:
+    r"""Conditional <X-x0I> / P_exc, where P_exc is excited population."""
+    s = excited_population_norm(state, Nmol=Nmol)
+    if s <= 0.0:
+        return 0.0
+    val = expect(X_shift, state)
+    return float(np.real(val) / s)
+
+
+def x_shift2_conditional_callable(t, state, *, X_shift2: Qobj, Nmol: int) -> float:
+    r"""Conditional <(X-x0I)^2> / P_exc, where P_exc is excited population."""
+    s = excited_population_norm(state, Nmol=Nmol)
+    if s <= 0.0:
+        return 0.0
+    val = expect(X_shift2, state)
+    return float(np.real(val) / s)
