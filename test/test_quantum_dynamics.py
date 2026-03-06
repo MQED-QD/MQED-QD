@@ -1,3 +1,8 @@
+'''
+This is a test script to verify the difference between Lindblad equation 
+and non-Hermitian schrödinger equation. They aggre with each other for MSD 
+in a tolerance.
+'''
 # A test program for the run_quantum_dynamics module
 import os
 

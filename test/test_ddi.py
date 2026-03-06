@@ -1,3 +1,7 @@
+'''
+This is the script to test our Fresnel implementation generated matrix element in agreement with 
+previous MATLAB generated matrix element (which is benchmark). Test results confirm our implementation is correct.
+'''
 import numpy as np
 import h5py
 from pathlib import Path
@@ -5,17 +9,19 @@ from scipy.io import loadmat, savemat
 import pytest
 from matplotlib import pyplot as plt
 from scipy.stats import norm
+import os
 
 from mqed.utils.SI_unit import eV_to_J, c, eps0, hbar,D2CMM
 from mqed.Lindblad.ddi_matrix import build_ddi_matrix_from_Gslice, _phi_wrapped_normal_deg
 from mqed.utils.dgf_data import load_gf_h5
 from mqed.utils.orientation import resolve_angle_deg, spherical_to_cartesian_dipole
 
+dir_path = os.path.dirname(os.path.abspath(__file__))
 # Substitute with your own path.
-dgf_data_path = '/home/guangmingliu/Documents/Notre_Dame/2025Fall/MacroscopicQED/outputs/Dyadic_GF_analytical/2025-10-13/11-29-07/result_Ag_2_nm.hdf5'
-matlab_path = '/home/guangmingliu/Documents/Notre_Dame/2025Fall/MacroscopicQED/test/matlab_data/Parameter_Set1.mat'
-matlab_disorder_matrix = '/home/guangmingliu/Documents/Notre_Dame/2025Fall/MacroscopicQED/test/matlab_data/Parameter_Set2.mat'
-matlab_angle_disorder = '/home/guangmingliu/Documents/Notre_Dame/2025Fall/MacroscopicQED/test/matlab_data/Angle_Set2.mat'
+dgf_data_path = os.path.join(dir_path, 'GF_Sommerfeld_data/Fresnel_GF_planar_Ag_height_2nm_665nm.hdf5')
+matlab_path = os.path.join(dir_path,'matlab_data/Parameter_Set1.mat')
+matlab_disorder_matrix = os.path.join(dir_path,'matlab_data/Parameter_Set2.mat')
+matlab_angle_disorder = os.path.join(dir_path,'matlab_data/Angle_Set2.mat')
 
 data = load_gf_h5(dgf_data_path)   # {"G_total","G_vac","energy_eV","Rx_nm","zD","zA"}
 Gtot  = data["G_total"]             # (M,N,3,3)

@@ -1,3 +1,6 @@
+'''
+This is a test script to verify if Hydra works well.
+'''
 # tests/test_hydra_wiring.py
 from pathlib import Path
 from hydra import initialize_config_dir, compose
@@ -30,7 +33,7 @@ def test_overrides_apply():
 def test_smoke_writes_to_tmp(tmp_path):
     cfg_dir = Path(__file__).parent / "../configs/Lindblad"
     cfg = _compose(cfg_dir, "quantum_dynamics", overrides=[f"output.filename=test_out.h5",
-                                                        f"greens.h5_path={(Path(__file__).resolve().parents[1] / 'outputs/Dyadic_GF_analytical/2025-10-13/11-29-07/result_Ag_2_nm.hdf5')}",
+                                                        f"greens.h5_path={(Path(__file__).resolve().parents[1] / 'test/GF_Sommerfeld_data/Fresnel_GF_planar_Ag_height_2nm_665nm.hdf5')}",
                                                         f"simulation.Nmol=5"])
     # IMPORTANT: app_run writes into output_dir we pass
     app_run(cfg, output_dir=tmp_path)
