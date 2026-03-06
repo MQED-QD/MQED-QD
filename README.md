@@ -5,7 +5,7 @@
 [![python](https://img.shields.io/badge/Python-3.9%2B-blue?logo=python&logoColor=white)](#)
 [![hydra](https://img.shields.io/badge/Config-Hydra_1.x-89b8cd)](https://hydra.cc/)
 [![license](https://img.shields.io/badge/License-MIT-green)](LICENSE)
-[![docs](https://img.shields.io/badge/Docs-GitHub_Pages-blue?logo=github)](https://mqed-transport.github.io/Macroscopic-Quantum-Electrodynamics/)
+[![docs](https://img.shields.io/badge/Docs-GitHub_Pages-blue?logo=github)](https://mqed-qd.github.io/Macroscopic-Quantum-Electrodynamics/index.html)
 
 A Python toolkit for simulating exciton transport
 near plasmonic interfaces using macroscopic quantum electrodynamics (MQED).
@@ -105,7 +105,7 @@ All commands use [Hydra](https://hydra.cc/) YAML configs under `configs/`.
 | `configs/BEM/` | BEM geometry and comparison settings |
 | `configs/plots/` | MSD, RMSD, PR, IPR plot settings |
 
-See the [Configuration Reference](https://mqed-transport.github.io/Macroscopic-Quantum-Electrodynamics/configuration.html) for full documentation.
+See the [Configuration Reference](https://mqed-qd.github.io/Macroscopic-Quantum-Electrodynamics/configuration.html) for full documentation.
 
 ---
 
