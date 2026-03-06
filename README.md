@@ -2,7 +2,7 @@
 
 # MQED-QD
 
-[![python](https://img.shields.io/badge/Python-3.9%2B-blue?logo=python&logoColor=white)](#)
+[![python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)](#)
 [![hydra](https://img.shields.io/badge/Config-Hydra_1.x-89b8cd)](https://hydra.cc/)
 [![license](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 [![docs](https://img.shields.io/badge/Docs-GitHub_Pages-blue?logo=github)](https://mqed-qd.github.io/Macroscopic-Quantum-Electrodynamics/index.html)
