@@ -86,14 +86,47 @@ The total dyadic Green's function decomposes as
 where :math:`\overline{\overline{\mathbf{G}}}_0` is the closed-form vacuum
 Green's function and
 :math:`\overline{\overline{\mathbf{G}}}_\mathrm{Sc}` encodes the effect of
-the interface.  In cylindrical coordinates the scattering part separates into
-*s*- and *p*-wave contributions:
+the interface.
+
+Vacuum Green's Function
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+The free-space dyadic Green's function has the closed-form analytical
+expression
 
 .. math::
 
-   \overline{\overline{\mathbf{G}}}_\mathrm{Sc}
-   = \frac{i}{4\pi}
-   \bigl(\mathbf{M}^{(s)} + \mathbf{M}^{(p)}\bigr).
+   \overline{\overline{\mathbf{G}}}_0(\mathbf{r}_\alpha,\mathbf{r}_\beta,\omega)
+   = \frac{e^{ik_0 R_{\alpha\beta}}}{4\pi R_{\alpha\beta}}
+   \Big[
+   \left(\overline{\overline{\mathbf{I}}}_3
+         - \mathbf{e}_\mathrm{R}\mathbf{e}_\mathrm{R}\right)
+   + \left(3\mathbf{e}_\mathrm{R}\mathbf{e}_\mathrm{R}
+         - \overline{\overline{\mathbf{I}}}_3\right)
+   \left(\frac{1}{(k_0 R_{\alpha\beta})^{2}}
+         - \frac{i}{k_0 R_{\alpha\beta}}\right)
+   \Big],
+
+where :math:`R_{\alpha\beta} = |\mathbf{r}_\alpha - \mathbf{r}_\beta|` is the
+distance between the source and field points,
+:math:`\mathbf{e}_\mathrm{R} = (\mathbf{r}_\alpha - \mathbf{r}_\beta)/R_{\alpha\beta}`
+is the unit vector along that direction,
+:math:`\overline{\overline{\mathbf{I}}}_3` is the :math:`3\times 3` identity
+tensor, and :math:`k_0 = \omega/c` is the free-space wave number.
+
+Scattering Part
+^^^^^^^^^^^^^^^^
+
+In cylindrical coordinates the scattering part is given by the
+Sommerfeld integral:
+
+.. math::
+
+   \overline{\overline{\mathbf{G}}}_\mathrm{Sc}(\rho, \varphi, z, z', \omega)
+   = \int_{0}^{+\infty} \frac{i\,dk_{\rho}}{4\pi}
+   \Big[ R_s\,\overline{\overline{\mathbf{M}}}^{(s)}
+       + R_p\,\overline{\overline{\mathbf{M}}}^{(p)} \Big]\,
+   e^{iK_{z,i}(k_{\rho},\,\omega)(z+z')}.
 
 
 Sommerfeld Integrals
