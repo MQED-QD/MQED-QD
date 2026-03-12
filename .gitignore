@@ -25,4 +25,4 @@ build/
 dist/
 *.egg-info/
 
-mqed/disorder/
+mqed/disorder/angle_disorder
