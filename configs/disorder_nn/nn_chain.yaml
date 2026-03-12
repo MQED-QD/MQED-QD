@@ -1,0 +1,48 @@
+# Configuration for nearest-neighbour 1D chain with diagonal + off-diagonal disorder.
+# Uses scipy.sparse tridiagonal Hamiltonian + expm_multiply propagation.
+
+defaults:
+  - hydra: default          # <- loads configs/disorder_nn/hydra/default.yaml
+  - _self_
+
+hydra:
+  job:
+    name: nn_chain_disorder
+
+# --- Chain parameters (energies in eV) ---
+chain:
+  N_emit: 1000              # number of sites
+  eps_0_eV: 0.0             # on-site energy (uniform baseline)
+  J_0_eV: 0.05              # nearest-neighbour coupling (uniform baseline)
+
+# --- Disorder ---
+disorder:
+  sigma_eps_eV: 0.0         # Gaussian std-dev for on-site energy disorder
+  sigma_J_eV: 0.05           # Gaussian std-dev for coupling disorder
+  n_realizations: 1000         # number of disorder realisations
+  seed: 2025                 # base RNG seed (realisation k uses seed + k)
+  n_jobs: -1                 # joblib parallelism (-1 = all cores)
+
+# --- Time grid ---
+time:
+  t_total_fs: 1500.0        # total propagation time in femtoseconds
+  n_steps: 1500             # number of output time steps (uniform grid)
+
+# --- Initial condition ---
+initial_state:
+  type: single_site             # "gaussian" or "single_site"
+  # Gaussian wavepacket parameters (ignored when type = single_site)
+  sigma_sites: 10.0          # Gaussian width (std dev in site units)
+  k_parallel: 1.0            # plane-wave phase (radians per site; 0 = real Gaussian)
+  # For both types, center_site = null means middle of the chain
+  center_site: null
+  # single_site uses center_site as the excited site index
+
+# --- Observables ---
+observables:
+  msd: true                  # mean square displacement Σ|C_n|²(n-n₀)²
+  populations: true          # full |C_n(t)|² for every site
+
+# --- Output ---
+output:
+  filename: nn_chain_sigma_eps${disorder.sigma_eps_eV}_sigma_J${disorder.sigma_J_eV}_avg.hdf5
