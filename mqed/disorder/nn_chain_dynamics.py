@@ -68,6 +68,7 @@ class NNChainConfig:
     # observables
     obs_msd: bool = True
     obs_populations: bool = True
+    obs_position: bool = True
 
 
 # ---------------------------------------------------------------------------
@@ -79,7 +80,7 @@ class NNChainResult:
     t_fs: np.ndarray                           # (T,)  time grid
     msd: Optional[np.ndarray] = None           # (T,)  MSD
     populations: Optional[np.ndarray] = None   # (N, T) site populations |C_n(t)|²
-
+    position: Optional[np.ndarray] = None      # (T,)  mean position
 
 # ---------------------------------------------------------------------------
 # Dynamics class
@@ -207,14 +208,18 @@ class NNChainDynamics:
         # observable storage
         msd_arr: Optional[np.ndarray] = None
         pop_arr: Optional[np.ndarray] = None
+        position_arr: Optional[np.ndarray] = None  # (N,) precompute n for MSD calculation
 
         # displacement² for MSD (cheap — always compute for clarity)
         x_sq = (np.arange(self.N, dtype=float) - self._center) ** 2
+        x = np.arange(self.N, dtype=float) - self._center
 
         if self.cfg.obs_msd:
             msd_arr = np.empty(T, dtype=float)
         if self.cfg.obs_populations:
             pop_arr = np.empty((self.N, T), dtype=float)
+        if self.cfg.obs_position:
+            position_arr = np.empty(T, dtype=float)
 
         # record t=0
         P = np.abs(C) ** 2
@@ -222,6 +227,8 @@ class NNChainDynamics:
             msd_arr[0] = np.dot(P, x_sq)
         if pop_arr is not None:
             pop_arr[:, 0] = P
+        if position_arr is not None:
+            position_arr[0] = np.dot(P, x)
 
         # step-by-step propagation (expm_multiply is efficient for sparse)
         for k in range(1, T):
@@ -233,9 +240,12 @@ class NNChainDynamics:
                 msd_arr[k] = np.dot(P, x_sq)
             if pop_arr is not None:
                 pop_arr[:, k] = P
+            if position_arr is not None:
+                position_arr[k] = np.dot(P, x)
 
         return NNChainResult(
             t_fs=self.t_fs,
             msd=msd_arr,
             populations=pop_arr,
+            position=position_arr,
         )

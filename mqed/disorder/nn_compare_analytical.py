@@ -15,10 +15,10 @@ MSD analytical solution for off-diagonal disorder for local excitation:
 .. math::
     \langle x^2(t) \\rangle = 2 a^2 \frac{J_0^2 + \delta J_n^2}{\hbar^2} t^2
 
-For plane wave excitation with wavevector k_parallel:
+For Gaussian wave excitation with wavevector k_parallel:
 .. math::
-    c_n(0) = e^{i k_{parallel} n a} \exp(-\frac{(n - n_0)^2}{2 \omega_{0}^2})
-MSD analytical solution for off-diagonal disorder for plane wave excitation:
+    c_n(0) = N e^{i k_{parallel} n a} \exp(-\frac{(n - n_0)^2}{2 \omega_{0}^2})
+MSD analytical solution for off-diagonal disorder for Gaussian wave excitation:
 .. math::
     \langle x^2(t) \\rangle = a^2 (\frac{\omega_{0}^2}{2} +  \frac{2 \sigma_J^2}{\hbar^2} t^2)
 
@@ -39,15 +39,15 @@ print(f"Current directory: {current_dir}")
 
 project_root = current_dir.parent.parent
 print(f"Project root: {project_root}")
-breakpoint()
+# breakpoint()
 
 root_path = os.path.dirname(os.path.abspath(__file__))
-plane_wave_numerical_data_path = os.path.join(root_path, "NN_cache/nn_chain_sigma_eps0.0_sigma_J0.05_avg.hdf5")
+# plane_wave_numerical_data_path = os.path.join(root_path, "NN_cache/nn_chain_sigma_eps0.0_sigma_J0.05_avg.hdf5")
 
 USE_PLANE_WAVE_PHASE = True  # set to False to test the local excitation formula instead
 if USE_PLANE_WAVE_PHASE:
-    print("Comparing with plane wave excitation analytical formula.")
-    numerical_data_path = os.path.join(root_path, "NN_cache/nn_chain_sigma_eps0.0_sigma_J0.05_avg.hdf5")
+    print("Comparing with Gaussian wave excitation analytical formula.")
+    numerical_data_path = os.path.join(root_path, "NN_cache/nn_chain_sigma_eps0.0_sigma_J0.01_avg_rlz_3000.hdf5")
 else:    
     print("Comparing with local excitation analytical formula.")
     numerical_data_path = os.path.join(root_path, "NN_cache/nn_chain_sigma_eps0.0_sigma_J0.05_local_avg.hdf5")
@@ -63,10 +63,11 @@ with h5py.File(numerical_data_path, "r") as f:
     k_parallel = float(f.attrs["k_parallel"])
     sigma_sites = float(f.attrs["sigma_sites"])
     # time axis is a top-level dataset in picoseconds
-    t_ps = np.array(f["t_ps"][:])
+    t_array = np.array(f["t_ps"][:])
     # breakpoint()
     # MSD lives inside the "expectations" group
     msd_mean = np.array(f["expectations/msd_mean"][:])
+    position_mean = np.array(f["expectations/position_mean"][:])
 
 
 def msd_analytical_formula_offdiag_local_excitation(a, hbar, J_0_eV, sigma_J_eV, t_fs):
@@ -75,18 +76,24 @@ def msd_analytical_formula_offdiag_local_excitation(a, hbar, J_0_eV, sigma_J_eV,
     prefactor = 2 * a**2 * J_eff_squared / hbar**2
     return prefactor * t_fs**2
 
-def msd_analytical_formula_offdiag_plane_wave_excitation(a, hbar, J_0_eV, sigma_J_eV, t_fs, k_parallel, omega_0):
-    """Analytical formula for MSD with off-diagonal disorder for plane wave excitation."""
+def msd_analytical_formula_offdiag_gaussian_wave_excitation(a, hbar, J_0_eV, sigma_J_eV, t_fs, k_parallel, omega_0):
+    """Analytical formula for MSD with off-diagonal disorder for Gaussian wave excitation."""
     term1 = omega_0**2 / 2
     term2 = (4 * J_0_eV**2 / hbar**2) * np.sin(k_parallel * a)**2
     term3 = (2 * sigma_J_eV**2) / hbar**2
     prefactor = a**2 * (term1 + ( term3) * t_fs**2)
     return prefactor
 
-def compare_msd_with_analytical_plane_wave_excitation(t_fs, msd_numerical, a, hbar, J_0_eV, sigma_J_eV, k_parallel, omega_0):
+def position_analytical_formula_offdiag_gaussian_wave_excitation(a, hbar, J_0_eV, sigma_J_eV, t_fs, k_parallel, omega_0):
+    """Analytical formula for mean position with off-diagonal disorder for Gaussian wave excitation."""
+    term1 = (2 * -J_0_eV / hbar) * np.sin(k_parallel * a)
+    prefactor = a * term1 * t_fs
+    return prefactor
+
+def compare_msd_with_analytical_gaussian_wave_excitation(t_fs, msd_numerical, a, hbar, J_0_eV, sigma_J_eV, k_parallel, omega_0):
     """Compare numerical MSD with analytical formula."""
     if USE_PLANE_WAVE_PHASE:
-        msd_analytical = msd_analytical_formula_offdiag_plane_wave_excitation(
+        msd_analytical = msd_analytical_formula_offdiag_gaussian_wave_excitation(
             a=a,
             hbar=hbar,
             J_0_eV=J_0_eV,
@@ -111,24 +118,57 @@ def compare_msd_with_analytical_plane_wave_excitation(t_fs, msd_numerical, a, hb
     ax.plot(t_fs, msd_analytical, label="Analytical MSD", color="red", linestyle="-")
     ax.set_xlabel("Time (fs)")
     ax.set_ylabel("MSD")
-    ax.set_xlim(0, 20)
-    ax.set_ylim(0, 100)
+    # ax.set_xlim(0, 5)
+    # ax.set_ylim(48, 54)
     ax.legend()
     if USE_PLANE_WAVE_PHASE:
-        ax.set_title("Plane wave excitation: Numerical vs Analytical MSD")
+        ax.set_title("Gaussian wave excitation: Numerical vs Analytical MSD")
     else:
         ax.set_title("Local excitation: Numerical vs Analytical MSD")
+    plt.show()
+
+def compare_position_with_analytical_gaussian_wave_excitation(t_fs, position_numerical, a, hbar, J_0_eV, sigma_J_eV, k_parallel, omega_0):
+    """Compare numerical mean position with analytical formula."""
+    position_analytical = position_analytical_formula_offdiag_gaussian_wave_excitation(
+        a=a,
+        hbar=hbar,
+        J_0_eV=J_0_eV,
+        sigma_J_eV=sigma_J_eV,
+        t_fs=t_fs,
+        k_parallel=k_parallel,
+        omega_0=omega_0
+    )
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    ax.plot(t_fs, position_numerical, label="Numerical Mean Position", color="blue", marker="o", linestyle="--")
+    ax.plot(t_fs, position_analytical, label="Analytical Mean Position", color="red", linestyle="-")
+    ax.set_xlabel("Time (fs)")
+    ax.set_ylabel("Mean Position (site index)")
+    ax.legend()
+    ax.set_title("Gaussian wave excitation: Numerical vs Analytical Mean Position")
     plt.show()
 
 hbar_eVfs = 0.6582119514  # ℏ in eV·fs
 a = 1.0                    # lattice constant (lattice units)
 omega_0 = sigma_sites      # Gaussian wavepacket width σ_sites (lattice units)
 
-t_fs = np.arange(t_total_fs) # time axis in fs (from the loaded data)
+t_fs = t_array* 1e3        # time axis in fs
 
-compare_msd_with_analytical_plane_wave_excitation(
+# compare_msd_with_analytical_gaussian_wave_excitation(
+#     t_fs=t_fs,
+#     msd_numerical=msd_mean,
+#     a=a,
+#     hbar=hbar_eVfs,
+#     J_0_eV=J_0_eV,
+#     sigma_J_eV=sigma_J_eV,
+#     k_parallel=k_parallel,
+#     omega_0=omega_0,
+# )
+
+compare_position_with_analytical_gaussian_wave_excitation(
     t_fs=t_fs,
-    msd_numerical=msd_mean,
+    position_numerical=position_mean,
     a=a,
     hbar=hbar_eVfs,
     J_0_eV=J_0_eV,

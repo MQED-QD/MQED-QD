@@ -137,6 +137,18 @@ def run_disorder_nn(cfg: DictConfig) -> None:
             f"MSD(t_final) mean={float(np.asarray(msd_mean).flat[-1]):.4f}, "
             f"std={float(np.asarray(msd_std).flat[-1]):.4f}"
         )
+    
+    # Position 
+    position_mean: Optional[np.ndarray] = None
+    position_std: Optional[np.ndarray] = None
+    if nn_cfg.obs_position:
+        position_stack = np.stack([r.position for r in results_typed if r.position is not None], axis=0)
+        position_mean = np.mean(position_stack, axis=0)
+        position_std = np.std(position_stack, axis=0)
+        logger.info(
+            f"Position(t_final) mean={float(np.asarray(position_mean).flat[-1]):.4f}, "
+            f"std={float(np.asarray(position_std).flat[-1]):.4f}"
+        )
 
     # Populations
     pop_mean: Optional[np.ndarray] = None
@@ -159,6 +171,10 @@ def run_disorder_nn(cfg: DictConfig) -> None:
         expectations["populations_mean"] = pop_mean
     if pop_std is not None:
         expectations["populations_std"] = pop_std
+    if position_mean is not None:
+        expectations["position_mean"] = position_mean
+    if position_std is not None:
+        expectations["position_std"] = position_std
 
     save_dx_h5(
         outfile=outfile,
