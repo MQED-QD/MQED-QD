@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.abspath('../..'))
 project = 'MacroscopicQED'
 copyright = '2025, Guangming Liu'
 author = 'Guangming Liu'
-release = '0.1.1'
+release = '1.0.0'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

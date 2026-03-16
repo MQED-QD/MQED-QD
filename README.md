@@ -14,6 +14,19 @@ near plasmonic interfaces using macroscopic quantum electrodynamics (MQED).
 
 ---
 
+## Latest Update
+
+**Version 1.0.0** marks the first stable MQED-QD release.
+
+- **BEM workflow matured** with new tutorials for vacuum calibration and dyadic Green's-function reconstruction, bundled figures, and clearer validation guidance.
+- **Transport outputs are clearer** with explicit separation of position, second moment, MSD, and RMSD handling across simulation and plotting.
+- **Disorder studies scale better** through MPI support for NN-chain ensemble runs and analytical MSD/RMSD overlay options in plotting.
+- **Documentation is broader and more practical** with expanded tutorial coverage, updated configuration guidance, and improved API reference coverage for BEM utilities.
+
+See `CHANGELOG.md` for the full release summary.
+
+---
+
 ## Features
 
 | Category | Capability |
@@ -135,7 +148,7 @@ Macroscopic-Quantum-Electrodynamics/
 ## Documentation
 
 **Full documentation:**
-[https://mqed-transport.github.io/Macroscopic-Quantum-Electrodynamics/](https://mqed-qd.github.io/Macroscopic-Quantum-Electrodynamics/index.html)
+[https://mqed-transport.github.io/Macroscopic-Quantum-Electrodynamics/](https://mqed-qd.github.io/MQED-QD/index.html)
 
 Build locally:
 
