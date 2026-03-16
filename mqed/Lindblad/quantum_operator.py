@@ -1,18 +1,19 @@
 # MacroscopicQED/mqed/Lindblad/quantum_operator.py
-"""Quantum operators (MSD, position, IPR) for dynamics simulations."""
+"""Quantum operators (position moments, position, IPR) for dynamics simulations."""
 from qutip import Qobj, qeye, projection, expect
 import numpy as np
 
 
-def msd_operator(dim: int, d_nm: float, Nmol: int, init_site_index: int) -> Qobj:
-    r"""Mean-square displacement operator (single-excitation manifold).
+def position_square_operator(dim: int, d_nm: float, Nmol: int, init_site_index: int) -> Qobj:
+    r"""Second moment of position operator (single-excitation manifold).
 
-    Basis: ``|0\rangle`` (ground), ``|1\rangle,...,|N\rangle`` (sites). Positions: ground=0,
-    site ``j`` at ``j d``. MSD operator is ``(X - x_0 I)^2``.
 
     .. math::
+       Basis: \quad |0\rangle \text{ (ground)}, \quad |1\rangle,...,|N\rangle \text{ (sites)}.
 
-       \langle x^2 \rangle - \langle x \rangle^2 = \mathrm{Tr}\big[(X - x_0 I)^2 \, \rho\big].
+       Positions: \quad \text{ground}=0, \quad \text{site } j \text{ at } j \cdot d.
+
+       \langle x^2 \rangle = \mathrm{Tr}\big[(X - x_0 I)^2 \, \rho\big].
     """
     positions = np.zeros(dim)
     positions[1:] = d_nm * np.arange(1, Nmol + 1, dtype=float)
@@ -21,13 +22,21 @@ def msd_operator(dim: int, d_nm: float, Nmol: int, init_site_index: int) -> Qobj
     return (X - x0 * qeye(dim)) ** 2
 
 def site_population_operator(dim: int, site:int) -> Qobj:
-    r"""Projector onto site ``site`` (single excitation)."""
+    r"""Projector onto site ``site`` (single excitation).
+
+    .. math::
+       P_j =  \quad |j\rangle \langle j|, \quad j=1,...,N
+    """
     e_ops_populations = projection(dim, site+1, site+1)
 
     return e_ops_populations
 
 def position_operator(dim: int, d_nm: float, Nmol: int, init_site_index: int) -> Qobj:
-    r"""Position operator (single excitation), centered at the initial site ``x0``."""
+    r"""Position operator (single excitation), centered at the initial site ``x0``.
+    
+    .. math::
+       \langle x \rangle = \mathrm{Tr}\big[(X - x_0 I) \, \rho\big].
+    """
     positions = np.zeros(dim)
     positions[1:] = d_nm * np.arange(1, Nmol + 1, dtype=float)
     X = Qobj(np.diag(positions), dims=[[dim], [dim]])

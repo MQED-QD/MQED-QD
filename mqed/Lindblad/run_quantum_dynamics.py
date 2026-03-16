@@ -9,7 +9,7 @@ from loguru import logger
 from omegaconf import DictConfig
 
 from mqed.Lindblad.quantum_dynamics import LindbladDynamics, NonHermitianSchDynamics, SimulationConfig
-from mqed.Lindblad.quantum_operator import ipr_callable, msd_operator, position_operator, site_population_operator, x_shift_conditional_callable, x_shift2_conditional_callable
+from mqed.Lindblad.quantum_operator import ipr_callable, position_square_operator, position_operator, site_population_operator, x_shift_conditional_callable, x_shift2_conditional_callable
 from mqed.utils.dgf_data import load_gf_h5
 from mqed.utils.logging_utils import setup_loggers_hydra_aware
 from mqed.utils.save_hdf5 import save_dx_h5
@@ -31,8 +31,8 @@ def build_observable(item: Dict[str, Any], *, dim: int, d_nm: float, Nmol: int, 
         logger.info(f"Adding observable: position operator (X_shift)")
         return name, position_operator(dim, d_nm, Nmol, init_site)
     if name == "X_shift2":
-        logger.info(f"Adding observable: mean squared displacement operator (X_shift2)")
-        return name, msd_operator(dim, d_nm, Nmol, init_site)
+        logger.info(f"Adding observable: second moment of position operator (X_shift2)")
+        return name, position_square_operator(dim, d_nm, Nmol, init_site)
     if name == "pop_site":
         logger.info(f"Adding observable: population operator at specified site")
         site = int(params.get("site", 1))
@@ -53,9 +53,9 @@ def build_observable(item: Dict[str, Any], *, dim: int, d_nm: float, Nmol: int, 
         )
 
     if name == "X_shift2_cond":
-        logger.info("Adding observable: conditional MSD moment (X_shift2_cond)")
+        logger.info("Adding observable: conditional second moment of position operator (X_shift2_cond)")
         Nmol_local = int(params.get("Nmol", Nmol))
-        X_shift2_op = msd_operator(dim, d_nm, Nmol, init_site)
+        X_shift2_op = position_square_operator(dim, d_nm, Nmol, init_site)
         return name, (
             lambda t, st, X2=X_shift2_op, N=Nmol_local:
                 x_shift2_conditional_callable(t, st, X_shift2=X2, Nmol=N)
@@ -156,10 +156,6 @@ def app_run(cfg: DictConfig, output_dir: Optional[Path] = None):
         raise ValueError(f"Unknown solver.method = {method}")
 
 
-    # e_ops = {"X_shift": position_operator(sim_cfg.Nmol + 1, sim_cfg.d_nm, sim_cfg.Nmol, cfg.initial_state.site_index),
-    #         "X_shift2": msd_operator(sim_cfg.Nmol + 1, sim_cfg.d_nm, sim_cfg.Nmol, cfg.initial_state.site_index),
-    #         "IPR_site": lambda t, st: ipr_callable(t, st, Nmol=sim_cfg.Nmol),}
-
     obs_cfg = getattr(cfg, "observables", []) or []
     e_ops, compute_root_msd = _build_observables(
         obs_cfg,
@@ -208,10 +204,29 @@ def app_run(cfg: DictConfig, output_dir: Optional[Path] = None):
     outfile = output_dir / cfg.output.filename
     # states = getattr(result, 'states', None)
     logger.info(f"Saving results to {outfile.absolute()}")
+    save_legacy_aliases = bool(cfg.output.get("save_legacy_aliases", True))
     mode = str(cfg.simulation.get("mode", "stationary"))
     n_realizations = 1
     if mode == "disorder" and hasattr(cfg, "disorder"):
         n_realizations = int(cfg.disorder.get("n_realizations", 1))
+
+    expectations_to_save: Dict[str, np.ndarray] = {
+        key: np.asarray(val) for key, val in result.expectations.items()
+    }
+    if "X_shift" in expectations_to_save:
+        expectations_to_save["position_mean"] = expectations_to_save["X_shift"]
+    if "X_shift2" in expectations_to_save:
+        x2 = expectations_to_save["X_shift2"]
+        expectations_to_save["x2_mean"] = x2
+        x = expectations_to_save.get("X_shift")
+        if x is not None:
+            expectations_to_save["msd_mean"] = np.maximum(0.0, x2 - x**2)
+        else:
+            expectations_to_save["msd_mean"] = x2
+
+    if not save_legacy_aliases:
+        expectations_to_save.pop("X_shift", None)
+        expectations_to_save.pop("X_shift2", None)
 
     save_dx_h5(
         outfile=outfile,
@@ -221,8 +236,11 @@ def app_run(cfg: DictConfig, output_dir: Optional[Path] = None):
         method=method,
         mode=mode,
         n_realizations=n_realizations,
-        expectations=result.expectations,
-        extra_attrs={"root_MSD_enabled": compute_root_msd},
+        expectations=expectations_to_save,
+        extra_attrs={
+            "root_MSD_enabled": compute_root_msd,
+            "save_legacy_aliases": save_legacy_aliases,
+        },
     )
 
 
