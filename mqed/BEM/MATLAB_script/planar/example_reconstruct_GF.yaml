@@ -1,0 +1,23 @@
+defaults:
+  - _self_
+  - hydra: default  # <-- 
+
+hydra:
+  job:
+    name: reconstruct_GF
+log_file: ${hydra:runtime.output_dir}/${hydra.job.name}.log
+
+parameters:
+  energy_eV: 1.864           # corresponds to lambda = 665 nm
+  lambda_nm: 665            # wavelength in nm
+  zD_nm: 8                     # dipole height in nm
+  zA_nm: 8
+  geometry: 'planar' # or 'nanorod', 'sphere', match with your simulation to avoid confusion.
+  material: 'Ag'          # 'Ag', 'Au', etc.
+  dipole_position_nm: 500    # dipole position along the nanorod axis in nm
+
+io:
+  xlsx_path: ${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/mqed/BEM/MATLAB_script/planar/dipole_silver_planar_height_8nm_GF_665nm.xlsx
+  peff_path: ${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/mqed/BEM/MATLAB_script/planar/peff_vs_lambda_665nm.csv
+
+  output_file: BEM_GF_${parameters.geometry}_${parameters.material}_${parameters.lambda_nm}nm_height_${parameters.zD_nm}nm_pos_${parameters.dipole_position_nm}nm.hdf5

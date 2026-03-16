@@ -23,7 +23,11 @@ def fit_scale(re_bem, im_bem, re_fresnel, im_fresnel):
     """Fit complex scalar s minimising ||s * G_BEM - G_Fresnel||^2."""
     Gb = re_bem.to_numpy() + 1j * im_bem.to_numpy()
     Gf = re_fresnel.to_numpy() + 1j * im_fresnel.to_numpy()
-    s = np.vdot(Gb, Gf) / np.vdot(Gb, Gb)
+    if np.all(Gb == 0):
+        logger.warning("BEM data is all zero, cannot fit scale factor.")
+        return 0
+    else:
+        s = np.vdot(Gb, Gf) / np.vdot(Gb, Gb)
     return s
 
 
@@ -58,10 +62,20 @@ def main():
         re_fr_col = f"Re_{comp}_Fresnel"
         im_fr_col = f"Im_{comp}_Fresnel"
 
+        # 1. Check if the columns exist
         if re_bem_col not in df.columns:
             logger.warning(f"Component {comp} not found in CSV, skipping.")
             continue
+        # 2. Check if the columns are all zeros
+        # This checks if the sum of absolute values is zero
+        is_bem_zero = (df[re_bem_col].abs().sum() == 0) and (df[im_bem_col].abs().sum() == 0)
+        is_fr_zero = (df[re_fr_col].abs().sum() == 0) and (df[im_fr_col].abs().sum() == 0)
 
+        if is_bem_zero or is_fr_zero:
+            logger.info(f"Component {comp} contains only zero values, skipping scale fit.")
+            continue
+
+        # 3. Proceed with fitting if data exists
         s = fit_scale(df[re_bem_col], df[im_bem_col], df[re_fr_col], df[im_fr_col])
         rms = relative_rms(s, df[re_bem_col], df[im_bem_col], df[re_fr_col], df[im_fr_col])
         scales[comp] = s
@@ -72,7 +86,7 @@ def main():
         logger.error("No components found in CSV.")
         return
 
-    s_avg = np.mean(list(scales.values()))
+    s_avg = np.mean([s for s in scales.values() if s != 0])
     logger.info(f"s_avg  = {s_avg:.6f}  (averaged over {len(scales)} components)")
 
     rms_all = []
