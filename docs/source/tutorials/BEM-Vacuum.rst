@@ -17,7 +17,7 @@ using MQED-QD. You will:
   :ref:`tutorial-bem-reconstruct-gf`.
 
 For implementation details and benchmark context, see the MNPBEM toolbox paper
-[Hohenester2012BEMVac]_ and the MQED-QD paper [Liu2026]_.
+[Hohenester2012BEMVac]_ and the MQED-QD paper [Liu2026BEMVac]_.
 
 The calibration relies on matching BEM fields to the analytical vacuum
 reference:
@@ -169,6 +169,6 @@ References
    "MNPBEM - A Matlab toolbox for the simulation of plasmonic nanoparticles,"
    *Computer Physics Communications* **183** (2012) 370-381.
 
-.. [Liu2026] G. Liu, S. Wang, and H. T. Chen,
+.. [Liu2026BEMVac] G. Liu, S. Wang, and H. T. Chen,
    "MQED-QD: An Open-Source Package for Quantum Dynamics Simulation in Complex
    Dielectric Environments," arXiv:2603.05378.

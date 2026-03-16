@@ -19,7 +19,7 @@ factor from :ref:`tutorial-bem-vacuum`:
    \tilde{p}_j(\omega).
 
 For numerical details and methodology context, see the MNPBEM toolbox paper
-[Hohenester2012BEMRec]_ and the MQED-QD package paper [Liu2026]_.
+[Hohenester2012BEMRec]_ and the MQED-QD package paper [Liu2026BEMRec]_.
 
 By the end you will know how to:
 
@@ -104,8 +104,8 @@ Core fields for reconstruction are:
      dipole_position_nm: 500
 
    io:
-     xlsx_path: ${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/BEM_cache/dipole_silver_planar_height_8nm_GF_665nm.xlsx
-     peff_path: ${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/BEM_cache/peff_vs_lambda_665nm.csv
+     xlsx_path: ${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/mqed/BEM/MATLAB_script/planar/dipole_silver_planar_height_8nm_GF_665nm.xlsx
+     peff_path: ${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/mqed/BEM/MATLAB_script/planar/peff_vs_lambda_665nm_50nm.csv
      output_file: BEM_GF_${parameters.geometry}_${parameters.material}_${parameters.lambda_nm}nm_height_${parameters.zD_nm}nm_pos_${parameters.dipole_position_nm}nm.hdf5
 
 In practice, you usually only need to update:
@@ -141,6 +141,24 @@ Configuration file:
 That command exports a CSV with selected dyadic components from both methods,
 which you can post-process using ``mqed/BEM/verify_bem_fresnel.py``.
 
+.. code-block:: bash
+
+   python -m mqed.BEM.verify_bem_fresnel path/to/csv_file.csv
+
+User needs to update the CSV path in the script before running.
+The output gives the relative error between BEM and Sommerfeld dyadics:
+
+.. code-block:: bash
+
+    | INFO     | __main__:main:83 - s_Gxx = 0.726759+0.000000j  (rel. RMS after scaling = 6.826349e-06)
+    | INFO     | __main__:main:75 - Component Gxy contains only zero values, skipping scale fit.
+    | INFO     | __main__:main:83 - s_Gxz = 0.726448-0.000008j  (rel. RMS after scaling = 2.133498e-03)
+    | INFO     | __main__:main:75 - Component Gyx contains only zero values, skipping scale fit.
+    | INFO     | __main__:main:83 - s_Gyy = 0.726758+0.000000j  (rel. RMS after scaling = 3.834833e-06)
+    | INFO     | __main__:main:83 - s_Gzx = 0.726764-0.000007j  (rel. RMS after scaling = 3.914327e-04)
+    | INFO     | __main__:main:83 - s_Gzz = 0.726759+0.000000j  (rel. RMS after scaling = 2.192826e-05)
+    | INFO     | __main__:main:90 - s_avg  = 0.726697-0.000003j  (averaged over 5 components)
+    | SUCCESS  | __main__:main:101 - Mean rel. RMS error (using s_avg) = 5.636888e-04 over 5 components
 
 Plot the calibration/verification accuracy
 ------------------------------------------
@@ -178,6 +196,6 @@ References
    "MNPBEM - A Matlab toolbox for the simulation of plasmonic nanoparticles,"
    *Computer Physics Communications* **183** (2012) 370-381.
 
-.. [Liu2026] G. Liu, S. Wang, and H. T. Chen,
+.. [Liu2026BEMRec] G. Liu, S. Wang, and H. T. Chen,
    "MQED-QD: An Open-Source Package for Quantum Dynamics Simulation in Complex
    Dielectric Environments," arXiv:2603.05378.
