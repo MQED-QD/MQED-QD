@@ -16,6 +16,8 @@ topic.
    :caption: Contents
 
    GF_Sommerfeld
+   BEM-Vacuum
+   BEM-Reconstruct-GF
    field_enhancement
    quantum_dynamics
    plotting

@@ -60,8 +60,6 @@ Installing the package registers the following entry points:
      - Compute effective dipole-moment intensity (BEM).
    * - ``mqed_BEM_reconstruct_GF``
      - Reconstruct dyadic Green's function from BEM simulation.
-   * - ``mqed_BEM_compare_silver``
-     - Compare BEM and Fresnel results for a silver planar interface.
 
 Quick first run
 ---------------
@@ -86,6 +84,30 @@ To override a parameter from the command line:
 .. code-block:: bash
 
    mqed_GF_Sommerfeld simulation.energy_eV=1.864
+
+**Use a different YAML in the same config directory (Recommended)**
+
+.. code-block:: bash
+
+   mqed_GF_Sommerfeld --config-name=my_GF
+
+This loads ``configs/Dyadic_GF/my_GF.yaml`` instead of the default
+``GF_Sommerfeld.yaml``.  Your custom file must live in the same
+``configs/Dyadic_GF/`` directory. Users are recommended to 
+copy the default YAML to a new file and edit the copy 
+to explore different settings while keeping the original intact.
+This approach also applies to all other commands and their respective config directories.
+
+**Use a YAML from an arbitrary directory**
+
+.. code-block:: bash
+
+   mqed_GF_Sommerfeld --config-dir=/path/to/my/configs --config-name=my_GF
+
+This tells Hydra to look for ``my_GF.yaml`` in ``/path/to/my/configs/``
+instead of the default config directory. If users wish to store 
+their custom YAML files in a separate directory, they can 
+use this approach to keep them organized and avoid cluttering the default.
 
 See the :ref:`tutorial-gf-sommerfeld` tutorial for a full walkthrough
 including multi-energy runs and downstream usage.

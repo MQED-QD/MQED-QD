@@ -19,6 +19,7 @@
    :template: module_template.rst
    :recursive:
 
+   accuracy_plot
    compare_BEM_dyadic
    compare_const
    compare_enhancement
