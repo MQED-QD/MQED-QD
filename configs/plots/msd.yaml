@@ -95,9 +95,20 @@ curves:
   #   style: "-."         # matplotlib line format
   #   lw: 1.4
 
+analytical_curves:
+  - label: "Analytical MSD (local)"
+    from_curve_index: 0
+    model: local_excitation
+    style: ":"
+    lw: 2.0
+    color: "black"
+    params:
+      J_0_eV: 0.05
+      sigma_J_eV: 0.01
 
 plot_settings:
   save_plot: true
+  enable_analytical_curves: false
   geometry: nanorod # or other geometries, 'sphere', 'planar', etc.
   material: silver
   excitation_position_nm: initial # or 'initial', 'middle', etc.
@@ -110,6 +121,7 @@ plot_settings:
   figsize: [8.0, 6.0] # width, height in inches (1 inch = 2.54 cm) [3.35,2.4] for ACS
 
   # x selection (time). Choose one: x_range_ps or x_index_range
+  time_unit: ps
   x_range_ps: [0.0, 150.0]   # in picoseconds
   # x_index_range: [0, 500]
 

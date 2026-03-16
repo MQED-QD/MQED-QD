@@ -98,3 +98,4 @@ solver:
   # Output file (goes under Hydra's run dir)
 output:
   filename: ${simulation.gf_method}_${material.name}_${material.geometry}_${simulation.lambda_nm}nm_N${simulation.Nmol}_height_${height}nm_inter_${simulation.d_nm}nm.hdf5
+  save_legacy_aliases: true

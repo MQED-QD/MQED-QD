@@ -43,8 +43,20 @@ curves:
     lw: 2
     color: "orange"
 
+analytical_curves:
+  - label: "Analytical RMSD (local)"
+    from_curve_index: 0
+    model: local_excitation
+    style: ":"
+    lw: 2.0
+    color: "black"
+    params:
+      J_0_eV: 0.05
+      sigma_J_eV: 0.01
+
 plot_settings:
   save_plot: true
+  enable_analytical_curves: false
   filename: "silver_middle_sqrt_msd.png"
   dpi: 400
   show: false
@@ -54,6 +66,7 @@ plot_settings:
   figsize: [7.5, 5.0]
 
   # x selection (time). Choose one: x_range_ps or x_index_range
+  time_unit: ps
   x_range_ps: [0.0, 150.0]   # in picoseconds
   # x_index_range: [0, 500]
 
