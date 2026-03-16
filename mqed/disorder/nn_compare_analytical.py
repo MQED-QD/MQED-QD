@@ -71,29 +71,50 @@ with h5py.File(numerical_data_path, "r") as f:
 
 
 def msd_analytical_formula_offdiag_local_excitation(a, hbar, J_0_eV, sigma_J_eV, t_fs):
-    """Analytical formula for MSD with off-diagonal disorder."""
+    """Analytical formula for MSD with off-diagonal disorder for local excitation. 
+    <x>=0 for local excitation, so only the second moment contributes."""
     J_eff_squared = J_0_eV**2 + sigma_J_eV**2
     prefactor = 2 * a**2 * J_eff_squared / hbar**2
     return prefactor * t_fs**2
 
-def msd_analytical_formula_offdiag_gaussian_wave_excitation(a, hbar, J_0_eV, sigma_J_eV, t_fs, k_parallel, omega_0):
-    """Analytical formula for MSD with off-diagonal disorder for Gaussian wave excitation."""
+def x_square_analytical_formula_offdiag_gaussian_wave_excitation(a, hbar, J_0_eV, sigma_J_eV, t_fs, k_parallel, omega_0):
+    """Analytical formula for second moment of position with 
+    off-diagonal disorder for Gaussian wave excitation."""
     term1 = omega_0**2 / 2
     term2 = (4 * J_0_eV**2 / hbar**2) * np.sin(k_parallel * a)**2
     term3 = (2 * sigma_J_eV**2) / hbar**2
-    prefactor = a**2 * (term1 + ( term3) * t_fs**2)
+    prefactor = a**2 * (term1 + ( term2 + term3) * t_fs**2)
     return prefactor
 
-def position_analytical_formula_offdiag_gaussian_wave_excitation(a, hbar, J_0_eV, sigma_J_eV, t_fs, k_parallel, omega_0):
+def msd_analytical_formula_offdiag_gaussian_wave_excitation(a, hbar, J_0_eV, sigma_J_eV, t_fs, k_parallel, omega_0):
+    """Analytical formula for MSD with off-diagonal disorder for Gaussian wave excitation."""
+    x_square = x_square_analytical_formula_offdiag_gaussian_wave_excitation(a, hbar, J_0_eV, sigma_J_eV, t_fs, k_parallel, omega_0)
+    x = position_analytical_formula_offdiag_gaussian_wave_excitation(a, hbar, J_0_eV, sigma_J_eV, t_fs, k_parallel, omega_0)
+    msd = x_square - x**2
+    return msd
+
+def position_analytical_formula_offdiag_gaussian_wave_excitation(a, hbar, J_0_eV, t_fs, k_parallel):
     """Analytical formula for mean position with off-diagonal disorder for Gaussian wave excitation."""
     term1 = (2 * -J_0_eV / hbar) * np.sin(k_parallel * a)
     prefactor = a * term1 * t_fs
     return prefactor
 
-def compare_msd_with_analytical_gaussian_wave_excitation(t_fs, msd_numerical, a, hbar, J_0_eV, sigma_J_eV, k_parallel, omega_0):
+def RMSD_analytical_formula_offdiag_gaussian_wave_excitation(a, hbar, J_0_eV, sigma_J_eV, t_fs, k_parallel, omega_0):
+    """Analytical formula for root mean square displacement (RMSD) with off-diagonal disorder for Gaussian wave excitation."""
+    x_square = x_square_analytical_formula_offdiag_gaussian_wave_excitation(a, hbar, J_0_eV, sigma_J_eV, t_fs, k_parallel, omega_0)
+    x = position_analytical_formula_offdiag_gaussian_wave_excitation(a, hbar, J_0_eV, t_fs, k_parallel)
+    msd = x_square - x**2
+    return np.sqrt(msd)
+
+def RMSD_analytical_formula_offdiag_local_excitation(a, hbar, J_0_eV, sigma_J_eV, t_fs):
+    """Analytical formula for root mean square displacement (RMSD) with off-diagonal disorder for local excitation."""
+    msd = msd_analytical_formula_offdiag_local_excitation(a, hbar, J_0_eV, sigma_J_eV, t_fs)
+    return np.sqrt(msd)
+
+def compare_x_square_with_analytical_gaussian_wave_excitation(t_fs, msd_numerical, a, hbar, J_0_eV, sigma_J_eV, k_parallel, omega_0):
     """Compare numerical MSD with analytical formula."""
     if USE_PLANE_WAVE_PHASE:
-        msd_analytical = msd_analytical_formula_offdiag_gaussian_wave_excitation(
+        x_square_analytical = x_square_analytical_formula_offdiag_gaussian_wave_excitation(
             a=a,
             hbar=hbar,
             J_0_eV=J_0_eV,
@@ -104,7 +125,7 @@ def compare_msd_with_analytical_gaussian_wave_excitation(t_fs, msd_numerical, a,
         )
         
     else:
-        msd_analytical = msd_analytical_formula_offdiag_local_excitation(
+        x_square_analytical = msd_analytical_formula_offdiag_local_excitation(
             a=a,
             hbar=hbar,
             J_0_eV=J_0_eV,
@@ -115,9 +136,9 @@ def compare_msd_with_analytical_gaussian_wave_excitation(t_fs, msd_numerical, a,
     fig, ax = plt.subplots(figsize=(8, 6))
 
     ax.plot(t_fs, msd_numerical, label="Numerical MSD", color="blue", marker="o", linestyle="--")
-    ax.plot(t_fs, msd_analytical, label="Analytical MSD", color="red", linestyle="-")
+    ax.plot(t_fs, x_square_analytical, label="Analytical X^2", color="red", linestyle="-")
     ax.set_xlabel("Time (fs)")
-    ax.set_ylabel("MSD")
+    ax.set_ylabel("$<X^2>$")
     # ax.set_xlim(0, 5)
     # ax.set_ylim(48, 54)
     ax.legend()
@@ -155,7 +176,7 @@ omega_0 = sigma_sites      # Gaussian wavepacket width σ_sites (lattice units)
 
 t_fs = t_array* 1e3        # time axis in fs
 
-# compare_msd_with_analytical_gaussian_wave_excitation(
+# compare_x_square_with_analytical_gaussian_wave_excitation(
 #     t_fs=t_fs,
 #     msd_numerical=msd_mean,
 #     a=a,
