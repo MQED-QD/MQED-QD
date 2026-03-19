@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SGE Job-Array Script Guide &mdash; MacroscopicQED</title>
+<style>
+  :root {
+    --bg:       #fdfdfd;
+    --fg:       #222;
+    --accent:   #2563eb;
+    --code-bg:  #f3f4f6;
+    --code-fg:  #1e293b;
+    --border:   #d1d5db;
+    --box-info: #eff6ff;
+    --box-warn: #fef9c3;
+    --box-tip:  #ecfdf5;
+    --line-ref: #6366f1;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+    line-height: 1.7;
+  }
+  h1 { font-size: 1.9rem; margin-bottom: .3rem; }
+  h2 { font-size: 1.35rem; margin-top: 2.5rem; border-bottom: 2px solid var(--accent); padding-bottom: .3rem; }
+  h3 { font-size: 1.1rem; margin-top: 1.8rem; }
+  .subtitle { color: #555; font-size: .95rem; margin-bottom: 2rem; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* code blocks */
+  pre {
+    background: var(--code-bg);
+    color: var(--code-fg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem 1.2rem;
+    overflow-x: auto;
+    font-size: .88rem;
+    line-height: 1.65;
+  }
+  code { font-family: "JetBrains Mono", "Fira Code", "Consolas", monospace; }
+  pre code { font-size: inherit; }
+  p code, li code, td code {
+    background: var(--code-bg);
+    padding: .15em .35em;
+    border-radius: 4px;
+    font-size: .9em;
+  }
+
+  /* annotated code */
+  .annotated-block {
+    margin: 1.2rem 0;
+    border-left: 3px solid var(--accent);
+    padding-left: 1rem;
+  }
+  .annotated-block .line-ref {
+    display: inline-block;
+    background: var(--line-ref);
+    color: #fff;
+    font-size: .75rem;
+    font-weight: 600;
+    padding: .1em .5em;
+    border-radius: 3px;
+    margin-right: .3rem;
+    font-family: monospace;
+  }
+  .annotated-block .explanation { margin: .4rem 0 .8rem 0; }
+
+  /* info/warn/tip boxes */
+  .box { border-radius: 6px; padding: .9rem 1.1rem; margin: 1rem 0; }
+  .box-info { background: var(--box-info); border-left: 4px solid var(--accent); }
+  .box-warn { background: var(--box-warn); border-left: 4px solid #eab308; }
+  .box-tip  { background: var(--box-tip);  border-left: 4px solid #10b981; }
+  .box strong { display: block; margin-bottom: .2rem; }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: .9rem;
+    margin: 1rem 0;
+  }
+  th, td { border: 1px solid var(--border); padding: .5rem .7rem; text-align: left; }
+  th { background: var(--code-bg); font-weight: 600; }
+
+  .toc { background: var(--code-bg); border-radius: 6px; padding: 1rem 1.5rem; margin-bottom: 2rem; }
+  .toc ul { margin: .3rem 0 0 0; padding-left: 1.5rem; }
+  .toc li { margin: .2rem 0; }
+
+  footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: .85rem; color: #666; }
+</style>
+</head>
+<body>
+
+<h1>SGE Job-Array Script Guide</h1>
+<p class="subtitle">
+  A walkthrough of the Sun Grid Engine (SGE) batch scripts used in the
+  <strong>MacroscopicQED</strong> disorder-ensemble workflows.
+  <br>Primary example: <code>angle_disorder_jobarray.sh</code> &mdash;
+  the same patterns apply to <code>jobarray.sh</code> (NN-chain variant).
+</p>
+
+<nav class="toc">
+  <strong>Contents</strong>
+  <ul>
+    <li><a href="#s-what">1. What Is an SGE Script?</a></li>
+    <li><a href="#s-grammar">2. SGE Directive Grammar (<code>#$</code>)</a></li>
+    <li><a href="#s-directives">3. Directive-by-Directive Reference</a></li>
+    <li><a href="#s-walkthrough">4. Full Annotated Walkthrough</a></li>
+    <li><a href="#s-jobarray">5. How Job Arrays Work</a></li>
+    <li><a href="#s-env">6. Important SGE Environment Variables</a></li>
+    <li><a href="#s-submit">7. Submitting &amp; Controlling Jobs</a></li>
+    <li><a href="#s-comparison">8. SGE vs. SLURM Cheat Sheet</a></li>
+  </ul>
+</nav>
+
+<!-- ============================================================ -->
+<h2 id="s-what">1. What Is an SGE Script?</h2>
+
+<p>
+  Sun Grid Engine (SGE) is a workload manager used on many HPC clusters
+  (including Notre Dame's CRC). An <strong>SGE script</strong> is simply a
+  Bash shell script with special comment lines (<code>#$ &hellip;</code>) that
+  tell the scheduler how many resources you need, where to send email
+  notifications, which queue to use, etc. The scheduler reads these directives,
+  allocates the resources, and then runs the rest of the script as a normal
+  Bash program on the assigned compute node(s).
+</p>
+
+<div class="box box-info">
+  <strong>Key insight</strong>
+  Everything after the <code>#$</code> directive block is ordinary Bash.
+  SGE only cares about the lines starting with <code>#$</code>.
+  The rest is your program.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s-grammar">2. SGE Directive Grammar</h2>
+
+<p>SGE directives follow this pattern:</p>
+
+<pre><code>#$ -&lt;flag&gt; [value]</code></pre>
+
+<ul>
+  <li><code>#$</code> &mdash; the directive prefix.
+    SGE scans lines that start with <code>#$</code> (after the shebang).
+    To Bash, these are just comments and are ignored.</li>
+  <li><code>-&lt;flag&gt;</code> &mdash; a single-letter or long-form option
+    (same flags you can pass to <code>qsub</code> on the command line).</li>
+  <li><code>[value]</code> &mdash; the argument for that flag (some flags
+    are boolean and take no value).</li>
+</ul>
+
+<div class="box box-tip">
+  <strong>Tip</strong>
+  Anything you put after <code>#$</code> can also be passed on the
+  <code>qsub</code> command line, and <em>command-line values override
+  the script directives</em>. So <code>#$ -t 1-4</code> in the script
+  can be overridden by <code>qsub -t 1-10 script.sh</code>.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s-directives">3. Directive-by-Directive Reference</h2>
+
+<p>Here are the directives used in our scripts:</p>
+
+<pre><code>#!/bin/bash
+#$ -N angle_disorder_array
+#$ -t 1-4
+#$ -M gliu8@nd.edu
+#$ -m abe
+#$ -pe smp 24
+#$ -q long@@theta_lab
+#$ -cwd</code></pre>
+
+<table>
+  <tr>
+    <th>Directive</th>
+    <th>Flag</th>
+    <th>Meaning</th>
+  </tr>
+  <tr>
+    <td><code>#!/bin/bash</code></td>
+    <td>&mdash;</td>
+    <td>
+      <strong>Shebang.</strong> Not an SGE directive. Tells the OS to
+      execute this file with <code>/bin/bash</code>. Must be the very
+      first line.
+    </td>
+  </tr>
+  <tr>
+    <td><code>#$ -N angle_disorder_array</code></td>
+    <td><code>-N</code></td>
+    <td>
+      <strong>Job name.</strong> Shows up in <code>qstat</code> output
+      and log filenames. Choose something short but descriptive.
+    </td>
+  </tr>
+  <tr>
+    <td><code>#$ -t 1-4</code></td>
+    <td><code>-t</code></td>
+    <td>
+      <strong>Array task range.</strong> Launches tasks with IDs 1, 2, 3, 4.
+      Each task gets its own <code>$SGE_TASK_ID</code>.
+      This is the heart of a <a href="#s-jobarray">job array</a>.
+    </td>
+  </tr>
+  <tr>
+    <td><code>#$ -M gliu8@nd.edu</code></td>
+    <td><code>-M</code></td>
+    <td>
+      <strong>Mail address.</strong> Where SGE sends notification emails.
+    </td>
+  </tr>
+  <tr>
+    <td><code>#$ -m abe</code></td>
+    <td><code>-m</code></td>
+    <td>
+      <strong>Mail events.</strong>
+      <code>a</code>&nbsp;=&nbsp;abort,
+      <code>b</code>&nbsp;=&nbsp;begin,
+      <code>e</code>&nbsp;=&nbsp;end.
+      You get an email when the job starts, finishes, or crashes.
+    </td>
+  </tr>
+  <tr>
+    <td><code>#$ -pe smp 24</code></td>
+    <td><code>-pe</code></td>
+    <td>
+      <strong>Parallel environment.</strong> Requests 24 slots in the
+      <code>smp</code> (shared-memory parallel) environment. SGE sets
+      <code>$NSLOTS=24</code>. We pass this to <code>mpirun -np</code>.
+    </td>
+  </tr>
+  <tr>
+    <td><code>#$ -q long@@theta_lab</code></td>
+    <td><code>-q</code></td>
+    <td>
+      <strong>Queue.</strong> Submits to the <code>long</code> queue,
+      restricted to the <code>@@theta_lab</code> host group.
+      The <code>@@</code> syntax selects a host group within the queue.
+    </td>
+  </tr>
+  <tr>
+    <td><code>#$ -cwd</code></td>
+    <td><code>-cwd</code></td>
+    <td>
+      <strong>Current working directory.</strong> Runs the job in the
+      directory from which <code>qsub</code> was called (instead of
+      your home directory). SGE sets <code>$SGE_O_WORKDIR</code> to
+      this path.
+    </td>
+  </tr>
+</table>
+
+<div class="box box-info">
+  <strong>Other useful directives (not in our scripts)</strong>
+  <ul style="margin:.3rem 0 0 0">
+    <li><code>#$ -l h_rt=48:00:00</code> &mdash; wall-clock time limit</li>
+    <li><code>#$ -l mem_free=8G</code> &mdash; minimum free memory per slot</li>
+    <li><code>#$ -o /path/to/stdout.log</code> &mdash; redirect stdout</li>
+    <li><code>#$ -e /path/to/stderr.log</code> &mdash; redirect stderr</li>
+    <li><code>#$ -j y</code> &mdash; merge stderr into stdout</li>
+    <li><code>#$ -V</code> &mdash; export all current environment variables to the job</li>
+  </ul>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s-walkthrough">4. Full Annotated Walkthrough</h2>
+
+<p>
+  Below is <code>angle_disorder_jobarray.sh</code> broken into logical
+  blocks with explanations. The same structure applies to
+  <code>jobarray.sh</code> (NN-chain variant) &mdash; only the parameter
+  names and the final command differ.
+</p>
+
+<!-- Block 1: shebang + directives -->
+<h3>Block 1 &mdash; Shebang &amp; SGE Directives</h3>
+<div class="annotated-block">
+<pre><code>#!/bin/bash
+#$ -N angle_disorder_array
+#$ -t 1-4
+#$ -M gliu8@nd.edu
+#$ -m abe
+#$ -pe smp 24
+#$ -q long@@theta_lab
+#$ -cwd</code></pre>
+<p class="explanation">
+  Covered in <a href="#s-directives">Section 3</a>.
+  These lines are metadata for the scheduler. Bash ignores them.
+</p>
+</div>
+
+<!-- Block 2: set -euo pipefail -->
+<h3>Block 2 &mdash; Strict Bash Mode</h3>
+<div class="annotated-block">
+<pre><code>set -euo pipefail</code></pre>
+<p class="explanation">
+  Activates three safety nets:
+</p>
+<table>
+  <tr><th>Flag</th><th>Meaning</th><th>Why it matters</th></tr>
+  <tr>
+    <td><code>-e</code></td>
+    <td>Exit immediately if any command returns non-zero</td>
+    <td>Prevents the script from silently continuing after a failure</td>
+  </tr>
+  <tr>
+    <td><code>-u</code></td>
+    <td>Treat unset variables as errors</td>
+    <td>Catches typos like <code>$TAKS_INDEX</code> instead of <code>$TASK_INDEX</code></td>
+  </tr>
+  <tr>
+    <td><code>-o pipefail</code></td>
+    <td>A pipeline fails if <em>any</em> stage fails (not just the last)</td>
+    <td>Without this, <code>bad_cmd | good_cmd</code> reports success</td>
+  </tr>
+</table>
+<div class="box box-warn">
+  <strong>Always use this in HPC scripts.</strong>
+  A silent failure wastes your allocation hours &mdash; the job keeps
+  running (and billing) while doing nothing useful.
+</div>
+</div>
+
+<!-- Block 3: conda -->
+<h3>Block 3 &mdash; Conda Environment Activation</h3>
+<div class="annotated-block">
+<pre><code>module load conda
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate mqed</code></pre>
+<p class="explanation">
+  HPC compute nodes start with a minimal environment.
+  <code>module load conda</code> makes the <code>conda</code> command
+  available. The <code>source</code> line initializes conda's shell
+  integration (so that <code>conda activate</code> works instead of
+  requiring <code>source activate</code>). Finally we activate the
+  <code>mqed</code> environment that has all our Python dependencies.
+</p>
+</div>
+
+<!-- Block 4: repo root -->
+<h3>Block 4 &mdash; Repository Root Detection</h3>
+<div class="annotated-block">
+<pre><code>SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -n "${MQED_REPO_ROOT:-}" ]; then
+  REPO_ROOT="${MQED_REPO_ROOT}"
+elif [ -n "${SGE_O_WORKDIR:-}" ] && [ -f "${SGE_O_WORKDIR}/mqed/disorder/angle_sweep_params.tsv" ]; then
+  REPO_ROOT="${SGE_O_WORKDIR}"
+else
+  REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+fi
+cd "${REPO_ROOT}"</code></pre>
+<p class="explanation">
+  We need to know where the repository lives so we can find the TSV
+  parameter file and set the working directory. The script tries three
+  strategies in priority order:
+</p>
+<ol>
+  <li><strong><code>MQED_REPO_ROOT</code></strong> &mdash; explicitly passed
+    via <code>qsub -v MQED_REPO_ROOT=/path/to/repo</code>. Most reliable.</li>
+  <li><strong><code>SGE_O_WORKDIR</code></strong> &mdash; the directory from
+    which <code>qsub</code> was called (set automatically by SGE when you
+    use <code>#$ -cwd</code>). We sanity-check that the TSV file exists
+    there.</li>
+  <li><strong>Relative to script location</strong> &mdash; fallback for local
+    testing. <code>BASH_SOURCE[0]</code> is the path to the script itself;
+    going up two directories reaches the repo root.</li>
+</ol>
+<div class="box box-info">
+  <strong>The <code>${VAR:-}</code> syntax</strong>
+  means "use <code>$VAR</code> if set, otherwise use empty string".
+  This prevents <code>set -u</code> from aborting on an unset variable.
+  It's a Bash <em>parameter expansion with default</em>.
+</div>
+</div>
+
+<!-- Block 5: task index and core variables -->
+<h3>Block 5 &mdash; Task Index &amp; Core Variables</h3>
+<div class="annotated-block">
+<pre><code>TASK_INDEX="${SGE_TASK_ID:-${1:-1}}"
+MPI_NPROC="${NSLOTS:-24}"
+CONFIG_NAME="${ANGLE_CONFIG_NAME:-my_angle_disorder}"</code></pre>
+<p class="explanation">
+  Three key variables with layered defaults:
+</p>
+<table>
+  <tr><th>Variable</th><th>Primary source</th><th>Fallback</th><th>Last resort</th></tr>
+  <tr>
+    <td><code>TASK_INDEX</code></td>
+    <td><code>$SGE_TASK_ID</code><br>(set by SGE for each array task)</td>
+    <td><code>$1</code><br>(first CLI argument for local testing)</td>
+    <td><code>1</code></td>
+  </tr>
+  <tr>
+    <td><code>MPI_NPROC</code></td>
+    <td><code>$NSLOTS</code><br>(set by SGE from <code>-pe smp 24</code>)</td>
+    <td colspan="2"><code>24</code></td>
+  </tr>
+  <tr>
+    <td><code>CONFIG_NAME</code></td>
+    <td><code>$ANGLE_CONFIG_NAME</code><br>(user-set env var)</td>
+    <td colspan="2"><code>my_angle_disorder</code></td>
+  </tr>
+</table>
+<p class="explanation">
+  The nested default pattern <code>${A:-${B:-C}}</code> reads as:
+  "use A if set; otherwise use B if set; otherwise use C."
+</p>
+</div>
+
+<!-- Block 6: param file resolution -->
+<h3>Block 6 &mdash; Parameter File Resolution</h3>
+<div class="annotated-block">
+<pre><code>DEFAULT_PARAM_FILE="mqed/disorder/angle_sweep_params.tsv"
+PARAM_FILE_INPUT="${ANGLE_SWEEP_PARAM_FILE:-${MQED_SWEEP_PARAM_FILE:-${2:-${DEFAULT_PARAM_FILE}}}}"
+
+if [[ "${PARAM_FILE_INPUT}" = /* ]]; then
+  PARAM_FILE="${PARAM_FILE_INPUT}"
+else
+  PARAM_FILE="${REPO_ROOT}/${PARAM_FILE_INPUT}"
+fi
+
+if [ ! -f "${PARAM_FILE}" ]; then
+  echo "Parameter file not found: ${PARAM_FILE}" &gt;&amp;2
+  exit 1
+fi</code></pre>
+<p class="explanation">
+  Resolves the TSV file path with a priority chain:
+  <code>ANGLE_SWEEP_PARAM_FILE</code> &rarr;
+  <code>MQED_SWEEP_PARAM_FILE</code> &rarr;
+  second CLI argument &rarr; default path.
+  Then handles both absolute (<code>/home/...</code>) and relative paths.
+  Exits early with an error message if the file doesn't exist.
+</p>
+<div class="box box-tip">
+  <strong>Tip:</strong>
+  <code>&gt;&amp;2</code> redirects output to <strong>stderr</strong>,
+  keeping error messages separate from normal output. On SGE, stdout and
+  stderr go to separate log files by default.
+</div>
+</div>
+
+<!-- Block 7: TSV parsing -->
+<h3>Block 7 &mdash; TSV Parsing with <code>awk</code></h3>
+<div class="annotated-block">
+<pre><code>PARAM_LINE="$(awk -v FS='[[:space:]]+' -v OFS='\t' -v idx="${TASK_INDEX}" '
+  NR &gt; 1 &amp;&amp; NF {
+    count++
+    if (count == idx) {
+      if (NF != 7) {
+        print "__MALFORMED__", NF, $0
+        exit
+      }
+      print $1, $2, $3, $4, $5, $6, $7
+      exit
+    }
+  }
+' "${PARAM_FILE}")"</code></pre>
+<p class="explanation">
+  This <code>awk</code> one-liner is the bridge between the SGE task ID
+  and the parameter file. Here is how it works:
+</p>
+<table>
+  <tr><th>Element</th><th>Meaning</th></tr>
+  <tr>
+    <td><code>-v FS='[[:space:]]+'</code></td>
+    <td>Field separator: one or more whitespace characters (tabs or spaces)</td>
+  </tr>
+  <tr>
+    <td><code>-v OFS='\t'</code></td>
+    <td>Output field separator: tab (so output is clean TSV)</td>
+  </tr>
+  <tr>
+    <td><code>-v idx="${TASK_INDEX}"</code></td>
+    <td>Pass the Bash variable into awk as <code>idx</code></td>
+  </tr>
+  <tr>
+    <td><code>NR &gt; 1</code></td>
+    <td>Skip the header row (line 1)</td>
+  </tr>
+  <tr>
+    <td><code>NF</code></td>
+    <td>Skip blank lines (NF = number of fields; 0 is falsy)</td>
+  </tr>
+  <tr>
+    <td><code>count++</code></td>
+    <td>Count data rows; when <code>count == idx</code>, this is our row</td>
+  </tr>
+  <tr>
+    <td><code>NF != 7</code></td>
+    <td>Validation: each row must have exactly 7 fields</td>
+  </tr>
+</table>
+<p class="explanation">
+  The output is a single tab-separated line like:<br>
+  <code>baseline&lt;TAB&gt;5.0&lt;TAB&gt;45.0&lt;TAB&gt;200&lt;TAB&gt;1.0&lt;TAB&gt;0.0&lt;TAB&gt;3.0</code>
+</p>
+</div>
+
+<!-- Block 8: error checking and destructuring -->
+<h3>Block 8 &mdash; Validation &amp; Destructuring</h3>
+<div class="annotated-block">
+<pre><code>if [ -z "${PARAM_LINE}" ]; then
+  echo "No parameter row found for task index ${TASK_INDEX}" &gt;&amp;2
+  exit 1
+fi
+
+if [[ "${PARAM_LINE}" == __MALFORMED__* ]]; then
+  BAD_FIELD_COUNT="$(printf '%s' "${PARAM_LINE}" | cut -f2)"
+  echo "Malformed row: expected 7 fields, found ${BAD_FIELD_COUNT}" &gt;&amp;2
+  exit 1
+fi
+
+IFS=$'\t' read -r LABEL SIGMA_PHI PHI NMOL D_NM KPARALLEL SIGMA_SITES &lt;&lt;&lt; "${PARAM_LINE}"</code></pre>
+<p class="explanation">
+  Three checks happen here:
+</p>
+<ol>
+  <li><strong>Empty result</strong> &mdash; the task index exceeds the number
+    of rows (e.g., <code>-t 1-10</code> but only 4 data rows).</li>
+  <li><strong>Malformed sentinel</strong> &mdash; <code>awk</code> printed
+    <code>__MALFORMED__</code> because a row had the wrong number of
+    columns.</li>
+  <li><strong>Destructuring</strong> &mdash; the <code>read</code> command
+    splits the tab-separated line into named variables.
+    <code>IFS=$'\t'</code> sets the delimiter to tab for this one command.
+    <code>-r</code> prevents backslash interpretation.</li>
+</ol>
+</div>
+
+<!-- Block 9: diagnostic echo -->
+<h3>Block 9 &mdash; Diagnostic Logging</h3>
+<div class="annotated-block">
+<pre><code>echo "Running task ${TASK_INDEX} with label=${LABEL}"
+echo "Parameter file: ${PARAM_FILE}"
+echo "Config name: ${CONFIG_NAME}"
+echo "sigma_phi_deg=${SIGMA_PHI}, phi_deg=${PHI}, Nmol=${NMOL}, d_nm=${D_NM}"
+echo "k_parallel=${KPARALLEL}, sigma_sites=${SIGMA_SITES}"
+echo "Using ${MPI_NPROC} MPI ranks"
+echo "start time: $(date)"</code></pre>
+<p class="explanation">
+  Prints all resolved parameters and a timestamp to stdout. These go to
+  the SGE log file (usually <code>angle_disorder_array.o&lt;JOB_ID&gt;.&lt;TASK_ID&gt;</code>).
+  Invaluable for debugging failed jobs after the fact.
+</p>
+</div>
+
+<!-- Block 10: mpirun -->
+<h3>Block 10 &mdash; The Actual Computation</h3>
+<div class="annotated-block">
+<pre><code>mpirun -np "${MPI_NPROC}" mqed_nhse_disorder \
+  --config-name "${CONFIG_NAME}" \
+  disorder.backend=mpi \
+  disorder.mpi_auto_launch=false \
+  disorder.mpi_nproc="${MPI_NPROC}" \
+  simulation.disorder_sigma_phi_deg="${SIGMA_PHI}" \
+  simulation.phi_deg="${PHI}" \
+  simulation.Nmol="${NMOL}" \
+  simulation.d_nm="${D_NM}" \
+  initial_state.k_parallel="${KPARALLEL}" \
+  initial_state.sigma_sites="${SIGMA_SITES}" \
+  hydra.run.dir="outputs/angle_sweep/${LABEL}"
+
+echo "end time: $(date)"</code></pre>
+<p class="explanation">
+  This is where the physics happens. Let's break it down:
+</p>
+<table>
+  <tr><th>Part</th><th>Meaning</th></tr>
+  <tr>
+    <td><code>mpirun -np "${MPI_NPROC}"</code></td>
+    <td>Launch the program with N MPI processes (one per SGE slot)</td>
+  </tr>
+  <tr>
+    <td><code>mqed_nhse_disorder</code></td>
+    <td>The Python entry point (installed via <code>pip install -e .</code>)</td>
+  </tr>
+  <tr>
+    <td><code>--config-name "${CONFIG_NAME}"</code></td>
+    <td>Hydra flag: which YAML config to load (e.g., <code>my_angle_disorder</code>)</td>
+  </tr>
+  <tr>
+    <td><code>disorder.backend=mpi</code></td>
+    <td>Hydra override: use MPI backend instead of joblib</td>
+  </tr>
+  <tr>
+    <td><code>disorder.mpi_auto_launch=false</code></td>
+    <td>We already launched with <code>mpirun</code>; don't let Python re-launch</td>
+  </tr>
+  <tr>
+    <td><code>simulation.disorder_sigma_phi_deg=...</code></td>
+    <td>Hydra override: inject the sweep parameter from the TSV row</td>
+  </tr>
+  <tr>
+    <td><code>hydra.run.dir="outputs/angle_sweep/${LABEL}"</code></td>
+    <td>Per-task output directory, named by the label column</td>
+  </tr>
+</table>
+<div class="box box-info">
+  <strong>Hydra CLI overrides</strong>
+  Every <code>key=value</code> after the config name is a
+  <a href="https://hydra.cc/docs/advanced/override_grammar/basic/">Hydra override</a>.
+  They override values from the YAML config file, giving you full
+  control from the command line without editing YAML.
+</div>
+<div class="box box-tip">
+  <strong>Why <code>mpi_auto_launch=false</code>?</strong>
+  The Python code has its own <code>mpirun</code> auto-launch logic
+  for convenience when running locally. On HPC, SGE already manages
+  the MPI launch, so we disable the Python-level auto-launch to
+  avoid double-spawning.
+</div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s-jobarray">5. How Job Arrays Work</h2>
+
+<p>A job array is SGE's way of running the <strong>same script many times
+with different inputs</strong>, without submitting separate jobs.</p>
+
+<pre><code>#$ -t 1-4          &larr;  creates tasks with IDs: 1, 2, 3, 4
+                       each task runs the same script independently</code></pre>
+
+<p>The lifecycle:</p>
+<ol>
+  <li>You submit one script with <code>qsub -t 1-4 script.sh</code>.</li>
+  <li>SGE creates 4 independent tasks, each with a unique <code>$SGE_TASK_ID</code>
+    (1, 2, 3, or 4).</li>
+  <li>Each task may run on a different node at a different time.</li>
+  <li>Inside the script, you use <code>$SGE_TASK_ID</code> to select the
+    row from the TSV file, so each task gets different parameters.</li>
+</ol>
+
+<pre><code>
+           qsub -t 1-4 angle_disorder_jobarray.sh
+                        |
+           SGE creates 4 independent tasks:
+           ┌─────────────────────────────────────────────────┐
+           │  Task 1 (SGE_TASK_ID=1)  ─→  TSV row 1         │
+           │  Task 2 (SGE_TASK_ID=2)  ─→  TSV row 2         │
+           │  Task 3 (SGE_TASK_ID=3)  ─→  TSV row 3         │
+           │  Task 4 (SGE_TASK_ID=4)  ─→  TSV row 4         │
+           └─────────────────────────────────────────────────┘
+           Each task runs on its own node(s) with 24 MPI ranks
+</code></pre>
+
+<div class="box box-info">
+  <strong>Step ranges</strong>
+  You can also use <code>-t 1-100:5</code> to get task IDs 1, 6, 11, 16, &hellip;
+  (step of 5). Useful for coarser sweeps.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s-env">6. Important SGE Environment Variables</h2>
+
+<table>
+  <tr><th>Variable</th><th>Set by</th><th>Meaning</th></tr>
+  <tr>
+    <td><code>SGE_TASK_ID</code></td>
+    <td>SGE (array jobs)</td>
+    <td>Current task index within the array (1, 2, 3, &hellip;)</td>
+  </tr>
+  <tr>
+    <td><code>NSLOTS</code></td>
+    <td>SGE (<code>-pe</code>)</td>
+    <td>Number of slots (CPU cores) allocated to this job</td>
+  </tr>
+  <tr>
+    <td><code>SGE_O_WORKDIR</code></td>
+    <td>SGE (<code>-cwd</code>)</td>
+    <td>Directory from which <code>qsub</code> was called</td>
+  </tr>
+  <tr>
+    <td><code>JOB_ID</code></td>
+    <td>SGE</td>
+    <td>Unique numeric job ID assigned by the scheduler</td>
+  </tr>
+  <tr>
+    <td><code>JOB_NAME</code></td>
+    <td>SGE (<code>-N</code>)</td>
+    <td>Job name from the <code>-N</code> directive</td>
+  </tr>
+  <tr>
+    <td><code>HOSTNAME</code></td>
+    <td>SGE</td>
+    <td>Compute node hostname where the task is running</td>
+  </tr>
+  <tr>
+    <td><code>TMPDIR</code></td>
+    <td>SGE</td>
+    <td>Per-job temporary directory (fast local storage on the node)</td>
+  </tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s-submit">7. Submitting &amp; Controlling Jobs</h2>
+
+<h3>Submission</h3>
+<pre><code># Submit with defaults (uses #$ directives in the script)
+qsub angle_disorder_jobarray.sh
+
+# Override the array range and pass an env variable
+qsub -t 1-10 -v ANGLE_CONFIG_NAME=quantum_dynamics_disorder angle_disorder_jobarray.sh
+
+# Use the convenience wrapper (counts TSV rows automatically)
+bash submit_angle_sweep.sh</code></pre>
+
+<h3>Monitoring</h3>
+<pre><code># List your jobs
+qstat
+
+# List only array tasks for a specific job
+qstat -j &lt;JOB_ID&gt;
+
+# Watch jobs refresh every 5 seconds
+watch -n 5 qstat</code></pre>
+
+<h3>Cancellation</h3>
+<pre><code># Cancel an entire job array
+qdel &lt;JOB_ID&gt;
+
+# Cancel a specific task within an array
+qdel &lt;JOB_ID&gt;.&lt;TASK_ID&gt;
+
+# Cancel all your jobs
+qdel -u $USER</code></pre>
+
+<h3>Log files</h3>
+<p>
+  SGE writes stdout and stderr to files in the submission directory
+  (because of <code>#$ -cwd</code>):
+</p>
+<pre><code>angle_disorder_array.o&lt;JOB_ID&gt;.&lt;TASK_ID&gt;    &larr; stdout
+angle_disorder_array.e&lt;JOB_ID&gt;.&lt;TASK_ID&gt;    &larr; stderr</code></pre>
+
+<!-- ============================================================ -->
+<h2 id="s-comparison">8. SGE vs. SLURM Cheat Sheet</h2>
+
+<p>
+  Many clusters use SLURM instead of SGE. Here is a side-by-side
+  comparison so you can translate between the two systems:
+</p>
+
+<table>
+  <tr>
+    <th>Concept</th>
+    <th>SGE</th>
+    <th>SLURM</th>
+  </tr>
+  <tr>
+    <td>Directive prefix</td>
+    <td><code>#$</code></td>
+    <td><code>#SBATCH</code></td>
+  </tr>
+  <tr>
+    <td>Submit a job</td>
+    <td><code>qsub script.sh</code></td>
+    <td><code>sbatch script.sh</code></td>
+  </tr>
+  <tr>
+    <td>Job name</td>
+    <td><code>#$ -N myname</code></td>
+    <td><code>#SBATCH --job-name=myname</code></td>
+  </tr>
+  <tr>
+    <td>Array tasks</td>
+    <td><code>#$ -t 1-100</code></td>
+    <td><code>#SBATCH --array=1-100</code></td>
+  </tr>
+  <tr>
+    <td>Task ID variable</td>
+    <td><code>$SGE_TASK_ID</code></td>
+    <td><code>$SLURM_ARRAY_TASK_ID</code></td>
+  </tr>
+  <tr>
+    <td>Number of cores</td>
+    <td><code>#$ -pe smp 24</code></td>
+    <td><code>#SBATCH --ntasks=24</code></td>
+  </tr>
+  <tr>
+    <td>Cores variable</td>
+    <td><code>$NSLOTS</code></td>
+    <td><code>$SLURM_NTASKS</code></td>
+  </tr>
+  <tr>
+    <td>Queue / Partition</td>
+    <td><code>#$ -q long</code></td>
+    <td><code>#SBATCH --partition=long</code></td>
+  </tr>
+  <tr>
+    <td>Wall time</td>
+    <td><code>#$ -l h_rt=48:00:00</code></td>
+    <td><code>#SBATCH --time=48:00:00</code></td>
+  </tr>
+  <tr>
+    <td>Email</td>
+    <td><code>#$ -M user@nd.edu</code><br><code>#$ -m abe</code></td>
+    <td><code>#SBATCH --mail-user=user@nd.edu</code><br><code>#SBATCH --mail-type=ALL</code></td>
+  </tr>
+  <tr>
+    <td>Working directory</td>
+    <td><code>#$ -cwd</code></td>
+    <td><code>#SBATCH --chdir=/path</code><br>(defaults to submission dir)</td>
+  </tr>
+  <tr>
+    <td>Check status</td>
+    <td><code>qstat</code></td>
+    <td><code>squeue -u $USER</code></td>
+  </tr>
+  <tr>
+    <td>Cancel job</td>
+    <td><code>qdel &lt;ID&gt;</code></td>
+    <td><code>scancel &lt;ID&gt;</code></td>
+  </tr>
+  <tr>
+    <td>Pass env vars</td>
+    <td><code>qsub -v KEY=VAL</code></td>
+    <td><code>sbatch --export=KEY=VAL</code></td>
+  </tr>
+</table>
+
+<footer>
+  <p>
+    MacroscopicQED &mdash; SGE Script Guide<br>
+    Generated for the <code>mqed/disorder/</code> ensemble workflows.
+  </p>
+</footer>
+
+</body>
+</html>
