@@ -2,7 +2,7 @@ import hydra
 import numpy as np
 from hydra.core.hydra_config import HydraConfig
 from pathlib import Path
-from qutip import fock, fock_dm
+from qutip import Qobj, fock, ket2dm
 from typing import Any, Dict, Optional, Tuple
 
 from loguru import logger
@@ -13,6 +13,84 @@ from mqed.Lindblad.quantum_operator import ipr_callable, position_square_operato
 from mqed.utils.dgf_data import load_gf_h5
 from mqed.utils.logging_utils import setup_loggers_hydra_aware
 from mqed.utils.save_hdf5 import save_dx_h5
+
+
+def resolve_initial_site_index(initial_state_cfg: DictConfig, nmol: int) -> int:
+    """Return the 1-based reference site index used by observables/state defaults."""
+    candidate = initial_state_cfg.get("site_index", None)
+    if candidate is None:
+        candidate = initial_state_cfg.get("center_site", None)
+    if candidate is None:
+        candidate = nmol // 2 + 1
+
+    site_index = int(candidate)
+    if not 1 <= site_index <= nmol:
+        raise ValueError(
+            f"initial_state.site_index/center_site must be in [1, {nmol}], got {site_index}."
+        )
+    return site_index
+
+
+def build_initial_ket(initial_state_cfg: DictConfig, *, nmol: int) -> Tuple[Qobj, int]:
+    """Build initial ket for single-site or Gaussian wave packet excitations."""
+    dim = nmol + 1
+    state_type = str(initial_state_cfg.get("type", "single_site")).lower()
+    reference_site = resolve_initial_site_index(initial_state_cfg, nmol)
+
+    if state_type in {"single_site", "site"}:
+        logger.info(f"Building single-site initial state localized at site: {reference_site}")
+        return fock(dim, reference_site), reference_site
+
+    if state_type == "gaussian":
+        logger.info("Building Gaussian initial state with parameters:k_parallel:{}, sigma_sites:{}".format(
+            initial_state_cfg.get("k_parallel", 0.0),
+            initial_state_cfg.get("sigma_sites", 1.0)
+        ))
+        sigma_sites = float(initial_state_cfg.get("sigma_sites", 1.0))
+
+        if sigma_sites <= 0.0:
+            raise ValueError(
+                f"initial_state.sigma_sites must be positive for gaussian state, got {sigma_sites}."
+            )
+        k_parallel = float(initial_state_cfg.get("k_parallel", 0.0))
+        center_candidate = initial_state_cfg.get("center_site", None)
+        center_site = reference_site if center_candidate is None else int(center_candidate)
+        if not 1 <= center_site <= nmol:
+            raise ValueError(
+                f"initial_state.center_site must be in [1, {nmol}], got {center_site}."
+            )
+
+        site_positions = np.arange(1, nmol + 1, dtype=float)
+        displacement = site_positions - float(center_site)
+        envelope = np.exp(-0.5 * (displacement / sigma_sites) ** 2)
+        phase = np.exp(1j * k_parallel * displacement)
+        amplitudes = envelope * phase
+        norm = np.linalg.norm(amplitudes)
+        if norm <= 0.0:
+            raise ValueError("Gaussian initial state has zero norm; check sigma_sites.")
+
+        data = np.zeros(dim, dtype=np.complex128)
+        data[1:] = amplitudes / norm
+        return Qobj(data, dims=[[dim], [1]]), center_site
+
+    raise ValueError(
+        f"Unsupported initial_state.type '{state_type}'. Use 'single_site' or 'gaussian'."
+    )
+
+
+def build_initial_state(
+    initial_state_cfg: DictConfig,
+    *,
+    method: str,
+    nmol: int,
+) -> Tuple[Qobj, int]:
+    """Build method-compatible initial state and the observable reference site."""
+    ket, reference_site = build_initial_ket(initial_state_cfg, nmol=nmol)
+    if method == "Lindblad":
+        return ket2dm(ket), reference_site
+    if method == "NonHermitian":
+        return ket, reference_site
+    raise ValueError(f"Unknown solver.method = {method}")
 
 def build_observable(item: Dict[str, Any], *, dim: int, d_nm: float, Nmol: int, init_site: int) -> Tuple[str, object]:
     """
@@ -28,18 +106,18 @@ def build_observable(item: Dict[str, Any], *, dim: int, d_nm: float, Nmol: int, 
 
 
     if name == "X_shift":
-        logger.info(f"Adding observable: position operator (X_shift)")
+        logger.info("Adding observable: position operator (X_shift)")
         return name, position_operator(dim, d_nm, Nmol, init_site)
     if name == "X_shift2":
-        logger.info(f"Adding observable: second moment of position operator (X_shift2)")
+        logger.info("Adding observable: second moment of position operator (X_shift2)")
         return name, position_square_operator(dim, d_nm, Nmol, init_site)
     if name == "pop_site":
-        logger.info(f"Adding observable: population operator at specified site")
+        logger.info("Adding observable: population operator at specified site")
         site = int(params.get("site", 1))
         return f"pop_site_{site}", site_population_operator(dim, site)  # label includes site
     if name == "IPR_site":
         # bind Nmol (required); any extra params are ignored safely
-        logger.info(f"Adding observable: Inverse Participation Ratio (requires Nmol param)")
+        logger.info("Adding observable: Inverse Participation Ratio (requires Nmol param)")
         Nmol_local = int(params.get("Nmol", Nmol))
         return name, (lambda t, st: ipr_callable(t, st, Nmol=Nmol_local))
 
@@ -144,16 +222,18 @@ def app_run(cfg: DictConfig, output_dir: Optional[Path] = None):
     if method == 'Lindblad':
         logger.info("Using Lindblad master equation solver.")
         dyn = LindbladDynamics(sim_cfg, G_slice)
-        # Lindblad expects density matrix
-        rho_or_psi = fock_dm(sim_cfg.Nmol + 1, cfg.initial_state.site_index)
     elif method == 'NonHermitian':
         logger.info("Using Non-Hermitian Schrodinger Equation solver.")
         dyn = NonHermitianSchDynamics(sim_cfg, G_slice)
-        # Non-Hermitian Sch. expects ket
-        rho_or_psi = fock(sim_cfg.Nmol + 1, cfg.initial_state.site_index)
     else:
         logger.error(f"Unknown solver.method = {method}")
         raise ValueError(f"Unknown solver.method = {method}")
+
+    rho_or_psi, init_site = build_initial_state(
+        cfg.initial_state,
+        method=method,
+        nmol=sim_cfg.Nmol,
+    )
 
 
     obs_cfg = getattr(cfg, "observables", []) or []
@@ -162,7 +242,7 @@ def app_run(cfg: DictConfig, output_dir: Optional[Path] = None):
         dim=sim_cfg.Nmol + 1,
         d_nm=sim_cfg.d_nm,
         Nmol=sim_cfg.Nmol,
-        init_site=cfg.initial_state.site_index,
+        init_site=init_site,
     )
 
 
@@ -247,12 +327,16 @@ def app_run(cfg: DictConfig, output_dir: Optional[Path] = None):
     logger.success(f"Simulation complete. Output saved to: {outfile.absolute()}")
 
 @hydra.main(config_path="../../configs/Lindblad", config_name="quantum_dynamics", version_base=None)
-def mqed_lindblad(cfg: DictConfig):
+def mqed_lindblad(cfg: Optional[DictConfig] = None):
+    if cfg is None:
+        raise ValueError("Hydra did not provide configuration.")
     cfg.solver.method = "Lindblad"
     app_run(cfg)
 
 @hydra.main(config_path="../../configs/Lindblad", config_name="quantum_dynamics_nhse", version_base=None)
-def mqed_nhse(cfg: DictConfig):
+def mqed_nhse(cfg: Optional[DictConfig] = None):
+    if cfg is None:
+        raise ValueError("Hydra did not provide configuration.")
     cfg.solver.method = "NonHermitian"
     app_run(cfg)
 
