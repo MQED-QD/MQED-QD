@@ -23,7 +23,7 @@ simulation:
     output_step: 2e-3
 
   Nmol: 100
-  d_nm: 3.0
+  d_nm: 2.0
 
   # orientation
   mu_D_debye: 3.8
@@ -35,7 +35,11 @@ simulation:
 
 # Initial condition
 initial_state:
-  site_index: 51  # middle excitation.
+  type: single_site
+  site_index: 51
+  center_site: null
+  sigma_sites: 6.0
+  k_parallel: 0.0
 
 # NHSE is faster and sufficient
 solver:
@@ -43,10 +47,26 @@ solver:
 
 # Ensemble averaging knobs
 disorder:
-  n_realizations: 80
+  backend: joblib
+  n_realizations: 1000
   seed: 2025
-  n_jobs: -1         # processes for parallel run (joblib). set to 1 to disable
+  n_jobs: -1
+  mpi_auto_launch: false
+  mpi_nproc: 8
+  mpi_exec: mpirun
   save_each: false   # true = save per-realization files too
+
+observables:
+  - name: root_MSD
+    kind: derived
+    enabled: true
+
+  - name: X_shift
+    kind: operator
+
+  - name: X_shift2
+    kind: operator
 
 output:
   filename: ${material.name}_sigma${simulation.disorder_sigma_phi_deg}_avg_latest.hdf5
+  save_legacy_aliases: true

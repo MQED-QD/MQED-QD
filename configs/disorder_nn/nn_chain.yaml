@@ -18,6 +18,9 @@ chain:
 # --- Disorder ---
 disorder:
   backend: joblib           # Or mpi for MPI parallelism (requires mpi4py)
+  mpi_auto_launch: false
+  mpi_nproc: 4
+  mpi_exec: mpirun
   sigma_eps_eV: 0.0         # Gaussian std-dev for on-site energy disorder
   sigma_J_eV: 0.05           # Gaussian std-dev for coupling disorder
   n_realizations: 1000         # number of disorder realisations
