@@ -1,0 +1,5 @@
+label	sigma_J_eV	sigma_eps_eV	J_0_eV	eps_0_eV	k_parallel	sigma_sites
+baseline	0.00211	0.0	-0.00675	0.0	0.8	20.0
+sigmaJ_high	0.00300	0.0	-0.00675	0.0	0.8	20.0
+sigmaeps_high	0.00211	0.01000	-0.00675	0.0	0.8	20.0
+shifted_chain	0.00211	0.0	-0.00550	0.00100	0.8	20.0

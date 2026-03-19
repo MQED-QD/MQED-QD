@@ -13,6 +13,10 @@ adapted for the lightweight NN-chain propagator.
 
 from __future__ import annotations
 
+import os
+import shutil
+import subprocess
+import sys
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -71,6 +75,65 @@ def _run_one(seed: int, nn_cfg: NNChainConfig) -> NNChainResult:
     """
     dyn = NNChainDynamics(nn_cfg)
     return dyn.evolve(seed=seed)
+
+
+def _is_mpi_parent_process() -> bool:
+    mpi_env_keys = (
+        "OMPI_COMM_WORLD_RANK",
+        "OMPI_COMM_WORLD_SIZE",
+        "PMI_RANK",
+        "PMI_SIZE",
+        "PMIX_RANK",
+        "MV2_COMM_WORLD_SIZE",
+        "MPI_LOCALNRANKS",
+        "SLURM_PROCID",
+        "SLURM_NTASKS",
+    )
+    return any(key in os.environ for key in mpi_env_keys)
+
+
+def _maybe_auto_launch_mpi(cfg: DictConfig) -> None:
+    backend = str(cfg.disorder.get("backend", "joblib")).lower()
+    auto_launch = bool(cfg.disorder.get("mpi_auto_launch", False))
+    if backend != "mpi" or not auto_launch:
+        return
+    if os.environ.get("MQED_MPI_AUTO_LAUNCHED") == "1":
+        return
+    if _is_mpi_parent_process():
+        return
+
+    mpi_nproc = int(cfg.disorder.get("mpi_nproc", 1))
+    if mpi_nproc <= 1:
+        logger.warning(
+            "MPI auto-launch requested with mpi_nproc <= 1; continuing without mpirun."
+        )
+        return
+
+    mpi_exec = str(cfg.disorder.get("mpi_exec", "mpirun"))
+    mpi_cmd = shutil.which(mpi_exec)
+    if mpi_cmd is None:
+        raise FileNotFoundError(
+            f"MPI launcher '{mpi_exec}' was not found in PATH. "
+            "Set disorder.mpi_exec to a valid launcher or disable disorder.mpi_auto_launch."
+        )
+
+    cmd = [mpi_cmd, "-np", str(mpi_nproc), sys.executable, "-m", "mqed.disorder.run_disorder_nn"]
+    cmd.extend(sys.argv[1:])
+    if not any(arg.startswith("hydra.run.dir=") for arg in sys.argv[1:]):
+        cmd.append(f"hydra.run.dir={HydraConfig.get().runtime.output_dir}")
+
+    env = os.environ.copy()
+    env["MQED_MPI_AUTO_LAUNCHED"] = "1"
+
+    logger.info(
+        f"Auto-launching MPI job via {mpi_exec} with {mpi_nproc} ranks."
+    )
+    completed = subprocess.run(cmd, env=env, check=False)
+    if completed.returncode != 0:
+        raise RuntimeError(
+            f"MPI launcher exited with code {completed.returncode}."
+        )
+    raise SystemExit(0)
 
 
 def _run_ensemble_joblib(seeds: List[int], nn_cfg: NNChainConfig, n_jobs: int) -> List[NNChainResult]:
@@ -271,9 +334,12 @@ def _run_ensemble_mpi(
 def run_disorder_nn(cfg: DictConfig) -> None:
     """Run disorder-averaged NN-chain simulation."""
 
+    _maybe_auto_launch_mpi(cfg)
+
     backend = str(cfg.disorder.get("backend", "joblib")).lower()
     rank = 0
     size = 1
+    requested_size = int(cfg.disorder.get("mpi_nproc", 1))
     if backend == "mpi":
         try:
             from mpi4py import MPI
@@ -285,9 +351,15 @@ def run_disorder_nn(cfg: DictConfig) -> None:
         rank = MPI.COMM_WORLD.Get_rank()
         size = MPI.COMM_WORLD.Get_size()
 
-    outdir = Path(HydraConfig.get().runtime.output_dir)
     if backend != "mpi" or rank == 0:
         setup_loggers_hydra_aware()
+        if backend == "mpi" and size != requested_size:
+            logger.warning(
+                f"MPI world size is {size}, while disorder.mpi_nproc={requested_size}. "
+                "Using the actual launcher-provided world size."
+            )
+
+    outdir = Path(HydraConfig.get().runtime.output_dir)
 
     if backend != "mpi" or rank == 0:
         logger.info("— NN-chain disorder ensemble —")
@@ -304,9 +376,15 @@ def run_disorder_nn(cfg: DictConfig) -> None:
         logger.info(
             f"Time: {nn_cfg.t_total_fs} fs, {nn_cfg.n_steps} steps"
         )
-        logger.info(
-            f"Initial state: {nn_cfg.initial_state_type}"
-        )
+        if nn_cfg.initial_state_type == "gaussian":
+            logger.info(
+                f"Initial state: Gaussian wavepacket with σ_sites={nn_cfg.sigma_sites} sites, "
+                f"k_parallel={nn_cfg.k_parallel}"
+            )
+        else:
+            logger.info(
+                f"Initial state: {nn_cfg.initial_state_type}"
+            )
 
     # ---- seeds ----
     n = int(cfg.disorder.n_realizations)
