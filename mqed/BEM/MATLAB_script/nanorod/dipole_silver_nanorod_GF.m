@@ -60,8 +60,8 @@ pt1 = compoint(p, r0, op);
 
 %% Electric field calculation range, unit:nm
 x_target_min = r0(1)+1; % The first response point eletric field.
-N_num=30;  % we are studying 50 acceptor.
-x_target_max = r0(1)+8*N_num; % The last point is 50-th acceptor position.
+N_num=30;  % we are studying N_num acceptor.
+x_target_max = r0(1)+8*N_num; % The last point is N_num-th acceptor position.
 z_target_val = r0(3);  % same as dipole height above surface.
 Nx_line = (x_target_max-x_target_min)+1;             % number of x samples
 

@@ -17,7 +17,7 @@ op = bemoptions('sim','ret','interp','curv');
 % --- geometry: choose ONE ---
 % 1) Nanorod-like (use a built-in if available in your version)
 diameter = 20;  % diameter of nanorod
-height = 200;   % height of nanorod
+height = 200;   % height of nanorod 
 
 n = [30, 15, 100]; % discertization points. The user can modify this part 
 % to observe 'finer' boundary elements on nanorod.
@@ -25,7 +25,7 @@ n = [30, 15, 100]; % discertization points. The user can modify this part
 pmesh = trirod( diameter, height, n,'triangles');% (name may differ 
 % by MNPBEM version)
 
-% Make the rod horizental
+% Make the rod horizontal
 pmesh = rot(pmesh, -90, [0 1 0]); % degrees, axis=x
 
 % Shift nanorod to make the left edge of nanorod at original point, and 

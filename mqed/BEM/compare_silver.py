@@ -1,6 +1,6 @@
-import os
 from pathlib import Path
 
+import h5py
 import hydra
 import numpy as np
 import pandas as pd
@@ -44,6 +44,95 @@ def _apply_axes_style(ax, cfg):
 
     for spine in ax.spines.values():
         spine.set_linewidth(cfg.get("spine_width", 1.2))
+
+
+# ---- MEEP HDF5 loader ---------------------------------------------------
+# The MEEP script (planar_example.py) saves:
+#   /E_field   : (Npts, 3, 3) complex128  — E_a at point i for dipole orient b
+#   /x_nm      : (Npts,) observation x-coordinates
+# Column mapping:  orient b={0:x, 1:y, 2:z},  component a={0:x, 1:y, 2:z}
+#
+# To match BEM Excel columns like "Re_Ez" with a z-oriented dipole:
+#   E_z component (a=2) for z-oriented dipole (b=2) → E_field[:, 2, 2]
+# -------------------------------------------------------------------------
+
+# Maps human-readable component names to (field_index, orient_index) pairs.
+# These match the BEM Excel column convention: "{Re|Im}_{component}"
+# with the dipole oriented along the same axis as the monitored component
+# (z-oriented dipole → Ez, x-oriented dipole → Ex, etc.)
+_MEEP_COMPONENT_MAP = {
+    "Ex": (0, 0),  # Ex component, x-oriented dipole
+    "Ey": (1, 1),  # Ey component, y-oriented dipole
+    "Ez": (2, 2),  # Ez component, z-oriented dipole
+}
+
+
+def _load_meep_h5(h5_path: Path) -> dict:
+    """Load MEEP planar simulation HDF5.
+
+    Args:
+        h5_path: Path to MEEP output (e.g., MEEP_planar_silver_665nm_2D.h5)
+
+    Returns:
+        dict with keys:
+            E_field : (Npts, 3, 3) complex128
+            x_nm    : (Npts,) float64
+    """
+    with h5py.File(h5_path, "r") as f:
+        E_field = f["E_field"][:]   # (Npts, 3, 3) complex128
+        x_nm = f["x_nm"][:]        # (Npts,)
+    return {"E_field": E_field, "x_nm": x_nm}
+
+
+def _meep_enhancement(meep_plane: dict, meep_vac: dict,
+                      component: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Compute E(silver)/E(vacuum) enhancement from MEEP data.
+
+    Args:
+        meep_plane: MEEP data dict for silver substrate
+        meep_vac:   MEEP data dict for vacuum
+        component:  Which diagonal component to compare ("Ex", "Ey", or "Ez")
+
+    Returns:
+        x_nm:     observation x-coordinates (from silver run)
+        enh_real: Re(E_silver) / Re(E_vacuum) — analogous to BEM Re enhancement
+        enh_imag: Im(E_silver) / Im(E_vacuum) — analogous to BEM Im enhancement
+
+    Note:
+        The x-grids from the two runs may differ (e.g., different --x-min).
+        We interpolate the vacuum data onto the silver x-grid for consistency.
+    """
+    if component not in _MEEP_COMPONENT_MAP:
+        raise ValueError(
+            f"Unknown component '{component}'. "
+            f"Choose from: {list(_MEEP_COMPONENT_MAP.keys())}"
+        )
+    ifield, iorient = _MEEP_COMPONENT_MAP[component]
+
+    E_plane = meep_plane["E_field"][:, ifield, iorient]  # complex (Npts,)
+    E_vac   = meep_vac["E_field"][:, ifield, iorient]    # complex (Npts_vac,)
+
+    x_plane = meep_plane["x_nm"]
+    x_vac   = meep_vac["x_nm"]
+
+    # If x-grids match exactly, use directly; otherwise interpolate vacuum
+    if len(x_plane) == len(x_vac) and np.allclose(x_plane, x_vac):
+        E_vac_interp = E_vac
+    else:
+        logger.info(
+            f"MEEP x-grids differ (silver: {len(x_plane)} pts, "
+            f"vacuum: {len(x_vac)} pts). Interpolating vacuum onto silver grid."
+        )
+        # Interpolate real and imaginary parts separately
+        E_vac_interp = (
+            np.interp(x_plane, x_vac, np.real(E_vac))
+            + 1j * np.interp(x_plane, x_vac, np.imag(E_vac))
+        )
+
+    enh_real = np.real(E_plane) / np.real(E_vac_interp)
+    enh_imag = np.imag(E_plane) / np.imag(E_vac_interp)
+
+    return x_plane, enh_real, enh_imag
 
 
 def _plot_series(ax, x, y, s):
@@ -90,15 +179,10 @@ def main(cfg: DictConfig):
     _apply_rcparams(cfg.plot.rcParams)
     setup_loggers_hydra_aware()
 
-    # IMPORTANT with Hydra: use to_absolute_path or get_original_cwd()
+    # ---- Fresnel / analytical reference (always loaded) -------------------
     dgf_data_path = Path(cfg.paths.dgf_h5)
-    bem_plane_path = Path(cfg.paths.bem_plane_xlsx)
-    bem_vacuum_path = Path(cfg.paths.bem_vacuum_xlsx)
-    for p in [dgf_data_path, bem_plane_path, bem_vacuum_path]:
-        if not p.exists():
-            raise FileNotFoundError(f"Missing input file: {p}")
-
-
+    if not dgf_data_path.exists():
+        raise FileNotFoundError(f"Missing Fresnel data: {dgf_data_path}")
 
     data = load_gf_h5(dgf_data_path)
     Gtot = data["G_total"]       # (M,N,3,3)
@@ -118,18 +202,48 @@ def main(cfg: DictConfig):
     impl_real = np.real(g_tot) / np.real(g_vac)
     impl_imag = np.imag(g_tot) / np.imag(g_vac)
 
-    # Load BEM
-    bem_plane = pd.read_excel(bem_plane_path, sheet_name=cfg.bem.sheet)
-    bem_vac   = pd.read_excel(bem_vacuum_path, sheet_name=cfg.bem.sheet)
+    # ---- Numerical simulation data (BEM or MEEP) --------------------------
+    # Controlled by cfg.simulation_source: "bem" (default) or "meep"
+    sim_source = cfg.get("simulation_source", "bem")
+    logger.info(f"Simulation data source: {sim_source}")
 
-    bem_real = bem_plane[cfg.bem.re_col].to_numpy() / bem_vac[cfg.bem.re_col].to_numpy()
-    bem_imag = bem_plane[cfg.bem.im_col].to_numpy() / bem_vac[cfg.bem.im_col].to_numpy()
+    if sim_source == "meep":
+        # --- MEEP HDF5 path loading ---
+        meep_plane_path = Path(cfg.paths.meep_plane_h5)
+        meep_vac_path   = Path(cfg.paths.meep_vacuum_h5)
+        for p in [meep_plane_path, meep_vac_path]:
+            if not p.exists():
+                raise FileNotFoundError(f"Missing MEEP file: {p}")
 
-    # Optional: run test with tolerances
-    # if cfg.test.enabled:
-    #     test_BEM_comparison(cfg, impl_real, impl_imag, bem_real, bem_imag)
+        meep_plane = _load_meep_h5(meep_plane_path)
+        meep_vac   = _load_meep_h5(meep_vac_path)
 
-    # Plot in “screenshot 2” style: one axes, markers for BEM, lines for Analytical/Implementation
+        # Which field component to compare (default: "Ez" for z-oriented dipole)
+        meep_component = cfg.get("meep", {}).get("component", "Ez")
+        logger.info(f"MEEP component: {meep_component}")
+
+        x_sim, sim_real, sim_imag = _meep_enhancement(
+            meep_plane, meep_vac, meep_component
+        )
+
+    else:
+        # --- BEM Excel loading (original behavior) ---
+        bem_plane_path = Path(cfg.paths.bem_plane_xlsx)
+        bem_vacuum_path = Path(cfg.paths.bem_vacuum_xlsx)
+        for p in [bem_plane_path, bem_vacuum_path]:
+            if not p.exists():
+                raise FileNotFoundError(f"Missing BEM file: {p}")
+
+        bem_plane = pd.read_excel(bem_plane_path, sheet_name=cfg.bem.sheet)
+        bem_vac   = pd.read_excel(bem_vacuum_path, sheet_name=cfg.bem.sheet)
+
+        sim_real = bem_plane[cfg.bem.re_col].to_numpy() / bem_vac[cfg.bem.re_col].to_numpy()
+        sim_imag = bem_plane[cfg.bem.im_col].to_numpy() / bem_vac[cfg.bem.im_col].to_numpy()
+
+        # BEM x-coordinates come from the Excel x column
+        x_sim = bem_plane[cfg.bem.get("x_col", "x_nm")].to_numpy()
+
+    # ---- Plot -------------------------------------------------------------
     fig, ax = plt.subplots(figsize=tuple(cfg.plot.figsize), dpi=cfg.plot.get("dpi", 120))
 
     _apply_axes_style(ax, cfg.plot.axes)
@@ -142,18 +256,18 @@ def main(cfg: DictConfig):
     if yscale == "symlog":
         ax.set_yscale("symlog", linthresh=cfg.get("linthresh", 1e-3))
 
-
     # Series order controlled by YAML
     for key in cfg.plot.series_order:
         s = cfg.plot.series[key]
-        if s.source == "impl_real":
+        source = s.source
+        if source == "impl_real":
             _plot_series(ax, x_nm, impl_real, s)
-        elif s.source == "impl_imag":
+        elif source == "impl_imag":
             _plot_series(ax, x_nm, impl_imag, s)
-        elif s.source == "bem_real":
-            _plot_series(ax, x_nm[1:], bem_real, s)
-        elif s.source == "bem_imag":
-            _plot_series(ax, x_nm[1:], bem_imag, s)
+        elif source in ("bem_real", "sim_real"):
+            _plot_series(ax, x_sim, sim_real, s)
+        elif source in ("bem_imag", "sim_imag"):
+            _plot_series(ax, x_sim, sim_imag, s)
 
     leg = ax.legend(
         loc=cfg.plot.legend.loc,

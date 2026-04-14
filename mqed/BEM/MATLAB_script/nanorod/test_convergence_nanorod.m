@@ -21,19 +21,6 @@ height = 1000;   % height of nanorod
 enei = 665; % dipole frequency in wavelength
 pdir = [0, 0, 1]; %dipole direction
 
-% BEM resolution
-% n_list = {
-%     [16,  8, 20];   % very coarse (for your own check only)
-%     % [18,  9, 22.5];
-%     [20, 10, 25];
-%     % [22, 11, 27.5];
-%     [24, 12, 30];
-%     [28, 14, 35];
-%     [32, 16, 40];   % reference
-%     [36, 18, 45];   % (optional) super-fine
-%     % [40, 20, 50];
-% };
-
 % boundary elements list. Change this to get the 'finer' structure for 
 % better convergence. Once got the convergence set, used that for later 
 % simulation for Green's function
