@@ -16,14 +16,16 @@ near plasmonic interfaces using macroscopic quantum electrodynamics (MQED).
 
 ## Latest Update
 
-**Version 1.0.0** marks the first stable MQED-QD release.
+**Version 1.1.0** adds spectral density analysis, multi-frequency Green's function support, and a batch HPC workflow.
 
-- **BEM workflow matured** with new tutorials for vacuum calibration and dyadic Green's-function reconstruction, bundled figures, and clearer validation guidance.
-- **Transport outputs are clearer** with explicit separation of position, second moment, MSD, and RMSD handling across simulation and plotting.
-- **Disorder studies scale better** through MPI support for NN-chain ensemble runs and analytical MSD/RMSD overlay options in plotting.
-- **Documentation is broader and more practical** with expanded tutorial coverage, updated configuration guidance, and improved API reference coverage for BEM utilities.
+- **Spectral density module** (`mqed.analysis.spectral_density`) computes and plots the photonic spectral density from dyadic Green's function data.
+- **Multi-frequency Sommerfeld GF** now supports parallel computation over a range of photon energies via MPI or Joblib backends.
+- **SGE job-array script** (`mqed/Dyadic_GF/gf_sommerfeld_jobarray.sh`) enables batch parameter sweeps on HPC clusters with a simple TSV parameter file.
+- **4D Green's function storage** supports the full `(N, N, 3, 3)` dyadic Green's function array in HDF5.
+- **MSD definition corrected** — previously computed the variance of displacement instead of the true mean square displacement; the variance is now saved separately as `variance_mean`.
+- **BEM nanorod tutorial** with step-by-step BEM simulation, convergence testing, and a troubleshooting section for new users.
 
-See `CHANGELOG.md` for the full release summary.
+See `CHANGELOG.md` for the full release notes.
 
 ---
 

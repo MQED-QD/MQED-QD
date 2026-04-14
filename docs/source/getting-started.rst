@@ -152,3 +152,8 @@ What's next?
      - Run Lindblad or NHSE time evolution.
    * - :doc:`/tutorials/plotting`
      - Plot MSD, RMSD, and participation ratios.
+
+.. seealso::
+
+   `GitHub README <https://github.com/MQED-QD/MQED-QD#readme>`_
+      Project overview, installation quick-start, and citation info.
