@@ -4,7 +4,7 @@ from setuptools import find_packages, setup
 
 setup(
     name="mqed",
-    version="1.0.0",
+    version="1.1.0",
     description="A workflow for calculating Dyadic Green's Functions in layered media and nanorod(supported by MNPBEM toolbox), and using them to compute dipole-dipole interactions and quantum dynamics.",
     author="Guangming Liu",
     author_email="",

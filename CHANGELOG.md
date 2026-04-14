@@ -1,5 +1,45 @@
 # Changelog
 
+## 1.1.0 - 2026-04-14
+
+### New features
+
+- Added spectral density analysis module (`mqed.analysis.spectral_density`) for
+  computing and visualising the photonic spectral density from dyadic Green's
+  function data.
+- Added multi-frequency simulation support for the Sommerfeld dyadic Green's
+  function with MPI and Joblib parallel backends.
+- Added SGE job-array script and TSV parameter file for batch Sommerfeld
+  Green's function sweeps on HPC clusters
+  (`mqed/Dyadic_GF/gf_sommerfeld_jobarray.sh`).
+- Added four-dimensional `(N, N, 3, 3)` storage format for dyadic Green's
+  function data.
+
+### Bug fixes
+
+- Fixed MSD definition across the codebase: the previous formula `<x²> − <x>²`
+  computed the *variance* of displacement, not the mean square displacement.
+  MSD is now correctly computed as `<(x−x₀)²>` (the second moment alone).
+  Affected files: `run_quantum_dynamics.py`, `plot_msd.py`,
+  `plot_sqrt_msd.py`, `run_disorder.py`, `run_disorder_nn.py`, and
+  `nn_compare_analytical.py`.  The variance is still available as a separate
+  saved key (`variance_mean`) where applicable.
+
+### Documentation
+
+- Added a BEM nanorod tutorial (`docs/source/tutorials/BEM-Nanorod.rst`) with
+  beginner-friendly annotations, a "What is BEM?" introduction, convergence
+  testing guidance, and a troubleshooting section.
+- Polished existing BEM tutorials for clarity and RST correctness.
+
+### Compatibility notes
+
+- MSD-related output keys now contain the true MSD.  Scripts that relied on the
+  previous (variance) values should be updated.  A new `variance_mean` key is
+  saved alongside `msd_mean` where both values are available.
+- The dyadic Green's function storage format now supports four-dimensional
+  arrays; older two-dimensional xlsx-based workflows are still supported.
+
 ## 1.0.0 - 2026-03-16
 
 This release marks the first stable MQED-QD milestone. The main focus is a much

@@ -1,0 +1,2 @@
+# mqed.analysis — Post-processing analysis modules
+"The module used to post-process the results of dyadic Green's function, including field enhancement(FE), resonance energy transfer(RET), and spectral density."
