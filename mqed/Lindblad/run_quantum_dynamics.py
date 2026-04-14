@@ -276,7 +276,10 @@ def app_run(cfg: DictConfig, output_dir: Optional[Path] = None):
                 "('X_shift_cond','X_shift2_cond') or ('X_shift','X_shift2')."
             )
 
-        dx = np.sqrt(np.maximum(0.0, x2 - x**2))
+        # MSD = <(x-x0)^2>, which is simply x2 (the second moment of
+        # displacement from the initial site).  Note: x2 - x**2 would give
+        # the *variance* of displacement, not the MSD.
+        dx = np.sqrt(np.maximum(0.0, x2))
         dx_std = np.zeros_like(dx)
 
 
@@ -299,10 +302,12 @@ def app_run(cfg: DictConfig, output_dir: Optional[Path] = None):
         x2 = expectations_to_save["X_shift2"]
         expectations_to_save["x2_mean"] = x2
         x = expectations_to_save.get("X_shift")
+        # MSD = <(x-x0)^2> = x2 (second moment of displacement).
+        # Previously this was x2 - x**2, which is the *variance*, not MSD.
+        expectations_to_save["msd_mean"] = np.maximum(0.0, x2)
         if x is not None:
-            expectations_to_save["msd_mean"] = np.maximum(0.0, x2 - x**2)
-        else:
-            expectations_to_save["msd_mean"] = x2
+            # Also store the variance for reference (not MSD).
+            expectations_to_save["variance_mean"] = np.maximum(0.0, x2 - x**2)
 
     if not save_legacy_aliases:
         expectations_to_save.pop("X_shift", None)
