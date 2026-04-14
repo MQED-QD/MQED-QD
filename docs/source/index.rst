@@ -43,3 +43,8 @@ Key Features
 
    configuration
    api/index
+
+.. seealso::
+
+   `GitHub Repository <https://github.com/MQED-QD/MQED-QD#readme>`_
+      Project overview, installation quick-start, latest updates, and citation info.
