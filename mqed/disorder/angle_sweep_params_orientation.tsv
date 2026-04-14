@@ -2,4 +2,4 @@ label	sigma_phi_deg	phi_deg	Nmol	d_nm	k_parallel	sigma_sites
 sigma_3     3.0             45.0	200	1.0	0.0	3.0
 sigma_5	    5.0             45.0	200	1.0	0.0	3.0
 sigma_7     7.0             45.0    200	1.0	0.0	3.0
-sigma_10    10.0            45.0	200	0.5	0.0	3.0
+sigma_10    10.0            45.0	200	1.0	0.0	3.0

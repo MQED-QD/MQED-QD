@@ -188,13 +188,10 @@ def _compute_aggregates_from_results(
         out["position_std"] = np.std(position_stack, axis=0)
 
     if x2_stack is not None:
-        if position_stack is not None:
-            msd_stack = x2_stack - position_stack ** 2
-            out["msd_mean"] = np.mean(msd_stack, axis=0)
-            out["msd_std"] = np.std(msd_stack, axis=0)
-        else:
-            out["msd_mean"] = out["x2_mean"]
-            out["msd_std"] = out["x2_std"]
+        # MSD = <(x-x0)^2> = x2 (second moment of displacement).
+        # Note: x2 - position^2 would be the variance, not the MSD.
+        out["msd_mean"] = out["x2_mean"]
+        out["msd_std"] = out["x2_std"]
 
     if nn_cfg.obs_populations:
         pop_stack = np.stack(
@@ -240,9 +237,9 @@ def _run_ensemble_mpi(
         if nn_cfg.obs_msd and result.msd is not None:
             local_x2_sum += result.msd
             local_x2_sumsq += result.msd ** 2
+            # MSD = <(x-x0)^2> = x2 (second moment of displacement).
+            # Previously this subtracted position^2 (giving variance, not MSD).
             msd_realization = result.msd
-            if nn_cfg.obs_position and result.position is not None:
-                msd_realization = np.maximum(0.0, result.msd - result.position ** 2)
             local_msd_sum += msd_realization
             local_msd_sumsq += msd_realization ** 2
         if nn_cfg.obs_position and result.position is not None:

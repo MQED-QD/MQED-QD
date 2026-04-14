@@ -225,15 +225,23 @@ def _append_transport_moments(stats: Dict[str, np.ndarray]) -> None:
     if "X_shift_mean" in stats and "X_shift2_mean" in stats:
         x_mean = stats["X_shift_mean"]
         x2_mean = stats["X_shift2_mean"]
-        stats["msd_mean"] = np.maximum(0.0, x2_mean - x_mean ** 2)
+        # MSD = <(x-x0)^2> = x2 (second moment of displacement).
+        # Note: x2 - <x>^2 is the *variance*, not the MSD.
+        stats["msd_mean"] = np.maximum(0.0, x2_mean)
+        # Also store variance separately for reference.
+        stats["variance_mean"] = np.maximum(0.0, x2_mean - x_mean ** 2)
 
 
 def _root_msd_from_sample(sample: Dict[str, np.ndarray]) -> Optional[np.ndarray]:
-    """Compute sqrt(MSD) from one sample, preferring conditional moments."""
-    if "X_shift2_cond" in sample and "X_shift_cond" in sample:
-        return np.sqrt(np.maximum(0.0, sample["X_shift2_cond"] - sample["X_shift_cond"] ** 2))
-    if "X_shift2" in sample and "X_shift" in sample:
-        return np.sqrt(np.maximum(0.0, sample["X_shift2"] - sample["X_shift"] ** 2))
+    """Compute sqrt(MSD) from one sample.
+
+    MSD = <(x-x0)^2> = X_shift2 (the second moment of displacement).
+    Note: previously this subtracted <x>^2, giving sqrt(variance) instead.
+    """
+    if "X_shift2_cond" in sample:
+        return np.sqrt(np.maximum(0.0, sample["X_shift2_cond"]))
+    if "X_shift2" in sample:
+        return np.sqrt(np.maximum(0.0, sample["X_shift2"]))
     return None
 
 

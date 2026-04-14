@@ -2,7 +2,7 @@
 #$ -N nn_disorder_array
 #$ -t 1-5
 #$ -M gliu8@nd.edu
-#$ -m abe
+#$ -m n
 #$ -pe smp 24
 #$ -q long@@theta_lab
 #$ -cwd
@@ -104,6 +104,13 @@ echo "Config name: ${CONFIG_NAME}"
 echo "sigma_J_eV=${SIGMA_J}, sigma_eps_eV=${SIGMA_EPS}, J_0_eV=${J0}, eps_0_eV=${EPS0}"
 echo "k_parallel=${KPARALLEL}, sigma_sites=${SIGMA_SITES}"
 echo "Using ${MPI_NPROC} MPI ranks"
+TOTAL_TASKS="$(awk 'NR>1 && NF {count++} END {print count}' "${PARAM_FILE}")"
+
+if [ "${TASK_INDEX}" -eq 1 ]; then
+  echo "Array job started (task 1 of ${TOTAL_TASKS})" \
+    | mail -s "[SGE] ${JOB_NAME:-nn_disorder_array} started" gliu8@nd.edu
+fi
+
 echo "start time: $(date)"
 
 mpirun -np "${MPI_NPROC}" mqed_nn_disorder \
@@ -120,3 +127,8 @@ mpirun -np "${MPI_NPROC}" mqed_nn_disorder \
   hydra.run.dir="outputs/nn_sweep/${LABEL}"
 
 echo "end time: $(date)"
+
+if [ "${TASK_INDEX}" -eq "${TOTAL_TASKS}" ]; then
+  echo "Array job finished (task ${TOTAL_TASKS} of ${TOTAL_TASKS})" \
+    | mail -s "[SGE] ${JOB_NAME:-nn_disorder_array} finished" gliu8@nd.edu
+fi

@@ -87,11 +87,14 @@ def x_square_analytical_formula_offdiag_gaussian_wave_excitation(a, hbar, J_0_eV
     return prefactor
 
 def msd_analytical_formula_offdiag_gaussian_wave_excitation(a, hbar, J_0_eV, sigma_J_eV, t_fs, k_parallel, omega_0):
-    """Analytical formula for MSD with off-diagonal disorder for Gaussian wave excitation."""
+    """Analytical formula for MSD with off-diagonal disorder for Gaussian wave excitation.
+
+    MSD = <(x-x0)^2> = x2 (second moment of displacement from initial site).
+    Note: this is NOT the variance <(x-x0)^2> - <x-x0>^2.
+    """
     x_square = x_square_analytical_formula_offdiag_gaussian_wave_excitation(a, hbar, J_0_eV, sigma_J_eV, t_fs, k_parallel, omega_0)
-    x = position_analytical_formula_offdiag_gaussian_wave_excitation(a, hbar, J_0_eV, sigma_J_eV, t_fs, k_parallel, omega_0)
-    msd = x_square - x**2
-    return msd
+    # MSD is the full second moment x2, not x2 - <x>^2 (which is variance).
+    return x_square
 
 def position_analytical_formula_offdiag_gaussian_wave_excitation(a, hbar, J_0_eV, t_fs, k_parallel):
     """Analytical formula for mean position with off-diagonal disorder for Gaussian wave excitation."""
@@ -100,11 +103,15 @@ def position_analytical_formula_offdiag_gaussian_wave_excitation(a, hbar, J_0_eV
     return prefactor
 
 def RMSD_analytical_formula_offdiag_gaussian_wave_excitation(a, hbar, J_0_eV, sigma_J_eV, t_fs, k_parallel, omega_0):
-    """Analytical formula for root mean square displacement (RMSD) with off-diagonal disorder for Gaussian wave excitation."""
+    """Analytical formula for root mean square displacement (RMSD) with
+    off-diagonal disorder for Gaussian wave excitation.
+
+    RMSD = sqrt(MSD) = sqrt(<(x-x0)^2>) = sqrt(x2).
+    Note: this is NOT sqrt(variance) = sqrt(x2 - <x>^2).
+    """
     x_square = x_square_analytical_formula_offdiag_gaussian_wave_excitation(a, hbar, J_0_eV, sigma_J_eV, t_fs, k_parallel, omega_0)
-    x = position_analytical_formula_offdiag_gaussian_wave_excitation(a, hbar, J_0_eV, t_fs, k_parallel)
-    msd = x_square - x**2
-    return np.sqrt(msd)
+    # RMSD = sqrt(MSD) = sqrt(x2), not sqrt(x2 - <x>^2) (which is std dev).
+    return np.sqrt(np.maximum(0.0, x_square))
 
 def RMSD_analytical_formula_offdiag_local_excitation(a, hbar, J_0_eV, sigma_J_eV, t_fs):
     """Analytical formula for root mean square displacement (RMSD) with off-diagonal disorder for local excitation."""
