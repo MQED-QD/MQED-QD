@@ -17,6 +17,8 @@ By the end you will know how to:
 - run the ``mqed_GF_Sommerfeld`` command with default and custom parameters,
 - specify single-frequency, multi-frequency (list), and swept-frequency (dict)
   inputs,
+- accelerate multi-frequency sweeps with **joblib** (multicore) or **MPI**
+  (cluster) parallelism,
 - locate and interpret the HDF5 output file.
 
 .. seealso::
@@ -117,6 +119,93 @@ instead of the default config directory.
       mqed_GF_Sommerfeld --config-name=my_GF simulation.energy_eV=2.0
 
 
+Parallel execution
+------------------
+
+When computing the Green's function over many frequencies (e.g. a 200-point
+spectral density sweep), the sequential loop can take tens of minutes.
+Because each energy point is **completely independent**, the frequency axis
+can be parallelized with no inter-worker communication.
+
+MQED-QD supports two parallel backends, selectable via the ``parallel``
+configuration group.
+
+**Joblib (shared-memory multiprocessing)**
+
+Best for laptops and single-node workstations.  Uses Python's
+``multiprocessing`` under the hood via `joblib <https://joblib.readthedocs.io>`_.
+
+.. code-block:: bash
+
+   # Use all available CPU cores
+   mqed_GF_Sommerfeld \
+       simulation.energy_eV='{min: 0.5, max: 4.0, points: 200}' \
+       parallel.backend=joblib
+
+   # Limit to 4 workers
+   mqed_GF_Sommerfeld \
+       simulation.energy_eV='{min: 0.5, max: 4.0, points: 200}' \
+       parallel.backend=joblib parallel.n_jobs=4
+
+Setting ``parallel.n_jobs=-1`` (the default) uses all available cores.
+
+.. tip::
+
+   On a machine with 8 cores, a 200-energy sweep that takes ~30 min
+   sequentially will finish in ~4 min with ``parallel.backend=joblib``.
+
+**MPI (distributed parallelism)**
+
+Best for HPC clusters with multi-node allocation.  Requires
+`mpi4py <https://mpi4py.readthedocs.io>`_ and an MPI runtime (e.g.
+OpenMPI or MPICH).
+
+*Auto-launch mode* (default) — the script detects it is not inside an MPI
+communicator and re-launches itself under ``mpiexec``:
+
+.. code-block:: bash
+
+   mqed_GF_Sommerfeld \
+       simulation.energy_eV='{min: 0.5, max: 4.0, points: 200}' \
+       parallel.backend=mpi parallel.mpi_nproc=16
+
+*Manual launch* — submit from a job scheduler (SLURM, PBS, etc.) with
+``mpi_auto_launch=false``:
+
+.. code-block:: bash
+
+   # Inside a SLURM job script, for example:
+   srun -n 32 mqed_GF_Sommerfeld \
+       simulation.energy_eV='{min: 0.5, max: 4.0, points: 200}' \
+       parallel.backend=mpi parallel.mpi_auto_launch=false
+
+Energy points are scattered round-robin across MPI ranks.  Only rank 0
+writes the final HDF5 file.
+
+.. list-table:: Parallel configuration reference
+   :header-rows: 1
+   :widths: 35 45 20
+
+   * - Parameter
+     - Description
+     - Default
+   * - ``parallel.backend``
+     - Execution mode: ``sequential``, ``joblib``, or ``mpi``
+     - ``sequential``
+   * - ``parallel.n_jobs``
+     - Number of joblib workers (``-1`` = all cores)
+     - ``-1``
+   * - ``parallel.mpi_nproc``
+     - Number of MPI ranks for auto-launch
+     - ``4``
+   * - ``parallel.mpi_auto_launch``
+     - Re-launch under ``mpiexec`` automatically
+     - ``true``
+   * - ``parallel.mpi_exec``
+     - Path to MPI launcher binary
+     - ``mpiexec``
+
+
 Configuration reference
 -----------------------
 
@@ -168,6 +257,14 @@ annotations.
    # ── Output ──────────────────────────────────────────────
    output:
      filename: "Fresnel_GF_planar_${simulation.material}_height_${simulation.position.zD_nm}nm.hdf5"
+
+   # ── Parallel execution ──────────────────────────────────
+   parallel:
+     backend: sequential        # 'sequential', 'joblib', or 'mpi'
+     n_jobs: -1                 # joblib workers; -1 = all cores
+     mpi_nproc: 4               # MPI ranks for auto-launch
+     mpi_auto_launch: true      # re-launch under mpiexec if needed
+     mpi_exec: mpiexec          # path to MPI launcher
 
 .. list-table:: Key parameters at a glance
    :header-rows: 1

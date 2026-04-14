@@ -18,6 +18,8 @@ topic.
    GF_Sommerfeld
    BEM-Vacuum
    BEM-Reconstruct-GF
+   BEM-Nanorod
    field_enhancement
+   spectral_density
    quantum_dynamics
    plotting
