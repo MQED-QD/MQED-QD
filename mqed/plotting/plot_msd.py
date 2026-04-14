@@ -50,6 +50,11 @@ def _position_analytical_gaussian(t_fs: np.ndarray, a: float, hbar_eV_fs: float,
 
 
 def _nn_msd_analytical(t_fs: np.ndarray, model: str, params: dict) -> np.ndarray:
+    """Analytical MSD for nearest-neighbour chain models.
+
+    MSD = <(x-x0)^2>  (second moment of displacement from initial site).
+    Note: this is NOT the variance <(x-x0)^2> - <x-x0>^2.
+    """
     a = float(params.get("a", 1.0))
     hbar_eV_fs = float(params.get("hbar_eV_fs", 0.6582119514))
     j_0_eV = float(params["J_0_eV"])
@@ -59,9 +64,9 @@ def _nn_msd_analytical(t_fs: np.ndarray, model: str, params: dict) -> np.ndarray
     if model == "gaussian_wave":
         k_parallel = float(params["k_parallel"])
         sigma_sites = float(params["sigma_sites"])
+        # MSD = <(x-x0)^2> = x2 (the full second moment, not x2 - <x>^2)
         x2 = _x_square_analytical_gaussian(t_fs, a, hbar_eV_fs, j_0_eV, sigma_j_eV, k_parallel, sigma_sites)
-        x = _position_analytical_gaussian(t_fs, a, hbar_eV_fs, j_0_eV, k_parallel)
-        return np.maximum(0.0, x2 - x ** 2)
+        return x2
     raise ValueError(f"Unsupported analytical model '{model}'. Use 'local_excitation' or 'gaussian_wave'.")
 
 def _load_dx_and_time(h5_path: Path) -> tuple[np.ndarray, np.ndarray, dict]:
@@ -99,8 +104,9 @@ def _load_dx_and_time(h5_path: Path) -> tuple[np.ndarray, np.ndarray, dict]:
             if not isinstance(x2_ds, h5py.Dataset) or not isinstance(x_ds, h5py.Dataset):
                 raise ValueError(f"{h5_path} has invalid expectations/x2_mean or position_mean dataset.")
             x2 = np.asarray(x2_ds[...]).ravel()
-            x = np.asarray(x_ds[...]).ravel()
-            msd = np.maximum(0.0, x2 - x**2)
+            # MSD = <(x-x0)^2> = x2 (second moment of displacement).
+            # Note: x2 - <x>^2 would be the variance, not the MSD.
+            msd = x2
             meta["source"] = "expectations/x2_mean,position_mean"
         elif isinstance(ex_group, h5py.Group) and "X_shift2" in ex_group and "X_shift" in ex_group:
             x2_ds = ex_group.get("X_shift2")
@@ -108,8 +114,8 @@ def _load_dx_and_time(h5_path: Path) -> tuple[np.ndarray, np.ndarray, dict]:
             if not isinstance(x2_ds, h5py.Dataset) or not isinstance(x_ds, h5py.Dataset):
                 raise ValueError(f"{h5_path} has invalid expectations/X_shift2 or X_shift dataset.")
             x2 = np.asarray(x2_ds[...]).ravel()
-            x = np.asarray(x_ds[...]).ravel()
-            msd = np.maximum(0.0, x2 - x**2)
+            # MSD = <(x-x0)^2> = x2 (second moment of displacement).
+            msd = x2
             meta["source"] = "expectations/X_shift2,X_shift"
         elif isinstance(ex_group, h5py.Group) and "msd_mean" in ex_group:
             msd_mean_ds = ex_group.get("msd_mean")
@@ -211,12 +217,48 @@ def main(cfg: DictConfig) -> None:
         x = _to_plot_time(t_ps[sel], ps) * getattr(ps, "x_scale_factor", 1.0)
         y = msd[sel]
         # style
-        style = getattr(curve, "style", "-")
+        linestyle = getattr(curve, "linestyle", getattr(curve, "style", "-"))
+        if isinstance(linestyle, str) and linestyle.lower() == "none":
+            linestyle = "None"
+
         lw = getattr(curve, "lw", ps.get("lw", 1.5))
         label = getattr(curve, "label", path.stem)
         color = getattr(curve, "color", None)
 
-        ax.plot(x, y, style, lw=lw, label=label, color=color)
+        marker = getattr(curve, "marker", None)
+        markersize = getattr(curve, "markersize", None)
+        markerfacecolor = getattr(curve, "markerfacecolor", None)
+        markeredgecolor = getattr(curve, "markeredgecolor", color)
+        markeredgewidth = getattr(curve, "markeredgewidth", None)
+        markevery = getattr(curve, "markevery", None)
+        alpha = getattr(curve, "alpha", None)
+        zorder = getattr(curve, "zorder", None)
+
+        plot_kwargs = {
+            "lw": lw,
+            "label": label,
+            "color": color,
+            "linestyle": linestyle,
+        }
+
+        if marker is not None:
+            plot_kwargs["marker"] = marker
+        if markersize is not None:
+            plot_kwargs["markersize"] = markersize
+        if markerfacecolor is not None:
+            plot_kwargs["markerfacecolor"] = markerfacecolor
+        if markeredgecolor is not None:
+            plot_kwargs["markeredgecolor"] = markeredgecolor
+        if markeredgewidth is not None:
+            plot_kwargs["markeredgewidth"] = markeredgewidth
+        if markevery is not None:
+            plot_kwargs["markevery"] = markevery
+        if alpha is not None:
+            plot_kwargs["alpha"] = alpha
+        if zorder is not None:
+            plot_kwargs["zorder"] = zorder
+
+        ax.plot(x, y, **plot_kwargs)
         loaded_curves.append({"t_ps": t_ps, "sel": sel, "meta": meta})
 
         logger.info(f"Plotted {label} from {path.name} (source={meta.get('source','?')})")

@@ -60,10 +60,12 @@ def _nn_rmsd_analytical(t_fs: np.ndarray, model: str, params: dict) -> np.ndarra
     if model == "gaussian_wave":
         k_parallel = float(params["k_parallel"])
         sigma_sites = float(params["sigma_sites"])
+        # RMSD = sqrt(MSD) = sqrt(x2-x**2) in our definition
+        # Note: x2 - <x>^2 would be the variance.
         x2 = _x_square_analytical_gaussian(t_fs, a, hbar_eV_fs, j_0_eV, sigma_j_eV, k_parallel, sigma_sites)
         x = _position_analytical_gaussian(t_fs, a, hbar_eV_fs, j_0_eV, k_parallel)
-        msd = np.maximum(0.0, x2 - x ** 2)
-        return np.sqrt(msd)
+        variance = np.maximum(0.0, x2 - x ** 2)
+        return np.sqrt(variance)
     raise ValueError(f"Unsupported analytical model '{model}'. Use 'local_excitation' or 'gaussian_wave'.")
 
 def _load_dx_and_time(h5_path: Path) -> tuple[np.ndarray, np.ndarray, dict]:
@@ -116,20 +118,15 @@ def _load_dx_and_time(h5_path: Path) -> tuple[np.ndarray, np.ndarray, dict]:
                 position_mean = np.asarray(pos_ds[...]).ravel()
                 dx = np.sqrt(np.maximum(0.0, x2_mean - position_mean**2))
                 meta["source"] = "expectations/x2_mean,position_mean"
-            elif isinstance(ex_group, h5py.Group) and "msd_mean" in ex_group:
+            elif isinstance(ex_group, h5py.Group) and "msd_mean" in ex_group and "position_mean" in ex_group:
                 msd_ds = ex_group.get("msd_mean")
+                pos_ds = ex_group.get("position_mean")
                 if not isinstance(msd_ds, h5py.Dataset):
                     raise ValueError(f"{h5_path} has invalid expectations/msd_mean dataset.")
                 msd_mean = np.asarray(msd_ds[...]).ravel()
-                dx = np.sqrt(np.maximum(0.0, msd_mean))
+                position_mean = np.asarray(pos_ds[...]).ravel()
+                dx = np.sqrt(np.maximum(0.0, msd_mean - position_mean**2))
                 meta["source"] = "expectations/msd_mean"
-            elif isinstance(ex_group, h5py.Group) and "x2_mean" in ex_group:
-                x2_ds = ex_group.get("x2_mean")
-                if not isinstance(x2_ds, h5py.Dataset):
-                    raise ValueError(f"{h5_path} has invalid expectations/x2_mean dataset.")
-                x2_mean = np.asarray(x2_ds[...]).ravel()
-                dx = np.sqrt(np.maximum(0.0, x2_mean))
-                meta["source"] = "expectations/x2_mean"
             else:
                 raise ValueError(
                     f"{h5_path} does not contain 'dx_mean_nm'/'dx_nm' "

@@ -126,12 +126,48 @@ def main(cfg: DictConfig) -> None:
         x = t_ps[sel] * getattr(ps, "x_scale_factor", 1.0)
         y = 1.0/ipr[sel]
 
-        style = getattr(curve, "style", "-")
-        lw = getattr(curve, "lw", ps.get("lw", 1.6))
+        linestyle = getattr(curve, "linestyle", getattr(curve, "style", "-"))
+        if isinstance(linestyle, str) and linestyle.lower() == "none":
+            linestyle = "None"
+
+        lw = getattr(curve, "lw", ps.get("lw", 1.5))
         label = getattr(curve, "label", path.stem)
         color = getattr(curve, "color", None)
 
-        ax.plot(x, y, style, lw=lw, label=label, color=color)
+        marker = getattr(curve, "marker", None)
+        markersize = getattr(curve, "markersize", None)
+        markerfacecolor = getattr(curve, "markerfacecolor", None)
+        markeredgecolor = getattr(curve, "markeredgecolor", color)
+        markeredgewidth = getattr(curve, "markeredgewidth", None)
+        markevery = getattr(curve, "markevery", None)
+        alpha = getattr(curve, "alpha", None)
+        zorder = getattr(curve, "zorder", None)
+
+        plot_kwargs = {
+            "lw": lw,
+            "label": label,
+            "color": color,
+            "linestyle": linestyle,
+        }
+
+        if marker is not None:
+            plot_kwargs["marker"] = marker
+        if markersize is not None:
+            plot_kwargs["markersize"] = markersize
+        if markerfacecolor is not None:
+            plot_kwargs["markerfacecolor"] = markerfacecolor
+        if markeredgecolor is not None:
+            plot_kwargs["markeredgecolor"] = markeredgecolor
+        if markeredgewidth is not None:
+            plot_kwargs["markeredgewidth"] = markeredgewidth
+        if markevery is not None:
+            plot_kwargs["markevery"] = markevery
+        if alpha is not None:
+            plot_kwargs["alpha"] = alpha
+        if zorder is not None:
+            plot_kwargs["zorder"] = zorder
+
+        ax.plot(x, y, **plot_kwargs)
 
         # Optional shading if ipr_std exists
         if ipr_std is not None and getattr(ps, "shade_std", True):
