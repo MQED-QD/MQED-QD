@@ -1,0 +1,61 @@
+# ─── Spectral Density Plot ───────────────────────────────────────────────────
+# Plots J_αβ(ω) from pre-computed HDF5 data.
+# See mqed/plotting/plot_spectral_density.py for details.
+
+defaults:
+  - _self_
+  - override hydra/job_logging: default
+
+hydra:
+  job:
+    name: plot_spectral_density
+
+# --- Input ---
+# Path to the spectral density HDF5 file produced by
+# mqed.analysis.spectral_density.
+input_file: "${oc.env:MQED_ROOT,./outputs}/spectral_density/spectral_density.h5"
+
+# --- Font settings (following plot_pr.py conventions) ---
+font:
+  family: "Arial"
+  labelsize: 18
+  ticksize: 16
+  legendsize: 14
+  titlesize: 18
+  labelweight: "bold"
+  titleweight: "bold"
+
+# --- Plot settings ---
+plot_settings:
+  # For separation-indexed layout: which Rx indices to plot (0-based)
+  separation_indices: [0]
+
+  # For pair-indexed layout: which (α, β) pairs to plot
+  # Each entry is [alpha, beta].  [0, 0] = self-term of emitter 0.
+  pair_indices:
+    - [0, 0]
+
+  # Labels
+  # For separation layout, {Rx} is replaced by the Rx value in nm
+  label_template: "Rx = {Rx:.1f} nm"
+  xlabel: "Energy (eV)"
+  ylabel: "$J(\\omega)$ (eV)"
+  title: "Spectral Density $J(\\omega)$"
+
+  # Axis scales: "linear" or "log"
+  xscale: "linear"
+  yscale: "linear"
+
+  # Optional axis limits (null = auto)
+  x_range_eV: null
+  y_range: null
+
+  # Style
+  figsize: [8, 5]
+  lw: 1.5
+  dpi: 300
+  grid: true
+
+  # Output
+  save_plot: true
+  filename: "spectral_density.png"

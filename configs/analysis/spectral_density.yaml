@@ -1,0 +1,33 @@
+# ─── Spectral Density Analysis ───────────────────────────────────────────────
+# Computes the generalized spectral density J_αβ(ω) from dyadic Green's
+# function HDF5 data.  See mqed/analysis/spectral_density.py for details.
+
+defaults:
+  - _self_
+  - override hydra/job_logging: default
+
+hydra:
+  job:
+    name: spectral_density
+
+# --- Input ---
+# Path to the GF HDF5 file.  Can be absolute or relative to the working
+# directory where the command is launched.
+# Supports environment variable MQED_ROOT: "${oc.env:MQED_ROOT,./data}/gf.h5"
+input_file: "${oc.env:MQED_ROOT,./data}/gf_data.h5"
+
+# --- Output ---
+output_file: "spectral_density.h5"
+
+# --- Dipole orientations ---
+# theta_deg: polar angle from z-axis (degrees).  Use 'magic' for the magic
+#            angle θ ≈ 54.74° that averages orientational effects.
+# phi_deg:   azimuthal angle in x-y plane (degrees).  Use 'magic' for
+#            isotropic averaging.
+orientations:
+  donor:
+    theta_deg: 90.0
+    phi_deg: 0.0
+  acceptor:
+    theta_deg: 90.0
+    phi_deg: 0.0

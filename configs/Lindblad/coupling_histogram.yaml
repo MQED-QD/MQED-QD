@@ -1,0 +1,40 @@
+# ──────────────────────────────────────────────────────────────
+#  Configuration for run_coupling_histogram.py
+#
+#  Builds V matrices for many orientation-disorder realizations
+#  and plots a histogram of nearest-neighbour couplings V(i,i+1).
+#
+#  Usage:
+#    python -m mqed.disorder.run_coupling_histogram
+#    python -m mqed.disorder.run_coupling_histogram simulation.disorder_sigma_phi_deg=20
+# ──────────────────────────────────────────────────────────────
+defaults:
+  - hydra: default
+  - _self_
+
+greens:
+  h5_path: ${oc.env:MQED_ROOT,${hydra:runtime.cwd}}/data/GF_cache/Fresnel_GF_planar_Ag_height_2nm_665nm.hdf5
+
+material:
+  name: silver
+
+simulation:
+  Nmol: 200
+  d_nm: 1.0
+  mu_D_debye: 3.8
+  mu_A_debye: 3.8
+  theta_deg: 90.0
+  phi_deg: magic          # "magic" → 54.7356°
+  mode: disorder
+  disorder_sigma_phi_deg: 10.0
+
+disorder:
+  n_realizations: 1000
+  seed: 2025
+  n_jobs: -2             # -1 = use all cores
+
+output:
+  fig_filename: nn_coupling_histogram_${material.name}_sigma${simulation.disorder_sigma_phi_deg}.png
+  data_filename: nn_couplings_${material.name}_sigma${simulation.disorder_sigma_phi_deg}.hdf5
+  bins: 60
+  meV: false

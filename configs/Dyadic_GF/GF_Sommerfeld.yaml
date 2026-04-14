@@ -57,5 +57,33 @@ simulation:
     limit: 400          # max subintervals for quad_vec
     split_propagating: true  # if true, split at k0 to treat propagating/evanescent separately
 
+# ── Parallel execution ─────────────────────────────────────────────
+# Controls how the multi-frequency loop is parallelized.
+#
+#   backend:  "sequential"  – no parallelism (default, simplest)
+#             "joblib"      – shared-memory multiprocessing via joblib
+#                             Good for laptops/workstations.
+#             "mpi"         – distributed parallelism via mpi4py
+#                             Good for HPC clusters.
+#
+#   n_jobs:   Number of joblib workers.
+#             -1 = use all available CPU cores (recommended).
+#             Ignored when backend != "joblib".
+#
+#   mpi_nproc:      Number of MPI ranks to spawn (if auto-launching).
+#   mpi_auto_launch: If true AND not already running under MPI,
+#                    re-launch the script with mpiexec automatically.
+#   mpi_exec:       Path to mpiexec binary.
+#
+# NOTE: Parallelization is over the *energy* (frequency) axis.
+#       Each energy point is fully independent — no communication
+#       is needed between workers.
+parallel:
+  backend: sequential
+  n_jobs: -1
+  mpi_nproc: 4
+  mpi_auto_launch: true
+  mpi_exec: mpiexec
+
 output:
   filename: "Fresnel_GF_planar_${simulation.material}_height_${simulation.position.zD_nm}nm.hdf5"

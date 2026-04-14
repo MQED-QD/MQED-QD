@@ -7,14 +7,27 @@ hydra:
     name: compare_ez
 log_file: ${hydra:runtime.output_dir}/${hydra.job.name}.log
 
+# ---- Data source selection ------------------------------------------------
+# "bem"  → reads BEM Excel files (original behavior)
+# "meep" → reads MEEP HDF5 files (planar_example.py output)
+simulation_source: bem
+
 paths:
   # lets you override with MQED_ROOT=/abs/path/to/repo
   root: ${oc.env:MQED_ROOT,${hydra:runtime.cwd}}
   data_dir: ${paths.root}/mqed/BEM
 
-  dgf_h5: ${paths.data_dir}/Fresnel_result/result_Ag_2_nm.hdf5
-  bem_plane_xlsx: ${paths.data_dir}/BEM_result/dipole_silver_2nm_results.xlsx
+  # Fresnel / analytical reference (always required)
+  dgf_h5: ${paths.data_dir}/Fresnel_result/Fresnel_GF_planar_Ag_height_5nm_665nm.hdf5
+
+  # BEM Excel files (used when simulation_source: bem)
+  bem_plane_xlsx: ${paths.data_dir}/BEM_result/dipole_silver_planar_height_5nm_results_665nm.xlsx
   bem_vacuum_xlsx: ${paths.data_dir}/BEM_result/dipole_vacuum_2nm_results.xlsx
+
+  # MEEP HDF5 files (used when simulation_source: meep)
+  meep_dir: ${paths.root}/mqed/MEEP
+  meep_plane_h5: ${paths.meep_dir}/MEEP_planar_silver_665nm_2D.h5
+  meep_vacuum_h5: ${paths.meep_dir}/MEEP_planar_vacuum_665nm_2D.h5
 
 
 dipole_frequency: 1.864  # example value (your units)
@@ -27,6 +40,9 @@ bem:
   sheet: FieldLine
   re_col: Re_Ez
   im_col: Im_Ez
+
+meep:
+  component: Ez
 
 dipoles:
   donor: {theta_deg: 0.0, phi_deg: 0.0}
@@ -45,17 +61,17 @@ plot:
 
   rcParams:
     font.size: 18
-    axes.labelsize: 26
-    axes.titlesize: 22
-    legend.fontsize: 22
-    xtick.labelsize: 18
+    axes.labelsize: 16
+    axes.titlesize: 16
+    legend.fontsize: 12
+    xtick.labelsize: 12
     ytick.labelsize: 18
 
   axes:
     title: " $\\omega_0 = {dipole_frequency} ~\\mathrm{{eV}}$"
     xlabel: "Distance $R_x$ (nm)"
     ylabel: "$Enhancement(Normalized)$"
-    xlim: [0, 100]
+    xlim: [0, 50]
     ylim: null
     grid: false
     spine_width: 1.2
@@ -65,7 +81,7 @@ plot:
       direction: "in"
       top: true
       right: true
-      labelsize: 18
+      labelsize: 12
       length: 6
       width: 1.2
 
@@ -75,16 +91,16 @@ plot:
     frameon: true
     fancybox: false
     framealpha: 1.0
-    fontsize: 22
+    fontsize: 12
     edgecolor: "0.5"
 
   # what to draw first/last
-  series_order: [bem_real, bem_imag, impl_real, impl_imag]
+  series_order: [sim_real, sim_imag, impl_real, impl_imag]
 
   series:
-    bem_real:
-      source: "bem_real"
-      label: "$V/V^{0}$ (BEM)"
+    sim_real:
+      source: "sim_real"
+      label: "$V/V^{0}$ (numerical)"
       linestyle: "None"
       marker: "o"
       markersize: 7
@@ -92,9 +108,9 @@ plot:
       markeredgewidth: 1.6
       color: "m"
 
-    bem_imag:
-      source: "bem_imag"
-      label: "$\\Gamma/\\Gamma^{0}$ (BEM)"
+    sim_imag:
+      source: "sim_imag"
+      label: "$\\Gamma/\\Gamma^{0}$ (numerical)"
       linestyle: "None"
       marker: "s"
       markersize: 7
