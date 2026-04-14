@@ -2,15 +2,33 @@ from typing import Callable, Optional, Union
 
 import numpy as np
 from scipy.integrate import quad_vec
-from scipy.special import jv # Bessel function of the first kind
+from scipy.special import jv  # Bessel function of the first kind
 from loguru import logger
-from mqed.utils.SI_unit import  c, hbar, eV_to_J
+from mqed.utils.SI_unit import c, hbar, eV_to_J
+
 
 class Greens_function_analytical:
     r"""
     Dyadic Green's function for a planar interface with cylindrical symmetry.
 
-    s- and p-polarized Fresnel coefficients:
+    Architecture Note (N-Layer Extensibility)
+    ------------------------------------------
+    The reflection coefficients and z-wavevectors are computed via dedicated
+    methods rather than inline lambdas.  This design separates the *integral
+    machinery* (Sommerfeld integrals, quadrature, tensor assembly — shared by
+    all planar geometries) from the *layer physics* (Fresnel coefficients,
+    phase factors — specific to the number of layers).
+
+    To extend to N layers, subclass this and override:
+
+    * :meth:`_kz` — return kz in any layer
+    * :meth:`_rs` / :meth:`_rp` — return generalized reflection coefficients
+      (e.g., recursive Tomas 1995 or transfer-matrix formalism)
+
+    The Sommerfeld integrals in :meth:`compute_integrals` call these methods
+    and remain unchanged.
+
+    s- and p-polarized Fresnel coefficients (two-layer):
 
     .. math::
 
@@ -32,10 +50,12 @@ class Greens_function_analytical:
 
        \overline{\overline{\mathbf{G}}}(\mathbf{r}_\alpha,\mathbf{r}_\beta,\omega) = \overline{\overline{\mathbf{G}}}_0(\mathbf{r}_\alpha,\mathbf{r}_\beta,\omega) + \overline{\overline{\mathbf{G}}}_{\text{refl}}^{(i)}(\mathbf{r}_\alpha,\mathbf{r}_\beta,\omega).
     """
-    def __init__(self,
+
+    def __init__(
+        self,
         metal_epsi: complex,
         omega: float,
-        eps_0 = 1.0,
+        eps_0: float = 1.0,
         qmax: Optional[float] = None,
         epsabs: float = 1e-10,
         epsrel: float = 1e-10,
@@ -43,50 +63,168 @@ class Greens_function_analytical:
         split_propagating: bool = True,
     ):
         """
-        Initializes the calculation with the system's physical parameters.
+        Initializes the two-layer Green's function calculator.
+
+        The two media are:
+          * Layer 0 (upper half-space, z > 0): permittivity ``eps_0``
+            — typically vacuum (1.0).
+          * Layer 1 (lower half-space, z < 0): permittivity ``metal_epsi``
+            — typically a dispersive metal like Ag or Au.
+
         Args:
-            metal_epsi (complex): The permittivity of the metal.
-            omega (float): The angular frequency of the light.
-            eps_0 (float, optional): The permittivity of free space. 
+            metal_epsi: Complex permittivity of the metal (layer 1).
+            omega:      Angular frequency [rad/s].
+            eps_0:      Permittivity of the upper half-space (layer 0).
+                        Default 1.0 (vacuum).
+            qmax:       Upper integration limit for Sommerfeld integrals.
+                        ``None`` → integrate to infinity.
+            epsabs:     Absolute error tolerance for ``quad_vec``.
+            epsrel:     Relative error tolerance for ``quad_vec``.
+            limit:      Maximum number of adaptive subintervals.
+            split_propagating: If True, split the integral at q = k0
+                        (propagating/evanescent boundary) for better
+                        numerical accuracy.
         """
         self.metal_epsi = metal_epsi
         self.omega = omega
         self.eps_0 = eps_0
-        self.c = c# speed of light in SI unit
-        self.k0 = self.omega/self.c  # free space wavenumber
+        self.c = c  # speed of light in SI units
+        self.k0 = self.omega / self.c  # free-space wavenumber
 
+        # Quadrature settings (passed through to complex_quad)
         self.qmax = qmax
         self.epsabs = epsabs
         self.epsrel = epsrel
         self.limit = limit
         self.split_propagating = split_propagating
-
-        # Pre-define the Fresnel equations for reflection coefficients
-        self._kz0 = lambda q: self._beta_phys(self.eps_0, q)
-        self._kz1 = lambda q: self._beta_phys(self.metal_epsi, q)
-
-        # Reflection coefficients for s- and p-polarized waves
-        self._rs = lambda q: (self._kz0(q) - self._kz1(q))/ (self._kz0(q) + self._kz1(q))
-        self._rp = lambda q: (self.metal_epsi * self._kz0(q) - self.eps_0 * self._kz1(q)) / \
-                            (self.metal_epsi * self._kz0(q) + self.eps_0 * self._kz1(q))
     
-    def _beta_phys(self, eps, q):
-        """
-        Calculates the physical wavevector component in the z-direction.
-        This function ensures that the imaginary part of the wavevector is non-negative,
-        enforcing the correct physical decay behavior in lossy media.
+    # ------------------------------------------------------------------
+    #  Layer physics: kz, reflection coefficients
+    #
+    #  These are the ONLY methods that encode the number/arrangement of
+    #  layers.  Everything below (Sommerfeld integrals, tensor assembly)
+    #  is geometry-agnostic and calls these through the public API.
+    #
+    #  To add N-layer support, subclass and override _kz, _rs, _rp with
+    #  recursive Fresnel / transfer-matrix implementations.  The integral
+    #  machinery will "just work".
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _beta_phys(eps: complex, k0: float, q):
+        r"""
+        Physical z-wavevector in a medium with permittivity ``eps``.
+
+        .. math::
+
+           K_{z}(q) = \sqrt{\epsilon\, k_0^2 - q^2}
+
+        The branch is chosen so that Im(K_z) >= 0 (evanescent waves decay
+        away from the interface) and, when Im(K_z) ≈ 0, Re(K_z) >= 0
+        (propagating waves travel upward).
+
+        A tiny imaginary offset ``+i·10⁻¹²`` is added under the square root
+        to lift the branch cut off the real axis — this is the standard
+        ``i0⁺`` prescription.
+
         Args:
-            eps (complex): The permittivity of the medium.(vacuum or material)
-            q (float or np.ndarray): The transverse wavevector component.
+            eps: Complex permittivity of the medium.
+            k0:  Free-space wavenumber ω/c [1/m].
+            q:   In-plane (transverse) wavevector component.
+
+        Returns:
+            Complex Kz value(s) with correct branch.
+
+        Note:
+            Made a ``@staticmethod`` so it can be called without an instance
+            (useful in parallel workers or standalone utilities).  The k0
+            argument replaces the previous ``self.k0`` access.
         """
-        # tiny i0+ ONLY here (do not add imag to k0 itself)
-        b = np.lib.scimath.sqrt(eps * self.k0**2 - q**2 + 1j*1e-12)
-        # enforce decay: Im(b) >= 0 (and if ~0, choose Re(b) >= 0)
+        b = np.lib.scimath.sqrt(eps * k0**2 - q**2 + 1j * 1e-12)
+        # Enforce Im(b) >= 0; if Im ≈ 0, enforce Re(b) >= 0.
         if np.ndim(b):
-            flip = (np.imag(b) < 0) | ((np.abs(np.imag(b)) < 1e-18) & (np.real(b) < 0))
+            flip = (np.imag(b) < 0) | (
+                (np.abs(np.imag(b)) < 1e-18) & (np.real(b) < 0)
+            )
             b[flip] = -b[flip]
             return b
-        return -b if (np.imag(b) < 0 or (abs(np.imag(b)) < 1e-18 and np.real(b) < 0)) else b
+        return (
+            -b
+            if (np.imag(b) < 0 or (abs(np.imag(b)) < 1e-18 and np.real(b) < 0))
+            else b
+        )
+
+    def _kz(self, layer: int, q):
+        r"""
+        z-wavevector component in a given layer.
+
+        For the current two-layer geometry:
+          * layer 0 → upper half-space (permittivity ``self.eps_0``)
+          * layer 1 → lower half-space (permittivity ``self.metal_epsi``)
+
+        Override in an N-layer subclass to index into an array of
+        permittivities: ``self.eps[layer]``.
+
+        Args:
+            layer: Layer index (0 = upper, 1 = metal).
+            q:     In-plane wavevector.
+
+        Returns:
+            Complex Kz in the requested layer.
+        """
+        eps = self.eps_0 if layer == 0 else self.metal_epsi
+        return self._beta_phys(eps, self.k0, q)
+
+    def _rs(self, q):
+        r"""
+        s-polarized (TE) Fresnel reflection coefficient at the interface.
+
+        Two-layer formula:
+
+        .. math::
+
+           r_s(q) = \frac{K_{z,0} - K_{z,1}}{K_{z,0} + K_{z,1}}
+
+        For N-layer extension, replace with the generalized reflection
+        coefficient computed via recursive Tomas (1995) relations or
+        transfer-matrix method.
+
+        Args:
+            q: In-plane wavevector (scalar or array).
+
+        Returns:
+            Complex reflection coefficient.
+        """
+        kz0 = self._kz(0, q)
+        kz1 = self._kz(1, q)
+        return (kz0 - kz1) / (kz0 + kz1)
+
+    def _rp(self, q):
+        r"""
+        p-polarized (TM) Fresnel reflection coefficient at the interface.
+
+        Two-layer formula:
+
+        .. math::
+
+           r_p(q) = \frac{\epsilon_1 K_{z,0} - \epsilon_0 K_{z,1}}
+                         {\epsilon_1 K_{z,0} + \epsilon_0 K_{z,1}}
+
+        For N-layer extension, replace with the generalized reflection
+        coefficient.
+
+        Args:
+            q: In-plane wavevector (scalar or array).
+
+        Returns:
+            Complex reflection coefficient.
+        """
+        kz0 = self._kz(0, q)
+        kz1 = self._kz(1, q)
+        return (
+            (self.metal_epsi * kz0 - self.eps_0 * kz1)
+            / (self.metal_epsi * kz0 + self.eps_0 * kz1)
+        )
     
     
 
@@ -231,10 +369,10 @@ class Greens_function_analytical:
         """
 
         def integrand(q: float) -> np.ndarray:
-            kz0 = self._kz0(q)
+            kz0 = self._kz(0, q)           # ← uses method, not lambda
             expz = np.exp(1j * kz0 * (z1 + z2))
-            rs = self._rs(q)
-            rp = self._rp(q)
+            rs = self._rs(q)                # ← method call (overridable)
+            rp = self._rp(q)                # ← method call (overridable)
             j0 = jv(0, q * rho)
             j1 = jv(1, q * rho)
             j2 = jv(2, q * rho)

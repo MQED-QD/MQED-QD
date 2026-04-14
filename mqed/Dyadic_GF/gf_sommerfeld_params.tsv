@@ -1,0 +1,5 @@
+label	energy_min_eV	energy_max_eV	energy_points	zD_nm	zA_nm	material
+Ag_zD10_full	1.5	3.5	200	10	10	Ag
+Ag_zD10_visible	1.8	3.1	150	10	10	Ag
+Ag_zD5_full	1.5	3.5	200	5	5	Ag
+Ag_zD20_full	1.5	3.5	200	20	20	Ag
