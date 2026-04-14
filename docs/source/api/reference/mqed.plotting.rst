@@ -1,4 +1,4 @@
-plotting
+﻿plotting
 ========
 
 ..
@@ -22,5 +22,6 @@ plotting
    plot_ipr
    plot_msd
    plot_pr
+   plot_spectral_density
    plot_sqrt_msd
 
