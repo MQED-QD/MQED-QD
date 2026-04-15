@@ -54,7 +54,7 @@ def test_gaussian_initial_state_normalized():
         ],
     )
     ket, ref_site = build_initial_ket(cfg.initial_state, nmol=int(cfg.simulation.Nmol))
-    norm = float((ket.dag() * ket).full()[0, 0].real)
+    norm = float(ket.norm())
 
     assert np.isclose(norm, 1.0, atol=1e-12)
     assert ref_site == 6
@@ -75,7 +75,7 @@ def test_gaussian_initial_state_null_center_uses_site_index():
         ],
     )
     ket, ref_site = build_initial_ket(cfg.initial_state, nmol=int(cfg.simulation.Nmol))
-    norm = float((ket.dag() * ket).full()[0, 0].real)
+    norm = float(ket.norm())
 
     assert ref_site == 4
     assert np.isclose(norm, 1.0, atol=1e-12)

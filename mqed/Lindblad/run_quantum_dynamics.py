@@ -17,9 +17,9 @@ from mqed.utils.save_hdf5 import save_dx_h5
 
 def resolve_initial_site_index(initial_state_cfg: DictConfig, nmol: int) -> int:
     """Return the 1-based reference site index used by observables/state defaults."""
-    candidate = initial_state_cfg.get("site_index", None)
+    candidate = initial_state_cfg.get("center_site", None)
     if candidate is None:
-        candidate = initial_state_cfg.get("center_site", None)
+        candidate = initial_state_cfg.get("site_index", None)
     if candidate is None:
         candidate = nmol // 2 + 1
 
