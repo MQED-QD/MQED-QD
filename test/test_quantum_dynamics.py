@@ -7,16 +7,14 @@ in a tolerance.
 import os
 
 import numpy as np
-import hydra
+import pytest
 
 from mqed.Lindblad.run_quantum_dynamics import app_run
 from mqed.utils.dgf_data import load_gf_h5
 from mqed.Lindblad.ddi_matrix import build_ddi_matrix_from_Gslice
 from mqed.utils.orientation import resolve_angle_deg, spherical_to_cartesian_dipole
 from mqed.Lindblad.quantum_dynamics import SimulationConfig, LindbladDynamics, NonHermitianSchDynamics
-from mqed.Lindblad.quantum_operator import msd_operator, x_shift2_conditional_callable
-
-from omegaconf import DictConfig
+from mqed.Lindblad.quantum_operator import position_square_operator, x_shift2_conditional_callable
 
 dir_path = os.path.dirname(os.path.abspath(__file__))
 # Test the result of Lindblad and non-Hermitian dynamics for MQED setup
@@ -54,7 +52,12 @@ def test_lindblad_vs_nonhermitian():
     psi_init = fock(sim_cfg.Nmol + 1, 1)     # State vector for Non-Hermitian
 
     # Evolve both systems
-    X_shift2_op = msd_operator(dim=sim_cfg.Nmol + 1, d_nm=sim_cfg.d_nm, Nmol=sim_cfg.Nmol, init_site_index=1)
+    X_shift2_op = position_square_operator(
+        dim=sim_cfg.Nmol + 1,
+        d_nm=sim_cfg.d_nm,
+        Nmol=sim_cfg.Nmol,
+        init_site_index=1,
+    )
     e_ops = {'MSD_nm2': lambda t, st, X2=X_shift2_op, N=sim_cfg.Nmol:
                 x_shift2_conditional_callable(t, st, X_shift2=X2, Nmol=N),
             'MSD_noncond_nm2': X_shift2_op}
@@ -73,3 +76,53 @@ def test_lindblad_vs_nonhermitian():
     assert np.allclose(msd_nonherm, msd_noncond, atol=1e-6), "Conditional and non-conditional MSD results differ significantly!"
     assert np.allclose(msd_lindblad, msd_nonherm, atol=1e-2), "Lindblad and Non-Hermitian results differ significantly!"
 
+
+def test_build_collapse_ops_rejects_non_psd_gamma():
+    sim_cfg = SimulationConfig(
+        tlist=np.array([0.0, 0.1]),
+        emitter_frequency=3.0,
+        Nmol=2,
+        Rx_nm=np.array([0.0, 3.0, 6.0]),
+        d_nm=3.0,
+        mu_D_debye=3.8,
+        mu_A_debye=None,
+        theta_deg=90.0,
+        phi_deg="magic",
+        disorder_sigma_phi_deg=None,
+        mode="stationary",
+    )
+
+    lindblad_dyn = LindbladDynamics(sim_cfg, np.zeros((3, 3), dtype=complex))
+    lindblad_dyn.Gamma_ab = np.array(
+        [[0.4, 0.0], [0.0, -0.3]],
+        dtype=float,
+    )
+
+    with pytest.raises(ValueError, match="not positive semidefinite"):
+        lindblad_dyn.build_collapse_ops()
+
+
+def test_build_collapse_ops_clips_tiny_negative_gamma_eigenvalues():
+    sim_cfg = SimulationConfig(
+        tlist=np.array([0.0, 0.1]),
+        emitter_frequency=3.0,
+        Nmol=2,
+        Rx_nm=np.array([0.0, 3.0, 6.0]),
+        d_nm=3.0,
+        mu_D_debye=3.8,
+        mu_A_debye=None,
+        theta_deg=90.0,
+        phi_deg="magic",
+        disorder_sigma_phi_deg=None,
+        mode="stationary",
+    )
+
+    lindblad_dyn = LindbladDynamics(sim_cfg, np.zeros((3, 3), dtype=complex))
+    lindblad_dyn.Gamma_ab = np.array(
+        [[1.0, 0.0], [0.0, -5e-13]],
+        dtype=float,
+    )
+
+    c_ops = lindblad_dyn.build_collapse_ops()
+
+    assert len(c_ops) == 1

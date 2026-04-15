@@ -152,7 +152,7 @@ class QuantumDynamics(ABC):
 
         # clip tiny negatives and check for real PSD
         evals = np.real_if_close(evals, tol=1000)
-        evals[evals < 0 & (evals > -tol)] = 0.0
+        evals[(evals < 0) & (evals > -tol)] = 0.0
         if np.any(evals < -tol):
             raise ValueError(
                 f"Gamma is not positive semidefinite (min eig={evals.min():.3e}). "
