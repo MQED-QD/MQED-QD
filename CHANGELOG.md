@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.1.1 - 2026-04-15
+
+### New features
+
+- Update the way to name the dyadic Green's function (`mqed.Dyadic_GF.main`) 
+and spectral density (`mqed.analysis.spectral_density`) so that the output 
+file contains the info of height and multiple energy points during simulation.
+
+### Bug fixes
+
+- Fixed the previous bugs in the `mqed.Dyadic_GF.main`: it only took `dict` 
+as input so that SGE script parameter was incompatible with previous program.
+Now we added `DictConfig` solving this issue.
+
 ## 1.1.0 - 2026-04-14
 
 ### New features
