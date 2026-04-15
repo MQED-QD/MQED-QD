@@ -197,14 +197,14 @@ def _plot_pair_layout(J_eV, energy_eV, cfg):
 
 @hydra.main(
     config_path="../../configs/plots",
-    config_name="spectral_density",
+    config_name="plt_spec_dens",
     version_base=None,
 )
 def plot_spectral_density(cfg) -> None:
     """Plot spectral density from pre-computed HDF5 data.
 
     This is the Hydra CLI entry point.  Configuration is loaded from
-    ``configs/plots/spectral_density.yaml``.
+    ``configs/plots/plt_spec_dens.yaml``.
     """
     output_dir = Path(HydraConfig.get().runtime.output_dir)
     setup_loggers_hydra_aware()

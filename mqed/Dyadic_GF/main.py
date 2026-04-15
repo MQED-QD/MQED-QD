@@ -25,7 +25,7 @@ import sys
 import subprocess
 
 import hydra
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig, ListConfig, OmegaConf
 import numpy as np
 from loguru import logger
 from pathlib import Path
@@ -53,9 +53,9 @@ def build_grid(config):
     """
     if isinstance(config, (float, int)):
         return np.array([config], dtype=float)
-    elif isinstance(config, list):
+    elif isinstance(config, (list, ListConfig)):
         return np.array(config, dtype=float)
-    elif isinstance(config, dict):
+    elif isinstance(config, (dict, DictConfig)):
         return np.linspace(config.min, config.max, config.points, dtype=float)
     else:
         raise TypeError(f"Unsupported spectral config type: {type(config)}")
@@ -372,7 +372,22 @@ def run_simulation(cfg: DictConfig) -> None:
 
     # ── Save results ──
     output_dir.mkdir(parents=True, exist_ok=True)
-    output_file = output_dir / cfg.output.filename
+
+    # Build dynamic output filename:
+    #   Hydra config provides the prefix (e.g. "Fresnel_GF_planar_Ag_height_5nm")
+    #   Python appends the energy range, points, and Rx info at runtime.
+    output_prefix = cfg.output.prefix
+    E_min = energy_ev_array[0]
+    E_max = energy_ev_array[-1]
+    n_energy = len(energy_ev_array)
+    Rx_max = rx_values_nm[-1]
+    n_rx = len(rx_values_nm)
+    output_fname = (
+        f"{output_prefix}"
+        f"_Emin_{E_min:.2f}_Emax_{E_max:.2f}_{n_energy}pts"
+        f"_Rx_{Rx_max:.0f}nm_{n_rx}pts.hdf5"
+    )
+    output_file = output_dir / output_fname
 
     save_gf_h5(
         output_file,

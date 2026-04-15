@@ -33,25 +33,10 @@ cd "${REPO_ROOT}"
 
 # NSLOTS is set by SGE's -pe directive.  On a laptop default to 4 cores so
 # MPI does not over-subscribe a small machine.
-MPI_NPROC="${NSLOTS:-4}"
+MPI_NPROC="${NSLOTS:-8}"
 
 # Hydra config name (no .yaml extension).  Override via GF_CONFIG_NAME.
-CONFIG_NAME="${GF_CONFIG_NAME:-GF_Sommerfeld}"
-
-# ── Summary ──────────────────────────────────────────────────────────────────
-echo "========================================================================"
-echo "  Dyadic Green's Function — Sommerfeld Integration"
-echo "  Task ${TASK_INDEX}  |  label = ${LABEL}"
-echo "========================================================================"
-echo "  Config name    : ${CONFIG_NAME}"
-echo "  Parameter file : ${PARAM_FILE}"
-echo "  Energy range   : ${ENERGY_MIN} – ${ENERGY_MAX} eV  (${ENERGY_PTS} points)"
-echo "  Donor height   : ${ZD_NM} nm  (${ZD_M} m)"
-echo "  Acceptor height: ${ZA_NM} nm  (${ZA_M} m)"
-echo "  Material       : ${MATERIAL}"
-echo "  MPI ranks      : ${MPI_NPROC}"
-echo "  Start time     : $(date)"
-echo "========================================================================"
+CONFIG_NAME="${GF_CONFIG_NAME:-GF_Sommerfeld_customed}"
 
 # ── Launch ───────────────────────────────────────────────────────────────────
 # We pass Hydra config overrides on the command line.  The key points:
@@ -68,12 +53,12 @@ mpirun -np "${MPI_NPROC}" mqed_GF_Sommerfeld \
   parallel.backend=mpi \
   parallel.mpi_auto_launch=false \
   parallel.mpi_nproc="${MPI_NPROC}" \
-  simulation.energy_eV.min="${ENERGY_MIN}" \
-  simulation.energy_eV.max="${ENERGY_MAX}" \
-  simulation.energy_eV.points="${ENERGY_PTS}" \
-  simulation.position.zD="${ZD_M}" \
-  simulation.position.zD_nm="${ZD_NM}" \
-  simulation.position.zA="${ZA_M}" \
-  simulation.material="${MATERIAL}" \
+  simulation.energy_eV.min="3.30" \
+  simulation.energy_eV.max="3.70" \
+  simulation.energy_eV.points="100" \
+  simulation.position.zD="1.0e-9" \
+  simulation.position.zD_nm="1" \
+  simulation.position.zA="1.0e-9" \
+  simulation.material="Ag" \
 
 
