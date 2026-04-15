@@ -1,55 +1,5 @@
 # setup.py
 
-from setuptools import find_packages, setup
+from setuptools import setup
 
-setup(
-    name="mqed",
-    version="1.1.0",
-    description="A workflow for calculating Dyadic Green's Functions in layered media and nanorod(supported by MNPBEM toolbox), and using them to compute dipole-dipole interactions and quantum dynamics.",
-    author="Guangming Liu",
-    author_email="",
-    packages=find_packages(),
-    include_package_data=True,
-    install_requires=[
-        "gitpython",
-        "h5py",
-        "hydra-colorlog",
-        "hydra-core",
-        "hydra-optuna-sweeper",
-        "joblib",
-        "loguru",
-        "matplotlib",
-        "numpy",
-        "openpyxl",
-        "optuna",
-        "pandas",
-        "qutip",
-        "rich",
-        "rootutils",
-        "scipy",
-        "seaborn",
-        "tqdm",
-    ],
-    entry_points={
-        "console_scripts": [
-            "mqed_GF_Sommerfeld = mqed.Dyadic_GF.main:run_simulation",
-            "mqed_RET = mqed.analysis.RET:main",
-            "mqed_FE = mqed.analysis.FE:main",
-            "mqed_lindblad = mqed.Lindblad.run_quantum_dynamics:mqed_lindblad",
-            "mqed_nhse = mqed.Lindblad.run_quantum_dynamics:mqed_nhse",
-            "mqed_nhse_disorder = mqed.disorder.run_disorder:run_disorder",
-            "mqed_nn_disorder = mqed.disorder.run_disorder_nn:run_disorder_nn",
-            "mqed_plot_sqrt_msd = mqed.plotting.plot_sqrt_msd:main",
-            "mqed_plot_msd = mqed.plotting.plot_msd:main",
-            "mqed_BEM_compare = mqed.BEM.compare_const:main",
-            "mqed_BEM_compare_silver = mqed.BEM.compare_silver:main",
-            "mqed_BEM_compute_peff = mqed.BEM.compute_peff:main",
-            "mqed_BEM_compare_dyadic = mqed.BEM.compare_BEM_dyadic:main",
-            "mqed_BEM_reconstruct_GF = mqed.BEM.reconstruct_GF:main",
-            "mqed_plot_IPR = mqed.plotting.plot_ipr:main",
-            "mqed_plot_PR = mqed.plotting.plot_pr:main",
-            "mqed_compare_enhancement = mqed.BEM.compare_enhancement:main",
-        ]
-    },
-    python_requires=">=3.10",
-)
+setup()

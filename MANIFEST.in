@@ -1,2 +1,3 @@
 # Include all files inside the DielectricFunction directory
 recursive-include mqed/DielectricFunction *
+recursive-include configs *.yaml
