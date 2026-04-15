@@ -13,6 +13,25 @@ file contains the info of height and multiple energy points during simulation.
 - Fixed the previous bugs in the `mqed.Dyadic_GF.main`: it only took `dict` 
 as input so that SGE script parameter was incompatible with previous program.
 Now we added `DictConfig` solving this issue.
+- Fixed the Lindblad collapse-operator positive-semidefinite validation in
+  `mqed.Lindblad.quantum_dynamics` so that only numerically tiny negative
+  eigenvalues are clipped, while genuinely invalid decay matrices still raise a
+  `ValueError`.
+- Fixed the initial-state site resolution in
+  `mqed.Lindblad.run_quantum_dynamics` so that `center_site` correctly takes
+  precedence when Gaussian initial states are configured through Hydra.
+
+### Packaging and infrastructure
+
+- Consolidated package metadata into `pyproject.toml`, kept `setup.py` as a
+  lightweight compatibility shim, and aligned the package version metadata with
+  `mqed.__version__`.
+- Included Hydra YAML configuration files in built distributions so installed
+  wheels retain the same CLI configuration support as editable source checkouts.
+- Added GitHub Actions pytest CI for Python 3.10 and 3.11 to exercise the test
+  suite automatically on code, config, packaging, and workflow changes.
+- Tightened dependency bounds in `environment.yaml` and
+  `environment_windows.yaml` to better match the validated packaging stack.
 
 ## 1.1.0 - 2026-04-14
 
