@@ -86,4 +86,4 @@ parallel:
   mpi_exec: mpiexec
 
 output:
-  filename: "Fresnel_GF_planar_${simulation.material}_height_${simulation.position.zD_nm}nm.hdf5"
+  prefix: "Fresnel_GF_planar_${simulation.material}_height_${simulation.position.zD_nm}nm"

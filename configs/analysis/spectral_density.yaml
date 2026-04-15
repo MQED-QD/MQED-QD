@@ -17,7 +17,11 @@ hydra:
 input_file: "${oc.env:MQED_ROOT,./data}/gf_data.h5"
 
 # --- Output ---
-output_file: "spectral_density.h5"
+output_prefix: "spec_dens"
+
+# --- Dipole moment magnitudes (Debye) ---
+mu_D_debye: 3.8   # Donor dipole moment magnitude
+mu_A_debye: 3.8   # Acceptor dipole moment magnitude
 
 # --- Dipole orientations ---
 # theta_deg: polar angle from z-axis (degrees).  Use 'magic' for the magic
