@@ -16,14 +16,11 @@ near plasmonic interfaces using macroscopic quantum electrodynamics (MQED).
 
 ## Latest Update
 
-**Version 1.1.0** adds spectral density analysis, multi-frequency Green's function support, and a batch HPC workflow.
+**Version 1.1.2** adds local Hydra config discovery for personal YAML files and keeps terminal help available for installed CLI commands.
 
-- **Spectral density module** (`mqed.analysis.spectral_density`) computes and plots the photonic spectral density from dyadic Green's function data.
-- **Multi-frequency Sommerfeld GF** now supports parallel computation over a range of photon energies via MPI or Joblib backends.
-- **SGE job-array script** (`mqed/Dyadic_GF/gf_sommerfeld_jobarray.sh`) enables batch parameter sweeps on HPC clusters with a simple TSV parameter file.
-- **4D Green's function storage** supports the full `(N, N, 3, 3)` dyadic Green's function array in HDF5.
-- **MSD definition corrected** — previously computed the variance of displacement instead of the true mean square displacement; the variance is now saved separately as `variance_mean`.
-- **BEM nanorod tutorial** with step-by-step BEM simulation, convergence testing, and a troubleshooting section for new users.
+- **Local config workflow** lets you keep personal YAML files in `local/configs/<group>/` and still run commands with the usual `--config-name=my_config` style.
+- **Hydra-backed terminal help** remains available from the installed CLI, including `--help`, `--hydra-help`, `--cfg`, and `--info`.
+- **Tutorial-first guidance** remains the main onboarding path, while terminal help now serves as a lightweight reminder for command discovery.
 
 See `CHANGELOG.md` for the full release notes.
 
@@ -108,6 +105,27 @@ For step-by-step walkthroughs, see the
 
 ---
 
+## CLI Help
+
+Tutorials and HTML documentation are still the best place for first-time users
+to learn the workflows. For quick terminal lookup, each installed command also
+supports Hydra's built-in help.
+
+```bash
+mqed_plot_msd --help
+mqed_plot_msd --hydra-help
+mqed_plot_msd --cfg job
+mqed_plot_msd --info searchpath
+```
+
+- `--help` shows the app-level config view and common overrides.
+- `--hydra-help` shows Hydra-specific flags such as `--config-name` and
+  `--multirun`.
+- `--cfg job` prints the composed job config without running the simulation.
+- `--info searchpath` shows where Hydra is looking for configuration files.
+
+---
+
 ## Configuration
 
 All commands use [Hydra](https://hydra.cc/) YAML configs under `configs/`.
@@ -120,6 +138,19 @@ All commands use [Hydra](https://hydra.cc/) YAML configs under `configs/`.
 | `configs/BEM/` | BEM geometry and comparison settings |
 | `configs/plots/` | MSD, RMSD, PR, IPR plot settings |
 
+For personal workflows, you can also place local-only YAML files in
+`local/configs/<group>/` and keep using the same command style:
+
+```bash
+mqed_plot_msd --config-name=my_msd
+mqed_nhse --config-name=my_nhse
+```
+
+This keeps shared reproducible configs in `configs/` while letting personal
+experiments live under `local/` without changing your normal CLI habits. Keep
+`local/` excluded locally with `.git/info/exclude` if those files should stay
+off GitHub.
+
 See the [Configuration Reference](https://mqed-qd.github.io/MQED-QD/configuration.html) for full documentation.
 
 ---
@@ -129,6 +160,7 @@ See the [Configuration Reference](https://mqed-qd.github.io/MQED-QD/configuratio
 ```
 Macroscopic-Quantum-Electrodynamics/
 ├── configs/           # Hydra YAML configurations
+├── local/             # Personal local-only configs and notes (not tracked)
 ├── data/
 │   └── example/       # Bundled example data (tracked in git)
 │       ├── GF_data/   # Pre-computed Green's function caches

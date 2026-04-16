@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.1.2 - 2026-04-16
+
+### New features
+
+- Added local Hydra config discovery through `mqed.utils.hydra_local` so
+  personal YAML files under `local/configs/<group>/` can be used with the same
+  CLI `--config-name=...` workflow as shared configs.
+
+### CLI and usability
+
+- Updated all Hydra-powered console scripts to resolve shared and personal
+  config trees together, covering plotting, BEM, Sommerfeld Green's functions,
+  analysis, Lindblad dynamics, and disorder workflows.
+- Restored terminal help for installed commands after the local-config wiring so
+  users can inspect `--help`, `--hydra-help`, `--cfg`, and `--info` directly in
+  the conda environment.
+
+### Documentation
+
+- Updated the README to document the `local/configs/` workflow, clarify that
+  tutorials remain the main user guide, and add a short CLI-help reference for
+  quick terminal discovery.
+
 ## 1.1.1 - 2026-04-15
 
 ### New features
