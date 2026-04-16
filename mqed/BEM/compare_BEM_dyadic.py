@@ -4,6 +4,7 @@ import hydra
 from omegaconf import DictConfig
 from mqed.utils.dgf_data import load_gf_h5
 from hydra.core.hydra_config import HydraConfig
+from mqed.utils.hydra_local import prepare_hydra_config_path
 from pathlib import Path
 
 from mqed.utils.BEM_tools import read_bem_dyadic, read_peff
@@ -51,7 +52,9 @@ def ij_of(comp: str):
     return m[comp[1]], m[comp[2]]
 
 
-@hydra.main(config_path="../../configs/BEM", config_name="compare_bem_dyadic", version_base=None)
+HYDRA_CONFIG_PATH: str = prepare_hydra_config_path("BEM", __file__)
+
+@hydra.main(config_path=HYDRA_CONFIG_PATH, config_name="compare_bem_dyadic", version_base=None)
 def main(cfg: DictConfig):
     output_dir = Path(HydraConfig.get().runtime.output_dir)
     

@@ -9,6 +9,7 @@ from mqed.utils.SI_unit import c,D2CMM,eps0
 from mqed.Dyadic_GF.GF_Sommerfeld import Greens_function_analytical
 from mqed.Dyadic_GF.main import build_grid
 from mqed.utils.logging_utils import setup_loggers_hydra_aware
+from mqed.utils.hydra_local import prepare_hydra_config_path
 from loguru import logger
 
 
@@ -68,7 +69,9 @@ def compute_E0_from_vacuum_G0(calculator, omega, x_m, y_m, zD_m, zA_m, pvec_Cm):
         E0[j, :] = pref * (G0 @ pvec_Cm)
     return E0
 
-@hydra.main(version_base=None, config_path="../../configs/BEM", config_name="compute_peff")
+HYDRA_CONFIG_PATH: str = prepare_hydra_config_path("BEM", __file__)
+
+@hydra.main(version_base=None, config_path=HYDRA_CONFIG_PATH, config_name="compute_peff")
 def main(cfg: DictConfig):
     setup_loggers_hydra_aware()
     # ---- read BEM field data ----

@@ -32,6 +32,7 @@ from joblib import Parallel, delayed
 from tqdm import tqdm
 
 from mqed.utils.logging_utils import setup_loggers_hydra_aware
+from mqed.utils.hydra_local import prepare_hydra_config_path
 from mqed.utils.save_hdf5 import save_dx_h5
 from mqed.utils.joblib_track import tqdm_joblib
 
@@ -323,8 +324,10 @@ def _run_ensemble_mpi(
 # Hydra entry point
 # ---------------------------------------------------------------------------
 
+HYDRA_CONFIG_PATH: str = prepare_hydra_config_path("disorder_nn", __file__)
+
 @hydra.main(
-    config_path="../../configs/disorder_nn",
+    config_path=HYDRA_CONFIG_PATH,
     config_name="nn_chain",
     version_base=None,
 )

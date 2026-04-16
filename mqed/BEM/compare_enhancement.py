@@ -11,6 +11,7 @@ import pandas as pd
 
 from mqed.utils.file_utils import _resolve_input_path
 from mqed.utils.logging_utils import setup_loggers_hydra_aware
+from mqed.utils.hydra_local import prepare_hydra_config_path
 from mqed.utils.dgf_data import load_gf_h5
 from mqed.utils.orientation import spherical_to_cartesian_dipole
 
@@ -90,7 +91,9 @@ def _compute_enhancement_from_h5(
     return x_nm, enh_real, enh_imag
 
 
-@hydra.main(config_path="../../configs/BEM", config_name="compare_enhancement", version_base=None)
+HYDRA_CONFIG_PATH: str = prepare_hydra_config_path("BEM", __file__)
+
+@hydra.main(config_path=HYDRA_CONFIG_PATH, config_name="compare_enhancement", version_base=None)
 def main(cfg: DictConfig) -> None:
     outdir = Path(HydraConfig.get().runtime.output_dir)
     setup_loggers_hydra_aware()

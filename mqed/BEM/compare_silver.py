@@ -12,6 +12,7 @@ from loguru import logger
 from mqed.utils.orientation import spherical_to_cartesian_dipole
 from mqed.utils.dgf_data import load_gf_h5
 from mqed.utils.logging_utils import setup_loggers_hydra_aware
+from mqed.utils.hydra_local import prepare_hydra_config_path
 
 
 def _apply_rcparams(rcparams: dict):
@@ -173,7 +174,9 @@ def _plot_series(ax, x, y, s):
 #         )
 
 
-@hydra.main(config_path="../../configs/BEM", config_name="compare_silver", version_base=None)
+HYDRA_CONFIG_PATH: str = prepare_hydra_config_path("BEM", __file__)
+
+@hydra.main(config_path=HYDRA_CONFIG_PATH, config_name="compare_silver", version_base=None)
 def main(cfg: DictConfig):
     output_dir = Path(HydraConfig.get().runtime.output_dir)
     _apply_rcparams(cfg.plot.rcParams)

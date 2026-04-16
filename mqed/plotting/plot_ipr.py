@@ -10,6 +10,7 @@ from loguru import logger
 
 from mqed.utils.file_utils import _resolve_input_path
 from mqed.utils.logging_utils import setup_loggers_hydra_aware
+from mqed.utils.hydra_local import prepare_hydra_config_path
 
 
 def _load_ipr_and_time(h5_path: Path, *, nmol_hint: int | None = None) -> tuple[np.ndarray, np.ndarray, dict, np.ndarray | None]:
@@ -99,7 +100,9 @@ def _select_x(t_ps: np.ndarray, cfg_ps) -> np.ndarray:
     return np.ones_like(t_ps, dtype=bool)
 
 
-@hydra.main(config_path="../../configs/plots", config_name="ipr", version_base=None)
+HYDRA_CONFIG_PATH: str = prepare_hydra_config_path("plots", __file__)
+
+@hydra.main(config_path=HYDRA_CONFIG_PATH, config_name="ipr", version_base=None)
 def main(cfg: DictConfig) -> None:
     setup_loggers_hydra_aware()
     outdir = Path(HydraConfig.get().runtime.output_dir)

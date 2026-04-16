@@ -116,6 +116,7 @@ from omegaconf import OmegaConf
 
 from mqed.utils.dgf_data import load_gf_h5
 from mqed.utils.logging_utils import setup_loggers_hydra_aware
+from mqed.utils.hydra_local import prepare_hydra_config_path
 from mqed.utils.orientation import resolve_angle_deg, spherical_to_cartesian_dipole
 from mqed.utils.SI_unit import D2CMM, c, eps0, eV_to_J, hbar
 
@@ -299,8 +300,10 @@ def _save_spectral_density_h5(filepath: Path, data: dict) -> None:
                 f.attrs[key] = val
 
 
+HYDRA_CONFIG_PATH: str = prepare_hydra_config_path("analysis", __file__)
+
 @hydra.main(
-    config_path="../../configs/analysis",
+    config_path=HYDRA_CONFIG_PATH,
     config_name="spectral_density",
     version_base=None,
 )

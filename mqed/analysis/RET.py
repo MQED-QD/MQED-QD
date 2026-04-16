@@ -10,6 +10,7 @@ from loguru import logger
 from mqed.utils.orientation import spherical_to_cartesian_dipole, resolve_angle_deg # NEW IMPORT
 from mqed.utils.dgf_data import load_gf_h5 # NEW IMPORT
 from mqed.utils.logging_utils import setup_loggers_hydra_aware
+from mqed.utils.hydra_local import prepare_hydra_config_path
 from mqed.utils.enhancement import compute_enhancement
 
 from pathlib import Path
@@ -154,7 +155,9 @@ def plot_RET(cfg: DictConfig):
         plt.close(fig)
     logger.success(f"RET enhancement calculation complete. Logs saved to: {plot_filepath.absolute()}")
 
-@hydra.main(config_path="../../configs/analysis", config_name="RET", version_base=None)
+HYDRA_CONFIG_PATH: str = prepare_hydra_config_path("analysis", __file__)
+
+@hydra.main(config_path=HYDRA_CONFIG_PATH, config_name="RET", version_base=None)
 def main(cfg: DictConfig) -> None:
     # 1. Get the output directory managed by Hydra
     plot_RET(cfg)

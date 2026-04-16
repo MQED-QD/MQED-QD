@@ -37,6 +37,7 @@ from mqed.utils.SI_unit import eV_to_J, hbar, c
 from mqed.utils.dgf_data import save_gf_h5
 from hydra.core.hydra_config import HydraConfig
 from mqed.utils.logging_utils import setup_loggers_hydra_aware
+from mqed.utils.hydra_local import prepare_hydra_config_path
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -301,7 +302,9 @@ def _run_mpi(
 #  Main entry point
 # ─────────────────────────────────────────────────────────────────────
 
-@hydra.main(config_path="../../configs/Dyadic_GF", config_name="GF_Sommerfeld", version_base=None)
+HYDRA_CONFIG_PATH: str = prepare_hydra_config_path("Dyadic_GF", __file__)
+
+@hydra.main(config_path=HYDRA_CONFIG_PATH, config_name="GF_Sommerfeld", version_base=None)
 def run_simulation(cfg: DictConfig) -> None:
     output_dir = Path(HydraConfig.get().runtime.output_dir)
     setup_loggers_hydra_aware()

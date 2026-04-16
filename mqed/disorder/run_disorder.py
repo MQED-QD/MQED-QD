@@ -27,6 +27,7 @@ from mqed.Lindblad.run_quantum_dynamics import _build_observables, build_initial
 from mqed.utils.dgf_data import load_gf_h5
 from mqed.utils.joblib_track import tqdm_joblib
 from mqed.utils.logging_utils import setup_loggers_hydra_aware
+from mqed.utils.hydra_local import prepare_hydra_config_path
 from mqed.utils.save_hdf5 import save_dx_h5
 
 
@@ -364,8 +365,10 @@ def _run_ensemble_mpi(
     return stats, rank, size, n_total
 
 
+HYDRA_CONFIG_PATH: str = prepare_hydra_config_path("Lindblad", __file__)
+
 @hydra.main(
-    config_path="../../configs/Lindblad",
+    config_path=HYDRA_CONFIG_PATH,
     config_name="quantum_dynamics_disorder",
     version_base=None,
 )

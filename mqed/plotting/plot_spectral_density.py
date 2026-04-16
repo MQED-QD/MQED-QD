@@ -29,6 +29,7 @@ from loguru import logger
 from omegaconf import OmegaConf
 
 from mqed.utils.logging_utils import setup_loggers_hydra_aware
+from mqed.utils.hydra_local import prepare_hydra_config_path
 
 
 # ---------------------------------------------------------------------------
@@ -195,8 +196,10 @@ def _plot_pair_layout(J_eV, energy_eV, cfg):
 # ---------------------------------------------------------------------------
 
 
+HYDRA_CONFIG_PATH: str = prepare_hydra_config_path("plots", __file__)
+
 @hydra.main(
-    config_path="../../configs/plots",
+    config_path=HYDRA_CONFIG_PATH,
     config_name="plt_spec_dens",
     version_base=None,
 )

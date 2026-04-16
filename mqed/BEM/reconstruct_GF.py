@@ -33,6 +33,7 @@ from mqed.BEM.compute_peff import omega_from_lambda_nm
 from mqed.utils.SI_unit import c, hbar, eV_to_J
 from mqed.Dyadic_GF.GF_Sommerfeld import Greens_function_analytical
 from mqed.utils.logging_utils import setup_loggers_hydra_aware
+from mqed.utils.hydra_local import prepare_hydra_config_path
 
 def build_and_save(
     xlsx_path: str,
@@ -205,7 +206,9 @@ def build_and_save_pair(
     logger.success(f"Pair-indexed GF saved: {out_h5} ({N} emitters)")
 
 
-@hydra.main(config_path="../../configs/BEM", config_name="reconstruct_GF",version_base=None)
+HYDRA_CONFIG_PATH: str = prepare_hydra_config_path("BEM", __file__)
+
+@hydra.main(config_path=HYDRA_CONFIG_PATH, config_name="reconstruct_GF",version_base=None)
 def main(cfg: DictConfig):
     '''
     Main function to run the reconstruction of the Green's function.

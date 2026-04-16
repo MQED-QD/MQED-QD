@@ -63,6 +63,7 @@ from mqed.Lindblad.ddi_matrix import build_ddi_matrix_from_Gslice
 from mqed.utils.dgf_data import load_gf_h5
 from mqed.utils.joblib_track import tqdm_joblib
 from mqed.utils.logging_utils import setup_loggers_hydra_aware
+from mqed.utils.hydra_local import prepare_hydra_config_path
 
 try:
     from tqdm import tqdm
@@ -219,8 +220,10 @@ def plot_nn_coupling_histogram(
 # ---------------------------------------------------------------------------
 #  Hydra entrypoint
 # ---------------------------------------------------------------------------
+HYDRA_CONFIG_PATH: str = prepare_hydra_config_path("Lindblad", __file__)
+
 @hydra.main(
-    config_path="../../configs/Lindblad",
+    config_path=HYDRA_CONFIG_PATH,
     config_name="coupling_histogram",
     version_base=None,
 )

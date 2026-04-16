@@ -12,6 +12,7 @@ from mqed.Lindblad.quantum_dynamics import LindbladDynamics, NonHermitianSchDyna
 from mqed.Lindblad.quantum_operator import ipr_callable, position_square_operator, position_operator, site_population_operator, x_shift_conditional_callable, x_shift2_conditional_callable
 from mqed.utils.dgf_data import load_gf_h5
 from mqed.utils.logging_utils import setup_loggers_hydra_aware
+from mqed.utils.hydra_local import prepare_hydra_config_path
 from mqed.utils.save_hdf5 import save_dx_h5
 
 
@@ -331,14 +332,16 @@ def app_run(cfg: DictConfig, output_dir: Optional[Path] = None):
 
     logger.success(f"Simulation complete. Output saved to: {outfile.absolute()}")
 
-@hydra.main(config_path="../../configs/Lindblad", config_name="quantum_dynamics", version_base=None)
+HYDRA_CONFIG_PATH: str = prepare_hydra_config_path("Lindblad", __file__)
+
+@hydra.main(config_path=HYDRA_CONFIG_PATH, config_name="quantum_dynamics", version_base=None)
 def mqed_lindblad(cfg: Optional[DictConfig] = None):
     if cfg is None:
         raise ValueError("Hydra did not provide configuration.")
     cfg.solver.method = "Lindblad"
     app_run(cfg)
 
-@hydra.main(config_path="../../configs/Lindblad", config_name="quantum_dynamics_nhse", version_base=None)
+@hydra.main(config_path=HYDRA_CONFIG_PATH, config_name="quantum_dynamics_nhse", version_base=None)
 def mqed_nhse(cfg: Optional[DictConfig] = None):
     if cfg is None:
         raise ValueError("Hydra did not provide configuration.")
