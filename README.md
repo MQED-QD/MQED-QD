@@ -16,11 +16,11 @@ near plasmonic interfaces using macroscopic quantum electrodynamics (MQED).
 
 ## Latest Update
 
-**Version 1.1.2** adds local Hydra config discovery for personal YAML files and keeps terminal help available for installed CLI commands.
+**Version 1.1.3** adds model-driven dielectric options, segmented spectral sweeps, and richer spectral-density overlay controls.
 
-- **Local config workflow** lets you keep personal YAML files in `local/configs/<group>/` and still run commands with the usual `--config-name=my_config` style.
-- **Hydra-backed terminal help** remains available from the installed CLI, including `--help`, `--hydra-help`, `--cfg`, and `--info`.
-- **Tutorial-first guidance** remains the main onboarding path, while terminal help now serves as a lightweight reminder for command discovery.
+- **Dielectric source selection** now supports `excel`, `constant`, `Drude`, and `Drude-Lorentz` models from YAML.
+- **Segmented spectral grids** let you use sparse off-resonant sampling and dense windows near plasmon resonances.
+- **Spectral-density overlays** now support per-curve multipliers, colors, and linestyles for clearer multi-curve comparisons.
 
 See `CHANGELOG.md` for the full release notes.
 
