@@ -59,6 +59,8 @@ mqed_BEM_reconstruct_GF = "mqed.BEM.reconstruct_GF:main"
 mqed_plot_IPR = "mqed.plotting.plot_ipr:main"
 mqed_plot_PR = "mqed.plotting.plot_pr:main"
 mqed_compare_enhancement = "mqed.BEM.compare_enhancement:main"
+mqed_calc_spec_dens = "mqed.analysis.spectral_density:compute_and_save_spectral_density"
+mqed_plot_spec_dens = "mqed.plotting.plot_spectral_density:plot_spectral_density"
 
 [tool.setuptools]
 include-package-data = true

@@ -28,12 +28,20 @@ font:
 # --- Plot settings ---
 plot_settings:
   # For separation-indexed layout: which Rx indices to plot (0-based)
+  # Example: [0, 3] overlays the curves for Rx index 0 and Rx index 3.
   separation_indices: [0]
+  separation_multipliers: [1.0]
+  separation_colors: null
+  separation_linestyles: null
 
   # For pair-indexed layout: which (α, β) pairs to plot
   # Each entry is [alpha, beta].  [0, 0] = self-term of emitter 0.
+  # Example: [[0, 0], [0, 3]] overlays both pair-resolved curves.
   pair_indices:
     - [0, 0]
+  pair_multipliers: [1.0]
+  pair_colors: null
+  pair_linestyles: null
 
   # Labels
   # For separation layout, {Rx} is replaced by the Rx value in nm

@@ -10,7 +10,15 @@ hydra:
 # --- Our Application Configuration ---
 
 material:
-  # Choose the source type: 'excel' for dispersive, 'constant' for non-dispersive
+  # Choose dielectric source mode (case-insensitive):
+  #   - excel           : interpolate epsilon from wavelength-column Excel data
+  #   - constant        : fixed complex epsilon independent of frequency
+  #   - Drude           : eps_inf - omega_p^2 / (omega^2 + i*gamma*omega)
+  #   - Drude-Lorentz   : Drude term + Lorentz oscillators
+  #
+  # Notes on model parameter units:
+  #   For every frequency-like parameter, provide exactly one key in either
+  #   eV or rad/s form, e.g. omega_p_eV OR omega_p_rad_s (not both).
   source_type: excel
 
   # --- Settings for a CONSTANT material ---
@@ -23,6 +31,33 @@ material:
     filepath: "DielectricFunction/dielectric function.xlsx"
     sheet_name: "Ag_BEM"
 
+  # --- Settings for a DRUDE model ---
+  # Used only if source_type is 'Drude' (or 'drude').
+  drude_config:
+    eps_inf: 1.0
+    omega_p_eV: 9.01
+    gamma_eV: 0.048
+
+  # --- Settings for a DRUDE-LORENTZ model ---
+  # Used only if source_type is 'Drude-Lorentz' (or equivalent normalized form).
+  # Model implemented in DataProvider:
+  #   eps = eps_inf - omega_p^2/(omega^2 + i*gamma_D*omega)
+  #         + sum_j [ f_j*omega_0j^2/(omega_0j^2 - omega^2 - i*gamma_j*omega) ]
+  drude_lorentz_config:
+    eps_inf: 1.0
+    omega_p_eV: 9.01
+    gamma_eV: 0.048
+    oscillators:
+      # strength = f_j (dimensionless)
+      # omega_0_* = resonance frequency
+      # gamma_* = damping
+      - strength: 0.85
+        omega_0_eV: 3.8
+        gamma_eV: 0.25
+      - strength: 0.20
+        omega_0_eV: 4.9
+        gamma_eV: 0.35
+
 simulation:
   material: "Ag" # Material surface
   spectral_param: "energy_eV" # Choose between 'wavelength_nm' or 'energy_eV'
@@ -32,11 +67,15 @@ simulation:
   # Single value: 1.50 (int or float)
   # Dictionary: {min: 1.0, max: 3.0, points: 201} (for a range)
   # List: [1.0, 1.5, 2.0]
+  # Piecewise list of ranges:
+  #   - {min: 0.0, max: 3.0, points: 21}
+  #   - {min: 3.0, max: 4.5, points: 301}
+  #   - {min: 4.5, max: 6.0, points: 21}
     min: 1.0
     max: 1.0 # Set min and max to the same value for a single point
     points: 1
-  
-  wavelength_nm: # same usage as energy_eV
+
+  wavelength_nm: # same usage as energy_eV, including piecewise range lists
     min: 500.0
     max: 500.0
     points: 1

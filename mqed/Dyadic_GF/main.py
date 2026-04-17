@@ -41,8 +41,61 @@ from mqed.utils.hydra_local import prepare_hydra_config_path
 
 
 # ─────────────────────────────────────────────────────────────────────
-#  Grid builder (unchanged)
+#  Grid builder
 # ─────────────────────────────────────────────────────────────────────
+
+def _build_linspace_segment(segment) -> np.ndarray:
+    """Build one uniformly spaced segment from a dict-like config."""
+    if segment.points <= 0:
+        raise ValueError("Spectral grid segments must have a positive number of points.")
+    if segment.min > segment.max:
+        raise ValueError("Spectral grid segments must satisfy min <= max.")
+
+    return np.linspace(segment.min, segment.max, segment.points, dtype=float)
+
+
+def _deduplicate_sorted_grid(values: np.ndarray, *companions: np.ndarray) -> tuple[np.ndarray, ...]:
+    """Remove repeated neighboring points from a sorted grid and companion arrays."""
+    if values.size <= 1:
+        return (values, *companions)
+
+    keep = np.ones(values.shape[0], dtype=bool)
+    keep[1:] = ~np.isclose(values[1:], values[:-1])
+    return (values[keep], *(companion[keep] for companion in companions))
+
+
+def _build_piecewise_grid(segments) -> np.ndarray:
+    """Build a piecewise grid while avoiding duplicate boundary points.
+
+    This lets Hydra configs use multiple spectral windows with different
+    resolutions, for example a dense window around a plasmon resonance and
+    sparse windows elsewhere.
+    """
+    arrays = []
+    segment_list = list(segments)
+    for index, segment in enumerate(segment_list):
+        if not isinstance(segment, (dict, DictConfig)):
+            raise TypeError(
+                "Piecewise spectral grids must be a list of {min, max, points} segments."
+            )
+
+        endpoint = index == len(segment_list) - 1
+        segment_array = np.linspace(
+            segment.min,
+            segment.max,
+            segment.points,
+            endpoint=endpoint,
+            dtype=float,
+        )
+        arrays.append(segment_array)
+
+    if not arrays:
+        return np.array([], dtype=float)
+
+    grid = np.concatenate(arrays)
+    grid, = _deduplicate_sorted_grid(grid)
+    return grid
+
 
 def build_grid(config):
     """Builds a 1-D numpy array from flexible Hydra config input.
@@ -51,13 +104,18 @@ def build_grid(config):
         - Single value:  ``2.0``              →  ``[2.0]``
         - List:          ``[1.0, 2.0, 3.0]``  →  as-is
         - Dict/linspace: ``{min: 1.0, max: 3.0, points: 5}``
+        - Piecewise:     ``[{min: 0.0, max: 3.0, points: 21}, ...]``
     """
     if isinstance(config, (float, int)):
         return np.array([config], dtype=float)
     elif isinstance(config, (list, ListConfig)):
+        if config and all(isinstance(item, (dict, DictConfig)) for item in config):
+            return _build_piecewise_grid(config)
         return np.array(config, dtype=float)
     elif isinstance(config, (dict, DictConfig)):
-        return np.linspace(config.min, config.max, config.points, dtype=float)
+        if "segments" in config:
+            return _build_piecewise_grid(config.segments)
+        return _build_linspace_segment(config)
     else:
         raise TypeError(f"Unsupported spectral config type: {type(config)}")
 
@@ -329,6 +387,10 @@ def run_simulation(cfg: DictConfig) -> None:
     elif kind == "wavelength_nm":
         lambda_nm = build_grid(sim_params.wavelength_nm)
         energy_ev_array = 2 * np.pi * hbar * c / (lambda_nm * 1e-9 * eV_to_J)
+        sort_idx = np.argsort(energy_ev_array)
+        energy_ev_array = energy_ev_array[sort_idx]
+        lambda_nm = lambda_nm[sort_idx]
+        energy_ev_array, lambda_nm = _deduplicate_sorted_grid(energy_ev_array, lambda_nm)
     else:
         raise ValueError(f"Unknown spectral_param: {kind}")
 

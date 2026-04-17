@@ -36,6 +36,8 @@ cd "${REPO_ROOT}"
 MPI_NPROC="${NSLOTS:-8}"
 
 # Hydra config name (no .yaml extension).  Override via GF_CONFIG_NAME.
+# Set GF_CONFIG_NAME=GF_Sommerfeld_nonuniform_example to use the local
+# piecewise-grid example in local/configs/Dyadic_GF/.
 CONFIG_NAME="${GF_CONFIG_NAME:-GF_Sommerfeld_customed}"
 
 # ── Launch ───────────────────────────────────────────────────────────────────
@@ -48,17 +50,26 @@ CONFIG_NAME="${GF_CONFIG_NAME:-GF_Sommerfeld_customed}"
 #   • simulation.position.zA_nm     — acceptor height (also sets zA in metres)
 #   • simulation.material           — material key
 
+# mpirun -np "${MPI_NPROC}" mqed_GF_Sommerfeld \
+#   --config-name "${CONFIG_NAME}" \
+#   parallel.backend=mpi \
+#   parallel.mpi_auto_launch=false \
+#   parallel.mpi_nproc="${MPI_NPROC}" \
+#   simulation.energy_eV.min="3.30" \
+#   simulation.energy_eV.max="3.70" \
+#   simulation.energy_eV.points="100" \
+#   simulation.position.zD="1.0e-9" \
+#   simulation.position.zD_nm="1" \
+#   simulation.position.zA="1.0e-9" \
+#   simulation.material="Ag" \
+
+# Example CLI override block for a nonuniform energy grid.
 mpirun -np "${MPI_NPROC}" mqed_GF_Sommerfeld \
   --config-name "${CONFIG_NAME}" \
   parallel.backend=mpi \
   parallel.mpi_auto_launch=false \
   parallel.mpi_nproc="${MPI_NPROC}" \
-  simulation.energy_eV.min="3.30" \
-  simulation.energy_eV.max="3.70" \
-  simulation.energy_eV.points="100" \
   simulation.position.zD="1.0e-9" \
   simulation.position.zD_nm="1" \
   simulation.position.zA="1.0e-9" \
-  simulation.material="Ag" \
-
-
+  simulation.material="Ag"

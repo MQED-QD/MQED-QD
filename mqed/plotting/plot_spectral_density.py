@@ -15,6 +15,9 @@ Usage::
 Configuration via ``configs/plots/spectral_density.yaml``.
 """
 
+from ast import literal_eval
+from typing import Any
+
 import matplotlib
 
 matplotlib.use("Agg")
@@ -73,6 +76,182 @@ def _apply_font_config(cfg):
     })
 
 
+def _parse_index_selection(raw_selection: Any, default_value: Any, selection_name: str) -> Any:
+    """Normalize Hydra index selection values into plain Python objects."""
+    if raw_selection is None:
+        return default_value
+
+    if isinstance(raw_selection, str):
+        stripped = raw_selection.strip()
+        if not stripped:
+            return default_value
+        try:
+            return literal_eval(stripped)
+        except (SyntaxError, ValueError) as exc:
+            raise ValueError(
+                f"Invalid {selection_name}: {raw_selection!r}. "
+                "Use Python-style list syntax such as [0, 3] or [[0, 0], [0, 3]]."
+            ) from exc
+
+    if hasattr(raw_selection, "__iter__") and not isinstance(raw_selection, (bytes, bytearray)):
+        return list(raw_selection)
+
+    return raw_selection
+
+
+def _normalize_separation_indices(raw_selection: Any) -> list[int]:
+    """Return a validated list of separation indices."""
+    normalized = _parse_index_selection(
+        raw_selection,
+        default_value=[0],
+        selection_name="plot_settings.separation_indices",
+    )
+
+    if isinstance(normalized, (int, float)):
+        return [int(normalized)]
+
+    if not isinstance(normalized, list):
+        raise ValueError(
+            "plot_settings.separation_indices must be an integer or a list of integers."
+        )
+
+    if not normalized:
+        return [0]
+
+    return [int(idx) for idx in normalized]
+
+
+def _is_nested_index_collection(value: Any) -> bool:
+    """Return True when a selection entry is itself a collection of indices."""
+    return hasattr(value, "__iter__") and not isinstance(value, (str, bytes, bytearray))
+
+
+def _normalize_pair_indices(raw_selection: Any) -> list[list[int]]:
+    """Return a validated list of [alpha, beta] pair indices."""
+    normalized = _parse_index_selection(
+        raw_selection,
+        default_value=[[0, 0]],
+        selection_name="plot_settings.pair_indices",
+    )
+
+    if not isinstance(normalized, list):
+        raise ValueError(
+            "plot_settings.pair_indices must be a pair like [0, 3] or a list of pairs."
+        )
+
+    if not normalized:
+        return [[0, 0]]
+
+    if len(normalized) == 2 and all(not _is_nested_index_collection(item) for item in normalized):
+        first = normalized[0]
+        second = normalized[1]
+        return [[int(first), int(second)]]
+
+    pair_indices = []
+    for pair in normalized:
+        if not _is_nested_index_collection(pair) or len(pair) != 2:
+            raise ValueError(
+                "Each pair in plot_settings.pair_indices must have exactly two entries."
+            )
+        pair_indices.append([int(pair[0]), int(pair[1])])
+
+    return pair_indices
+
+
+def _normalize_curve_scales(raw_scales: Any, count: int, setting_name: str) -> list[float]:
+    """Return one multiplicative scale factor per plotted curve."""
+    normalized = _parse_index_selection(
+        raw_scales,
+        default_value=[1.0] * count,
+        selection_name=setting_name,
+    )
+
+    if isinstance(normalized, (int, float)):
+        return [float(normalized)] * count
+
+    if not isinstance(normalized, list):
+        raise ValueError(f"{setting_name} must be a number or a list of numbers.")
+
+    if not normalized:
+        return [1.0] * count
+
+    if len(normalized) == 1 and count > 1:
+        return [float(normalized[0])] * count
+
+    if len(normalized) != count:
+        raise ValueError(
+            f"{setting_name} must contain {count} value(s) to match the selected curves."
+        )
+
+    return [float(scale) for scale in normalized]
+
+
+def _normalize_curve_styles(raw_styles: Any, count: int, setting_name: str) -> list[Any]:
+    """Return one optional style entry per plotted curve."""
+    if raw_styles is None:
+        return [None] * count
+
+    if isinstance(raw_styles, str):
+        return [raw_styles] * count
+
+    if not isinstance(raw_styles, list):
+        raw_styles = list(raw_styles)
+
+    if not raw_styles:
+        return [None] * count
+
+    if len(raw_styles) == 1 and count > 1:
+        return [raw_styles[0]] * count
+
+    if len(raw_styles) != count:
+        raise ValueError(
+            f"{setting_name} must contain {count} value(s) to match the selected curves."
+        )
+
+    return list(raw_styles)
+
+
+def _resolve_curve_multipliers(ps, primary_key: str, legacy_key: str, count: int) -> list[float]:
+    """Load curve multipliers with a backwards-compatible fallback key."""
+    raw_multipliers = ps.get(primary_key, None)
+    if raw_multipliers is None:
+        raw_multipliers = ps.get(legacy_key, None)
+
+    return _normalize_curve_scales(raw_multipliers, count=count, setting_name=f"plot_settings.{primary_key}")
+
+
+def _format_scaled_label(base_label: str, scale_factor: float) -> str:
+    """Append a multiplier annotation to the legend label when needed."""
+    if scale_factor == 1.0:
+        return base_label
+
+    if base_label.startswith("$") and base_label.endswith("$"):
+        return f"{base_label[:-1]}\\,\\times\\,{scale_factor:g}$"
+
+    return f"{base_label} ×{scale_factor:g}"
+
+
+def _validate_curve_multiplier(scale_factor: float, yscale: str, setting_name: str) -> None:
+    """Reject invalid multipliers for the active y-axis scale."""
+    if yscale == "log" and scale_factor <= 0:
+        raise ValueError(f"{setting_name} values must be positive when plot_settings.yscale is 'log'.")
+
+
+def _resolve_curve_styles(ps, prefix: str, count: int) -> tuple[list[Any], list[Any]]:
+    """Load optional per-curve colors and linestyles for one plot layout."""
+    colors = _normalize_curve_styles(
+        ps.get(f"{prefix}_colors", None),
+        count=count,
+        setting_name=f"plot_settings.{prefix}_colors",
+    )
+    linestyles = _normalize_curve_styles(
+        ps.get(f"{prefix}_linestyles", None),
+        count=count,
+        setting_name=f"plot_settings.{prefix}_linestyles",
+    )
+    return colors, linestyles
+
+
 def _plot_separation_layout(J_eV, energy_eV, Rx_nm, cfg):
     """Plot J(ω) for separation-indexed data.
 
@@ -81,24 +260,44 @@ def _plot_separation_layout(J_eV, energy_eV, Rx_nm, cfg):
     ps = cfg.plot_settings
 
     # Select which separations to plot
-    sep_indices = list(ps.get("separation_indices", [0]))
-    if not sep_indices:
-        sep_indices = [0]
+    sep_indices = _normalize_separation_indices(ps.get("separation_indices", [0]))
+    yscale = ps.get("yscale", "linear")
+    scale_factors = _resolve_curve_multipliers(
+        ps,
+        primary_key="separation_multipliers",
+        legacy_key="separation_scale_factors",
+        count=len(sep_indices),
+    )
+    colors, linestyles = _resolve_curve_styles(ps, prefix="separation", count=len(sep_indices))
 
     fig, ax = plt.subplots(figsize=tuple(ps.get("figsize", [8, 5])))
 
-    for idx in sep_indices:
+    for idx, scale_factor, color, linestyle in zip(
+        sep_indices,
+        scale_factors,
+        colors,
+        linestyles,
+    ):
         if idx >= len(Rx_nm):
             logger.warning(f"Separation index {idx} out of range "
                            f"(max {len(Rx_nm) - 1}), skipping.")
             continue
 
+        _validate_curve_multiplier(
+            scale_factor,
+            yscale=yscale,
+            setting_name="plot_settings.separation_multipliers",
+        )
+
         label = ps.get("label_template", "Rx = {Rx:.1f} nm").format(Rx=Rx_nm[idx])
+        label = _format_scaled_label(label, scale_factor)
         ax.plot(
             energy_eV,
-            J_eV[idx, :],
+            scale_factor * J_eV[idx, :],
             lw=ps.get("lw", 1.5),
             label=label,
+            color=color,
+            linestyle=linestyle,
         )
 
     ax.set_xlabel(ps.get("xlabel", r"Energy (eV)"))
@@ -107,7 +306,7 @@ def _plot_separation_layout(J_eV, energy_eV, Rx_nm, cfg):
     title_template = ps.get("title", r"Spectral Density $J(\omega)$")
     ax.set_title(title_template)
 
-    if ps.get("yscale", "linear") == "log":
+    if yscale == "log":
         ax.set_yscale("log")
     if ps.get("xscale", "linear") == "log":
         ax.set_xscale("log")
@@ -123,7 +322,10 @@ def _plot_separation_layout(J_eV, energy_eV, Rx_nm, cfg):
     if ps.get("grid", True):
         ax.grid(True, alpha=0.3)
 
-    ax.legend()
+    if ax.lines:
+        ax.legend()
+    else:
+        logger.warning("No valid separation indices were plotted.")
     fig.tight_layout()
     return fig
 
@@ -137,29 +339,49 @@ def _plot_pair_layout(J_eV, energy_eV, cfg):
 
     # Select which pairs to plot: list of [alpha, beta] pairs
     # Default: self-term of emitter 0
-    pair_indices = list(ps.get("pair_indices", [[0, 0]]))
-    if not pair_indices:
-        pair_indices = [[0, 0]]
+    pair_indices = _normalize_pair_indices(ps.get("pair_indices", [[0, 0]]))
+    yscale = ps.get("yscale", "linear")
+    scale_factors = _resolve_curve_multipliers(
+        ps,
+        primary_key="pair_multipliers",
+        legacy_key="pair_scale_factors",
+        count=len(pair_indices),
+    )
+    colors, linestyles = _resolve_curve_styles(ps, prefix="pair", count=len(pair_indices))
 
     fig, ax = plt.subplots(figsize=tuple(ps.get("figsize", [8, 5])))
 
     N = J_eV.shape[0]
-    for pair in pair_indices:
+    for pair, scale_factor, color, linestyle in zip(
+        pair_indices,
+        scale_factors,
+        colors,
+        linestyles,
+    ):
         alpha, beta = int(pair[0]), int(pair[1])
         if alpha >= N or beta >= N:
             logger.warning(f"Pair ({alpha}, {beta}) out of range "
                            f"(N={N}), skipping.")
             continue
 
+        _validate_curve_multiplier(
+            scale_factor,
+            yscale=yscale,
+            setting_name="plot_settings.pair_multipliers",
+        )
+
         label = ps.get(
             "label_template",
             r"$J_{{\alpha={a},\beta={b}}}(\omega)$"
         ).format(a=alpha, b=beta)
+        label = _format_scaled_label(label, scale_factor)
         ax.plot(
             energy_eV,
-            J_eV[alpha, beta, :],
+            scale_factor * J_eV[alpha, beta, :],
             lw=ps.get("lw", 1.5),
             label=label,
+            color=color,
+            linestyle=linestyle,
         )
 
     ax.set_xlabel(ps.get("xlabel", r"Energy (eV)"))
@@ -170,7 +392,7 @@ def _plot_pair_layout(J_eV, energy_eV, cfg):
     )
     ax.set_title(title_template)
 
-    if ps.get("yscale", "linear") == "log":
+    if yscale == "log":
         ax.set_yscale("log")
     if ps.get("xscale", "linear") == "log":
         ax.set_xscale("log")
@@ -186,7 +408,10 @@ def _plot_pair_layout(J_eV, energy_eV, cfg):
     if ps.get("grid", True):
         ax.grid(True, alpha=0.3)
 
-    ax.legend()
+    if ax.lines:
+        ax.legend()
+    else:
+        logger.warning("No valid pair indices were plotted.")
     fig.tight_layout()
     return fig
 
@@ -203,12 +428,15 @@ HYDRA_CONFIG_PATH: str = prepare_hydra_config_path("plots", __file__)
     config_name="plt_spec_dens",
     version_base=None,
 )
-def plot_spectral_density(cfg) -> None:
+def plot_spectral_density(cfg=None) -> None:
     """Plot spectral density from pre-computed HDF5 data.
 
     This is the Hydra CLI entry point.  Configuration is loaded from
     ``configs/plots/plt_spec_dens.yaml``.
     """
+    if cfg is None:
+        raise ValueError("Hydra did not provide a plotting configuration.")
+
     output_dir = Path(HydraConfig.get().runtime.output_dir)
     setup_loggers_hydra_aware()
 

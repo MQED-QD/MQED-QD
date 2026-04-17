@@ -16,7 +16,9 @@ By the end you will know how to:
 
 - run the ``mqed_GF_Sommerfeld`` command with default and custom parameters,
 - specify single-frequency, multi-frequency (list), and swept-frequency (dict)
-  inputs,
+  inputs (including segmented nonuniform windows),
+- choose dielectric models from YAML (``excel``, ``constant``, ``Drude``,
+  ``Drude-Lorentz``),
 - accelerate multi-frequency sweeps with **joblib** (multicore) or **MPI**
   (cluster) parallelism,
 - locate and interpret the HDF5 output file.
@@ -74,6 +76,69 @@ You can override any configuration key on the command line using
        simulation.energy_eV.points=11
 
 This generates 11 linearly spaced energies from 1.0 to 2.0 eV.
+
+**Segmented nonuniform sweep (piecewise ranges)**
+
+.. code-block:: bash
+
+   mqed_GF_Sommerfeld \
+       simulation.energy_eV.segments[0].min=0.0 \
+       simulation.energy_eV.segments[0].max=3.0 \
+       simulation.energy_eV.segments[0].points=21 \
+       simulation.energy_eV.segments[1].min=3.0 \
+       simulation.energy_eV.segments[1].max=4.5 \
+       simulation.energy_eV.segments[1].points=301 \
+       simulation.energy_eV.segments[2].min=4.5 \
+       simulation.energy_eV.segments[2].max=6.0 \
+       simulation.energy_eV.segments[2].points=21
+
+This is useful when the spectrum is mostly flat away from resonance and needs
+fine resolution only near the plasmonic window.
+
+
+Choosing the dielectric model
+-----------------------------
+
+The dielectric source is selected by ``material.source_type``:
+
+- ``excel``: interpolate from the configured Excel sheet
+- ``constant``: use a fixed complex permittivity
+- ``Drude``: use the Drude model
+- ``Drude-Lorentz``: use Drude + Lorentz oscillators
+
+Examples:
+
+.. code-block:: bash
+
+   # Constant epsilon
+   mqed_GF_Sommerfeld material.source_type=constant material.constant_value="9.0+0.2j"
+
+.. code-block:: bash
+
+   # Drude model with eV parameters
+   mqed_GF_Sommerfeld material.source_type=Drude \
+       material.drude_config.eps_inf=1.0 \
+       material.drude_config.omega_p_eV=9.01 \
+       material.drude_config.gamma_eV=0.048
+
+.. code-block:: bash
+
+   # Drude-Lorentz model with two oscillators
+   mqed_GF_Sommerfeld material.source_type=Drude-Lorentz \
+       material.drude_lorentz_config.eps_inf=1.0 \
+       material.drude_lorentz_config.omega_p_eV=9.01 \
+       material.drude_lorentz_config.gamma_eV=0.048 \
+       material.drude_lorentz_config.oscillators[0].strength=0.85 \
+       material.drude_lorentz_config.oscillators[0].omega_0_eV=3.8 \
+       material.drude_lorentz_config.oscillators[0].gamma_eV=0.25 \
+       material.drude_lorentz_config.oscillators[1].strength=0.20 \
+       material.drude_lorentz_config.oscillators[1].omega_0_eV=4.9 \
+       material.drude_lorentz_config.oscillators[1].gamma_eV=0.35
+
+.. note::
+
+   For each frequency-like model parameter, provide exactly one unit key:
+   ``*_eV`` or ``*_rad_s``.
 
 .. tip::
 
@@ -217,21 +282,37 @@ annotations.
 
    # ── Material ────────────────────────────────────────────
    material:
-     source_type: excel          # 'excel' (dispersive) or 'constant'
+     source_type: excel          # excel, constant, Drude, Drude-Lorentz
      constant_value: 9.0+0.0j   # used only when source_type = 'constant'
      excel_config:
        filepath: "DielectricFunction/dielectric function.xlsx"
        sheet_name: "Ag_BEM"
+     drude_config:               # used only when source_type = 'Drude'
+       eps_inf: 1.0
+       omega_p_eV: 9.01          # or omega_p_rad_s
+       gamma_eV: 0.048           # or gamma_rad_s
+     drude_lorentz_config:       # used only when source_type = 'Drude-Lorentz'
+       eps_inf: 1.0
+       omega_p_eV: 9.01
+       gamma_eV: 0.048
+       oscillators:
+         - strength: 0.85
+           omega_0_eV: 3.8       # or omega_0_rad_s
+           gamma_eV: 0.25        # or gamma_rad_s
 
    # ── Simulation ──────────────────────────────────────────
    simulation:
      material: "Ag"             # label used in the output filename
      spectral_param: "energy_eV"  # 'energy_eV' or 'wavelength_nm'
 
-     energy_eV:                 # single value, dict {min, max, points}, or list
+     energy_eV:                 # single value, list, dict, or piecewise segments
        min: 1.0
        max: 1.0
        points: 1
+       # segments:
+       #   - {min: 0.0, max: 3.0, points: 21}
+       #   - {min: 3.0, max: 4.5, points: 301}
+       #   - {min: 4.5, max: 6.0, points: 21}
 
      wavelength_nm:             # same three formats as energy_eV
        min: 500.0
@@ -274,7 +355,7 @@ annotations.
      - Description
      - Default
    * - ``material.source_type``
-     - Source of the dielectric function (``excel`` or ``constant``)
+     - Source of the dielectric function (``excel``, ``constant``, ``Drude``, ``Drude-Lorentz``)
      - ``excel``
    * - ``simulation.spectral_param``
      - Which spectral unit to use (``energy_eV`` or ``wavelength_nm``)

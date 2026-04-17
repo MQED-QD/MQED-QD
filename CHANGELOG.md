@@ -1,5 +1,36 @@
 # Changelog
 
+## 1.1.3 - 2026-04-17
+
+### New features
+
+- Added configurable dielectric-source models in
+  `mqed.Dyadic_GF.data_provider.DataProvider` with YAML-driven `source_type`
+  support for `excel`, `constant`, `Drude`, and `Drude-Lorentz`.
+- Added model-parameter parsing for both `*_eV` and `*_rad_s` keys, plus
+  oscillator support for Drude-Lorentz fits.
+- Added nonuniform segmented spectral grids in `build_grid` for Sommerfeld and
+  shared BEM workflows (`segments: [{min, max, points}, ...]`).
+- Added spectral-density overlay controls for per-curve multipliers, colors,
+  and linestyles in `mqed.plotting.plot_spectral_density`.
+
+### Documentation
+
+- Updated `docs/source/tutorials/GF_Sommerfeld.rst` with segmented energy-sweep
+  examples and dielectric-model usage (`Drude` / `Drude-Lorentz`).
+- Expanded `configs/Dyadic_GF/GF_Sommerfeld.yaml` annotations to document model
+  equations and parameter-unit conventions.
+- Added local example configs under `local/configs/Dyadic_GF/` for nonuniform
+  grids and Drude-Lorentz material setup.
+
+### Tests
+
+- Added `test/test_data_provider_models.py` to validate source-type selection,
+  Drude/Drude-Lorentz formulas, unit-key validation, and error handling.
+- Added tests for segmented grid handling and spectral-density plotting
+  multipliers/styles in `test/test_build_grid.py` and
+  `test/test_plot_spectral_density.py`.
+
 ## 1.1.2 - 2026-04-16
 
 ### New features
