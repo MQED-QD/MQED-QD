@@ -199,14 +199,12 @@ open build/html/index.html        # macOS
 If you use MQED-QD in your research, please cite:
 
 ```bibtex
-@misc{liu2026mqedqdopensourcepackagequantum,
-      title={MQED-QD: An Open-Source Package for Quantum Dynamics Simulation in Complex Dielectric Environments}, 
-      author={Guangming Liu and Siwei Wang and Hsing-Ta Chen},
-      year={2026},
-      eprint={2603.05378},
-      archivePrefix={arXiv},
-      primaryClass={physics.chem-ph},
-      url={https://arxiv.org/abs/2603.05378}, 
+@article{liu2026mqed,
+  title={MQED-QD: An Open-Source Package for Quantum Dynamics Simulation in Complex Dielectric Environments},
+  author={Liu, Guangming and Wang, Siwei and Chen, Hsing-Ta},
+  journal={Journal of Chemical Theory and Computation},
+  year={2026},
+  publisher={ACS Publications}
 }
 ```
 
