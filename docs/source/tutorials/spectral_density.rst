@@ -34,7 +34,7 @@ eV.
 Prerequisites
 =============
 
-* A working MQED installation (see :doc:`/getting_started`).
+* A working MQED installation (see :doc:`/getting-started`).
 * A dyadic Green's function HDF5 file produced by one of the GF tutorials
   (e.g. :ref:`tutorial-gf-sommerfeld`).  The file must contain the
   imaginary part of the GF together with the energy and position grids.
@@ -45,29 +45,154 @@ Quick start
 .. tip::
 
    If you have already run the :ref:`tutorial-gf-sommerfeld` tutorial, the
-   default configuration expects the output at ``./data/gf_data.h5``.
+   default configuration expects the output at ``./data/gf_data.hdf5``.
    Adjust the ``input_file`` path if your file is elsewhere.
 
 **Step 1 — Compute the spectral density**
+Here we will continue with the GF data from the :ref:`tutorial-gf-sommerfeld` tutorial
+and use the reference [Chuang2022]_ to compute the spectral density so that 
+we could reproduce Figure 2C in that paper. 
+**We have put the dyadic Green's function data at** 
+``./data/example/GF_data/Fresnel_GF_planar_Ag_height_1nm_Emin_0.10_Emax_6.00_359pts_Rx_33nm_34pts.hdf5``
+for user to follow along. The configuration file for this tutorial is
+``configs/analysis/spec_dens_example.yaml``, user can modify the ``input_file`` field to point to the above file:
+
+.. code-block:: yaml
+
+  input_file: "${oc.env:MQED_ROOT,./data}/example/GF_data/Fresnel_GF_planar_Ag_height_1nm_Emin_0.10_Emax_6.00_359pts_Rx_33nm_34pts.hdf5"
+
+  # --- Output ---
+  output_prefix: "spec_dens_${mu_D_debye}D_${mu_A_debye}D"
+
+  # --- Dipole moment magnitudes (Debye) ---
+  mu_D_debye: 10
+  mu_A_debye: 10
+
+  # --- Dipole orientations ---
+  # theta_deg: polar angle from z-axis (degrees).  Use 'magic' for the magic
+  #            angle θ ≈ 54.74° that averages orientational effects.
+  # phi_deg:   azimuthal angle in x-y plane (degrees).  Use 'magic' for
+  #            isotropic averaging.
+  orientations:
+    donor:
+      theta_deg: 90.0
+      phi_deg: 0.0
+    acceptor:
+      theta_deg: 90.0
+      phi_deg: 0.0
+
+Here we set the both donor and acceptor dipoles to be x-oriented with a magnitude of 10 Debye.
+User can run the following command to compute the spectral density:
 
 .. code-block:: bash
 
-   python -m mqed.analysis.spectral_density
+   python -m mqed.analysis.spectral_density --config-name spec_dens_example
+
+Or
+
+.. code-block:: bash
+
+   mqed_calc_spec_dens --config-name spec_dens_example
 
 This reads the default configuration from
-``configs/analysis/spectral_density.yaml``, loads the GF data, evaluates
-the spectral density, and writes the result to an HDF5 file.
+``configs/analysis/spec_dens_example.yaml``, loads the GF data,
+computes the spectral density according to the specified parameters,
+and save the result in an HDF5 file.
+**The output file**  ``spec_dens_10D_10D_Emin_0.10_Emax_6.00_359pts_height_1nm.hdf5``
+**will be used in the next step for plotting the spectral density curve.**
 
 **Step 2 — Plot the spectral density**
 
 .. code-block:: bash
 
-   python -m mqed.plotting.plot_spectral_density
+   python -m mqed.plotting.plot_spectral_density --config-name=plt_spec_dens_example
+
+Or 
+
+.. code-block:: bash
+
+   mqed_plot_spec_dens --config-name=plt_spec_dens_example
 
 This reads the default configuration from
-``configs/plots/spectral_density.yaml``, loads the spectral density HDF5
-file produced in Step 1, and saves a publication-ready PNG figure.
+``configs/plots/plt_spec_dens_example.yaml``, loads the spectral density HDF5
+file produced in Step 1, and saves a publication-ready PNG figure. User 
+can modify the configuration file to adjust the plot settings (e.g., axis labels, title, line styles) 
+or override specific parameters from the command line.
 
+The configuration looks like this:
+
+.. code-block:: yaml
+
+   # configs/plots/plt_spec_dens_example.yaml
+
+  # --- Input ---
+  # Path to the spectral density HDF5 file produced by
+  # mqed.analysis.spectral_density.
+  input_file: "${oc.env:MQED_ROOT,./data}/example/spec_dens_data/spec_dens_10D_10D_Emin_0.10_Emax_6.00_359pts_height_1nm.hdf5"
+
+  # --- Font settings (following plot_pr.py conventions) ---
+  font:
+    family: "Arial"
+    labelsize: 18
+    ticksize: 16
+    legendsize: 14
+    titlesize: 18
+    labelweight: "bold"
+    titleweight: "bold"
+
+  # --- Plot settings ---
+  plot_settings:
+    # For separation-indexed layout: which Rx indices to plot (0-based)
+    # Example: [0, 3] overlays the curves for Rx index 0 and Rx index 3.
+    separation_indices: [0,3,33]
+    separation_multipliers: [1.0,1.0,100]
+
+    # For pair-indexed layout: which (α, β) pairs to plot
+    # Each entry is [alpha, beta].  [0, 0] = self-term of emitter 0.
+    # Example: [[0, 0], [0, 3]] overlays both pair-resolved curves.
+    pair_indices:
+      - [0, 0]
+      - [0, 3]
+    pair_multipliers: [1.0,1.0]
+
+    # Labels
+    # For separation layout, {Rx} is replaced by the Rx value in nm
+    label_template: "Rx = {Rx:.1f} nm"
+    xlabel: "Energy (eV)"
+    ylabel: "$J(\\omega)$ (eV)"
+    title: "Spectral Density $J(\\omega)$"
+
+    # Axis scales: "linear" or "log"
+    xscale: "linear"
+    yscale: "linear"
+
+    # Optional axis limits (null = auto)
+    x_range_eV: [0,6]
+    y_range: null
+
+    # Style
+    figsize: [8, 6]
+    lw: 1.5
+    dpi: 300
+    grid: true
+
+    # Output
+    save_plot: true
+    filename: "Spec_dens_drude.png"
+
+The output figure will look like this: (identical to the reference [Chuang2022]_ Figure 2C up to axis labels and styling):
+
+.. figure:: /_static/tutorials/spectral_density/Spec_dens_drude.png
+   :width: 500
+   :align: center
+
+.. note::
+  Here our tutorial performs simulation on planar system with translation symmetry, so we only 
+  use the `separation_indices` to specify which curves to plot because the 
+  GF data is in separation-indexed layout. 
+  
+  In the future, we will add examples with `pair_indices` for systems without translation symmetry, 
+  where the GF data is in pair-indexed layout and requires specifying emitter pairs to plot.
 
 Configuration reference — analysis
 ===================================
@@ -79,8 +204,8 @@ The analysis step is configured by
 
    # configs/analysis/spectral_density.yaml
 
-   input_file:  '${oc.env:MQED_ROOT,./data}/gf_data.h5'
-   output_file: 'spectral_density.h5'
+   input_file:  '${oc.env:MQED_ROOT,./data}/gf_data.hdf5'
+   output_file: 'spectral_density.hdf5'
 
    orientations:
      donor:
@@ -98,11 +223,11 @@ The analysis step is configured by
      - Default
      - Description
    * - ``input_file``
-     - ``./data/gf_data.h5``
+     - ``./data/gf_data.hdf5``
      - Path to the GF HDF5 file (supports ``${oc.env:MQED_ROOT}``
        interpolation).
    * - ``output_file``
-     - ``spectral_density.h5``
+     - ``spectral_density.hdf5``
      - Output HDF5 file for the computed spectral density.
    * - ``orientations.donor.theta_deg``
      - ``90.0``
@@ -154,11 +279,11 @@ Using a custom configuration file
 ==================================
 
 You can point Hydra at a different configuration directory or override the
-config name:
+config name (Similar in tutorial :ref:`tutorial-gf-sommerfeld`):
 
 .. code-block:: bash
 
-   python -m mqed.analysis.spectral_density \
+   mqed_plot_spec_dens \
        --config-path /absolute/path/to/my_configs \
        --config-name my_spectral_density
 
@@ -166,10 +291,9 @@ Or override individual values via the command line:
 
 .. code-block:: bash
 
-   python -m mqed.analysis.spectral_density \
-       input_file=/path/to/my_gf_data.h5 \
-       output_file=my_spectral_density.h5
-
+   mqed_plot_spec_dens \
+       --config-path /absolute/path/to/my_configs \
+       --config-name my_spectral_density
 
 Configuration reference — plotting
 ====================================
@@ -181,7 +305,7 @@ The plotting step is configured by
 
    # configs/plots/spectral_density.yaml
 
-   input_file: '${oc.env:MQED_ROOT,./outputs}/spectral_density/spectral_density.h5'
+   input_file: '${oc.env:MQED_ROOT,./outputs}/spectral_density/spectral_density.hdf5'
 
    font:
      family:       Arial
@@ -304,7 +428,7 @@ Expected output
 ===============
 
 After running **Step 1** (analysis), the output HDF5 file
-(``spectral_density.h5``) contains:
+(``spectral_density.hdf5``) contains:
 
 * ``J_eV`` — the spectral density array in eV.  The shape depends on the
   GF layout:
@@ -334,7 +458,7 @@ can load it in your own scripts:
    import h5py
    import numpy as np
 
-   with h5py.File('spectral_density.h5', 'r') as f:
+   with h5py.File('spectral_density.hdf5', 'r') as f:
        J_eV     = np.array(f['J_eV'])
        energy_eV = np.array(f['energy_eV'])
 
@@ -348,3 +472,9 @@ can load it in your own scripts:
    * :doc:`quantum_dynamics` — using the spectral density in a
      quantum-dynamics simulation.
    * :doc:`plotting` — general plotting utilities in MQED.
+
+References
+----------
+
+.. [Chuang2022] Chuang *et al.*, "Chuang, Y.T., Lee, M.W. and Hsu, L.Y., 2022. Tavis-Cummings model revisited: 
+   A perspective from macroscopic quantum electrodynamics. Frontiers in Physics, 10, p.980167."

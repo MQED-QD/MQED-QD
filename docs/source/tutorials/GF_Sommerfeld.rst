@@ -38,22 +38,87 @@ described in :doc:`/installation`.
 Quick start
 -----------
 
-Run from the repository root with all defaults:
+**Example 1: Single frequency simulation with 100 molecular aggregates**
+
+Here we give an example of how to simulate dyadic Green's function for a single energy point 
+which will be used for quantum dynamics of 100 molecular aggregates with intermolecular distance ``d = 3 nm`` at 
+a height of ``z = 5 nm`` above the silver surface (which is specified by ``zD: 5.0e-9`` and ``zA: 5.0e-9`` in the below).
+In this setup, we will need 301 horizontal distance points from ``x = 0 nm`` to ``x = 300 nm`` to cover the interaction between all pairs of aggregates.
+(``x = 0 nm`` corresponds to the position of donor and outputs the self-interaction of the aggregate, i.e, decay rate.)
+The corresponding configuration file is ``configs/Dyadic_GF/GF_Sommerfeld_example_single_freq.yaml`` and the command to run is:
 
 .. code-block:: bash
 
-   mqed_GF_Sommerfeld
+  mqed_GF_Sommerfeld --config-name=GF_Sommerfeld_example_single_freq 
 
-This uses the YAML configuration at ``configs/Dyadic_GF/GF_Sommerfeld.yaml``.
-The default settings compute the Green's function for a **single energy
-(1.0 eV)** at a height of **5 nm** above a silver (Ag) surface.
+Here is the configuration file with annotations:
+
+.. code-block:: yaml
+
+   # ── Material ────────────────────────────────────────────
+   material:
+     source_type: excel          # excel, constant, Drude, Drude-Lorentz
+     constant_value: 9.0+0.0j   # used only when source_type = 'constant'
+     excel_config:
+       filepath: "DielectricFunction/dielectric function.xlsx"
+       sheet_name: "Ag_BEM"
+     drude_config:               # used only when source_type = 'Drude'
+       eps_inf: 1.0
+       omega_p_eV: 9.01          # or omega_p_rad_s
+       gamma_eV: 0.048           # or gamma_rad_s
+     drude_lorentz_config:       # used only when source_type = 'Drude-Lorentz'
+       eps_inf: 1.0
+       omega_p_eV: 9.01
+       gamma_eV: 0.048
+       oscillators:
+         - strength: 0.85
+           omega_0_eV: 3.8       # or omega_0_rad_s
+           gamma_eV: 0.25        # or gamma_rad_s
+
+   # ── Simulation ──────────────────────────────────────────
+   simulation:
+     material: "Ag"             # label used in the output filename
+     spectral_param: "energy_eV"  # 'energy_eV' or 'wavelength_nm'
+
+     energy_eV: 1.864                 # single value, list, dict, or piecewise segments
+
+
+     wavelength_nm:             # same three formats as energy_eV
+       min: 500.0
+       max: 500.0
+       points: 1
+
+     position:
+       zD: 5.0e-9              # donor height above surface (m)
+       zD_nm: 5                # donor height label for filename (nm)
+       zA: 5.0e-9              # acceptor height above surface (m)
+       Rx_nm:                  # horizontal donor–acceptor distances
+         start: 0.0
+         stop: 300.0
+         points: 301           # 0, 1, 2, …, 300 nm
+
+This file specifies a single frequency point at 1.864 eV. 
+
+
+After running the command, user can observe the progress bar in the terminal: 
+
+.. figure:: /_static/tutorials/Dyadic_GF/Screenshot_progress.png
+   :width: 500
+   :align: center
+
+   Running progress bar in the terminal.
+
+After the simulation finishes, a success message is printed to the terminal and user can find the output HDF5 file in the specified output directory. 
+The output file contains the computed dyadic Green's function data and related parameters, 
+which can be used for downstream analyses such as field enhancement calculations or quantum dynamics simulations.
 
 
 Specifying the emitter frequency
 --------------------------------
 
 You can override any configuration key on the command line using
-`Hydra <https://hydra.cc/>`_ syntax.
+`Hydra <https://hydra.cc/>`_ syntax. (See the YAML configurations in 
+the below.)
 
 **Single energy**
 
@@ -102,7 +167,7 @@ Choosing the dielectric model
 The dielectric source is selected by ``material.source_type``:
 
 - ``excel``: interpolate from the configured Excel sheet
-- ``constant``: use a fixed complex permittivity
+- ``constant``: use a fixed complex permittivity (Useful for non-dispersive material)
 - ``Drude``: use the Drude model
 - ``Drude-Lorentz``: use Drude + Lorentz oscillators
 
@@ -145,7 +210,10 @@ Examples:
    You can use wavelength instead of energy by setting
    ``simulation.spectral_param=wavelength_nm`` and providing
    ``simulation.wavelength_nm`` values in the same single / list / dict
-   format.
+   format. We provide this feature for some users who prefer wavelength
+   in their research. However, our simulation example will focus on 
+   **eV**. User needs to verify the physical accuracy when using 
+   wavelength in their simulation.
 
 
 Using a custom configuration file
@@ -156,14 +224,23 @@ Hydra provides two flags that let you swap the entire configuration file
 without editing code:
 
 **Use a different YAML in the same config directory**
+If we are trying to simulate multiple different parameters and 
+want to keep track of our previous simulation configuration, 
+we naturally want to use different configuration files which 
+is significantly easier than modify the single hydra file 
+every time in a new simulation. Luckily, Hydra helps us
+to achieve this by telling it the ``--config-name`` and 
+``--config-dir`` which specify the path and name of
+YAML file where we put in the project subdirectory.
 
 .. code-block:: bash
 
    mqed_GF_Sommerfeld --config-name=my_GF
 
 This loads ``configs/Dyadic_GF/my_GF.yaml`` instead of the default
-``GF_Sommerfeld.yaml``.  Your custom file must live in the same
-``configs/Dyadic_GF/`` directory.
+``GF_Sommerfeld.yaml``.  Your custom file ``my_GF.yaml`` must live in the same
+``configs/Dyadic_GF/`` directory. User need to manually create 
+``my_GF.yaml`` inside ``configs/Dyadic_GF``.
 
 **Use a YAML from an arbitrary directory**
 
@@ -172,7 +249,9 @@ This loads ``configs/Dyadic_GF/my_GF.yaml`` instead of the default
    mqed_GF_Sommerfeld --config-dir=/path/to/my/configs --config-name=my_GF
 
 This tells Hydra to look for ``my_GF.yaml`` in ``/path/to/my/configs/``
-instead of the default config directory.
+instead of the default config directory ``configs/Dyadic_GF/``.
+This helps user to seperate individual simulation directory from
+our project directory.
 
 .. tip::
 
@@ -213,6 +292,8 @@ Best for laptops and single-node workstations.  Uses Python's
        parallel.backend=joblib parallel.n_jobs=4
 
 Setting ``parallel.n_jobs=-1`` (the default) uses all available cores.
+We recommend user to set ``parallel.n_jobs=-2`` to leave at least
+one core for their computer to avoid accidental shutdown.
 
 .. tip::
 
@@ -239,13 +320,17 @@ communicator and re-launches itself under ``mpiexec``:
 
 .. code-block:: bash
 
-   # Inside a SLURM job script, for example:
-   srun -n 32 mqed_GF_Sommerfeld \
-       simulation.energy_eV='{min: 0.5, max: 4.0, points: 200}' \
-       parallel.backend=mpi parallel.mpi_auto_launch=false
+   # Inside a SGE job script, for example:
+   qsub -v GF_CONFIG_NAME=GF_Sommerfeld_custom\
+   mqed/Dyadic_GF/gf_sommerfeld_single_job.sh
+   # This script will use the specified config 'GF_Sommerfeld_custom.yaml'
+   # inside configs/Dyadic_GF/ and run with MPI parallelism.
 
-Energy points are scattered round-robin across MPI ranks.  Only rank 0
-writes the final HDF5 file.
+
+Energy points are scattered round-robin across MPI ranks. Only rank 0
+writes the final HDF5 file. User can adjust the number of ranks with ``parallel.mpi_nproc``.
+User can also choose their own YAML file with the ``GF_CONFIG_NAME`` environment variable 
+(e.g. ``GF_Sommerfeld_custom.yaml``) when submitting the job script.
 
 .. list-table:: Parallel configuration reference
    :header-rows: 1
@@ -269,83 +354,108 @@ writes the final HDF5 file.
    * - ``parallel.mpi_exec``
      - Path to MPI launcher binary
      - ``mpiexec``
+.. note::
+   
+   Users running on the HPC cluster with SLURM scheduler may need to modify the job script to fit their cluster environment.
 
-
-Configuration reference
------------------------
-
-The full default configuration file
-(``configs/Dyadic_GF/GF_Sommerfeld.yaml``) is reproduced below with
-annotations.
+**Example 2: Multiple frequencies simulation for Spectral Density**
+Here we will use the example configuration file ``configs/Dyadic_GF/GF_Sommerfeld_example_multi_freq.yaml`` to 
+compute the Green's function for a range of frequencies which will be used for calculating the spectral density in the next tutorial.
+We will use parameters from the previous literature [Chuang2022tavis]_ to model the dielectric function of silver with a Drude model.
+The parameter used in modified Drude model is: :math:`\epsilon_{Ag}(\omega) = \epsilon_{\infty,Ag} - \frac{\omega_{p,Ag}^2}{\omega^2 + i\gamma_{p,Ag}\omega}` 
+where :math:`\epsilon_{\infty,Ag}=5.3`, :math:`\omega_{p,Ag}=9.5 eV`, and :math:`\gamma_{p,Ag}=0.2 eV` and the YAML file is shown below with annotations:
 
 .. code-block:: yaml
 
-   # ── Material ────────────────────────────────────────────
-   material:
-     source_type: excel          # excel, constant, Drude, Drude-Lorentz
-     constant_value: 9.0+0.0j   # used only when source_type = 'constant'
-     excel_config:
-       filepath: "DielectricFunction/dielectric function.xlsx"
-       sheet_name: "Ag_BEM"
-     drude_config:               # used only when source_type = 'Drude'
-       eps_inf: 1.0
-       omega_p_eV: 9.01          # or omega_p_rad_s
-       gamma_eV: 0.048           # or gamma_rad_s
-     drude_lorentz_config:       # used only when source_type = 'Drude-Lorentz'
-       eps_inf: 1.0
-       omega_p_eV: 9.01
-       gamma_eV: 0.048
-       oscillators:
-         - strength: 0.85
-           omega_0_eV: 3.8       # or omega_0_rad_s
-           gamma_eV: 0.25        # or gamma_rad_s
+  material:
+     source_type: drude
 
-   # ── Simulation ──────────────────────────────────────────
-   simulation:
-     material: "Ag"             # label used in the output filename
-     spectral_param: "energy_eV"  # 'energy_eV' or 'wavelength_nm'
+    # --- Settings for a CONSTANT material ---
+    # This value is used only if source_type is 'constant'
+    constant_value: 9.0+0.0j # Example for a non-dispersive material
 
-     energy_eV:                 # single value, list, dict, or piecewise segments
-       min: 1.0
-       max: 1.0
-       points: 1
-       # segments:
-       #   - {min: 0.0, max: 3.0, points: 21}
-       #   - {min: 3.0, max: 4.5, points: 301}
-       #   - {min: 4.5, max: 6.0, points: 21}
+    # --- Settings for an EXCEL-based material ---
+    # This section is used only if source_type is 'excel'
+    excel_config:
+      filepath: "DielectricFunction/dielectric function.xlsx"
+      sheet_name: "Ag_BEM"
 
-     wavelength_nm:             # same three formats as energy_eV
-       min: 500.0
-       max: 500.0
-       points: 1
+    drude_config:
+      eps_inf: 5.3
+      omega_p_eV: 9.5
+      gamma_eV: 0.2
 
-     position:
-       zD: 5.0e-9              # donor height above surface (m)
-       zD_nm: 5                # donor height label for filename (nm)
-       zA: 5.0e-9              # acceptor height above surface (m)
-       Rx_nm:                  # horizontal donor–acceptor distances
-         start: 0.0
-         stop: 300.0
-         points: 301           # 0, 1, 2, …, 300 nm
+    drude_lorentz_config:
+      eps_inf: 1.0
+      omega_p_eV: 9.01
+      gamma_eV: 0.048
+      oscillators:
+        - strength: 0.85
+          omega_0_eV: 3.8
+          gamma_eV: 0.25
+        - strength: 0.20
+          omega_0_eV: 4.9
+          gamma_eV: 0.35
 
-     integration:              # numerical quadrature controls
-       qmax: null              # finite cutoff for evanescent tail; null → ∞
-       epsabs: 1.0e-10         # absolute tolerance
-       epsrel: 1.0e-10         # relative tolerance
-       limit: 400              # max sub-intervals for quad_vec
-       split_propagating: true # split at k₀ for propagating / evanescent
+  simulation:
+    material: "Ag" # Material surface
+    spectral_param: "energy_eV" # Choose between 'wavelength_nm' or 'energy_eV'
 
-   # ── Output ──────────────────────────────────────────────
-   output:
-     filename: "Fresnel_GF_planar_${simulation.material}_height_${simulation.position.zD_nm}nm.hdf5"
+    energy_eV:
+      segments:
+        - min: 0.1
+          max: 3.0
+          points: 29
+        - min: 3.0
+          max: 4.5
+          points: 300
+        - min: 4.5
+          max: 6.0
+          points: 30
+    
+    wavelength_nm: # same usage as energy_eV
+      min: 500.0
+      max: 500.0
+      points: 1
+    position:
+      zD: 1.0e-9
+      zD_nm: 1 # Key for name
+      zA: 1.0e-9
+      Rx_nm: # New section to define the range of horizontal distances
+        start: 0.0
+        stop: 33.0
+        points: 34 # This will give you points 1, 2, 3, ...
 
-   # ── Parallel execution ──────────────────────────────────
-   parallel:
-     backend: sequential        # 'sequential', 'joblib', or 'mpi'
-     n_jobs: -1                 # joblib workers; -1 = all cores
-     mpi_nproc: 4               # MPI ranks for auto-launch
-     mpi_auto_launch: true      # re-launch under mpiexec if needed
-     mpi_exec: mpiexec          # path to MPI launcher
+Here we specify a segmented energy sweep with 29 points from 0.1 to 3.0 eV, 300 points from 3.0 to 4.5 eV, and 30 points from 4.5 to 6.0 eV 
+to capture the plasmonic resonance of silver planar surface (The resonant frequency is around 
+3.8 eV so that we choose finer energy points around that region. For other energy grids, we use larger segments due to 'spectrally-flat',
+i.e, the value changes little with frequencies in this region.).
+
+In the terminal, user could run command 
+
+.. code-block:: bash
+
+   GF_CONFIG_NAME=GF_Sommerfeld_example_multi_freq bash mqed/Dyadic_GF/gf_sommerfeld_single_job.sh 
+
+to run the simulation with MPI parallelism on their own laptop (Not recommended in general, but for this small simulation, it is acceptable). This script assumes an MPI runtime is installed and the ``mqed`` conda environment is available.
+In the HPC cluster, user can submit the job script with
+
+.. code-block:: bash
+
+   qsub -v GF_CONFIG_NAME=GF_Sommerfeld_example_multi_freq mqed/Dyadic_GF/gf_sommerfeld_single_job.sh 
+
+to run the simulation with MPI parallelism. 
+
+User can observe the following information in the terminal:
+
+.. figure:: /_static/tutorials/Dyadic_GF/Screenshot_multi_freq.png
+   :width: 500
+   :align: center
+
+The output file will be used to calculate spectral density in our tutorial: :doc:`/tutorials/spectral_density`.
+
+Configuration reference
+------------------------
 
 .. list-table:: Key parameters at a glance
    :header-rows: 1
@@ -375,6 +485,13 @@ annotations.
    * - ``simulation.integration.limit``
      - Maximum sub-intervals for adaptive quadrature
      - ``400``
+
+
+.. warning::
+  Before running any script on HPC cluster, user need to install MQED-QD package in the cluster environment 
+  and make sure the path to the package is correct in the job script.
+  If user is running the Slurm script, please modify ``gf_sommerfeld_single_job.sh`` according to the guidance.
+
 
 
 Expected output
@@ -427,3 +544,11 @@ The recommended workflow is:
      the Green's function produced here.
    - :ref:`tutorial-quantum-dynamics` -- run Lindblad or NHSE dynamics with
      this Green's function as input.
+   - :ref:`tutorial-spectral-density` -- compute the spectral density from this
+     Green's function.
+
+References
+----------
+
+.. [Chuang2022tavis] Chuang *et al.*, "Chuang, Y.T., Lee, M.W. and Hsu, L.Y., 2022. Tavis-Cummings model revisited: 
+   A perspective from macroscopic quantum electrodynamics. Frontiers in Physics, 10, p.980167."

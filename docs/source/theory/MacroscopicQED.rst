@@ -292,6 +292,5 @@ Casimir--Polder shifts—follow directly from it.
 References
 ----------
 
-.. [Liu2026] G. Liu *et al.*, "Liu, G., Wang, S. and Chen, H.T., 2026. MQED-QD: 
-   An Open-Source Package for Quantum Dynamics Simulation in Complex Dielectric 
-   Environments. arXiv preprint arXiv:2603.05378)."
+.. [Liu2026] G. Liu *et al.*, "Liu, G., Wang, S. and Chen, H.T., 2026. MQED-QD: An Open-Source Package for 
+Quantum Dynamics Simulation in Complex Dielectric Environments. Journal of Chemical Theory and Computation."

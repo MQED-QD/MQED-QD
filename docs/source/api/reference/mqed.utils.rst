@@ -25,6 +25,7 @@
    dgf_data
    enhancement
    file_utils
+   hydra_local
    joblib_track
    logging_utils
    orientation
