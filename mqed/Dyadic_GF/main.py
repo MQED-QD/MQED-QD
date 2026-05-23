@@ -133,6 +133,7 @@ def _compute_one_energy(
     zA: float,
     material_cfg,
     integ_cfg,
+    rx_progress_desc: str | None = None,
 ) -> tuple:
     """Compute Green's function for all Rx at a single energy.
 
@@ -154,6 +155,7 @@ def _compute_one_energy(
         material_cfg: OmegaConf subtree for material (re-creates
                       ``DataProvider`` inside worker).
         integ_cfg:    OmegaConf subtree for integration parameters.
+        rx_progress_desc: Optional tqdm label for per-Rx progress.
 
     Returns:
         (idx, total, vacuum): idx is the energy index; total and vacuum
@@ -172,14 +174,20 @@ def _compute_one_energy(
         epsabs=1e-10 if integ_cfg is None else integ_cfg.epsabs,
         epsrel=1e-10 if integ_cfg is None else integ_cfg.epsrel,
         limit=400 if integ_cfg is None else int(integ_cfg.limit),
-        split_propagating=True if integ_cfg is None else bool(integ_cfg.split_propagating),
+        split_propagating=False if integ_cfg is None else bool(integ_cfg.split_propagating),
     )
 
     nR = len(rx_values_m)
     total = np.zeros((nR, 3, 3), dtype=complex)
     vacuum = np.zeros((nR, 3, 3), dtype=complex)
 
-    for j, rx_m in enumerate(rx_values_m):
+    rx_iter = enumerate(rx_values_m)
+    if rx_progress_desc is not None:
+        rx_iter = enumerate(
+            tqdm(rx_values_m, desc=rx_progress_desc, ncols=100, leave=False)
+        )
+
+    for j, rx_m in rx_iter:
         total[j] = calculator.calculate_total_Green_function(
             x=rx_m, y=0, z1=zD, z2=zA,
         )
@@ -203,6 +211,7 @@ def _run_sequential(
     results_total = np.zeros((nE, nR, 3, 3), dtype=complex)
     results_vacuum = np.zeros((nE, nR, 3, 3), dtype=complex)
     integ_cfg = getattr(sim_params, "integration", None)
+    show_rx_progress = nE == 1 and nR > 1
 
     for i in tqdm(range(nE), desc="Energies", ncols=100):
         logger.info(f"Energy {i+1}/{nE}: {energy_eV_array[i]:.3f} eV")
@@ -215,6 +224,7 @@ def _run_sequential(
             zA=sim_params.position.zA,
             material_cfg=material_cfg,
             integ_cfg=integ_cfg,
+            rx_progress_desc="Rx points" if show_rx_progress else None,
         )
         results_total[i] = tot
         results_vacuum[i] = vac

@@ -60,7 +60,7 @@ class Greens_function_analytical:
         epsabs: float = 1e-10,
         epsrel: float = 1e-10,
         limit: int = 400,
-        split_propagating: bool = True,
+        split_propagating: bool = False,
     ):
         """
         Initializes the two-layer Green's function calculator.
@@ -82,8 +82,8 @@ class Greens_function_analytical:
             epsrel:     Relative error tolerance for ``quad_vec``.
             limit:      Maximum number of adaptive subintervals.
             split_propagating: If True, split the integral at q = k0
-                        (propagating/evanescent boundary) for better
-                        numerical accuracy.
+                        (propagating/evanescent boundary) for potentially
+                        better numerical accuracy at additional cost.
         """
         self.metal_epsi = metal_epsi
         self.omega = omega
