@@ -1,5 +1,34 @@
 # Changelog
 
+## 1.1.4 - 2026-05-23
+
+### Documentation
+
+- Expanded the Sommerfeld dyadic Green's-function tutorial with two complete,
+  reproducible examples: a single-frequency molecular-aggregate setup and a
+  multi-frequency Drude-model sweep for spectral-density calculations.
+- Added a literature-reproduction spectral-density tutorial that walks from the
+  bundled Green's-function HDF5 data through spectral-density calculation and
+  plotting of a Figure-2C-style comparison for Chuang *et al.*
+- Added clearer guidance for MPI/HPC execution, custom Hydra configs, dielectric
+  model selection, segmented energy grids, output HDF5 contents, and downstream
+  handoff between Green's-function and spectral-density workflows.
+
+### Examples and reproducibility
+
+- Added shared example configs for the Sommerfeld single-frequency and
+  multi-frequency workflows under `configs/Dyadic_GF/`.
+- Added spectral-density analysis and plotting example configs under
+  `configs/analysis/` and `configs/plots/`.
+- Bundled precomputed Green's-function and spectral-density HDF5 example data
+  under `data/example/` so users can reproduce the spectral-density tutorial
+  without first running a long Green's-function sweep.
+
+### Maintenance
+
+- Fixed RST formatting and Sphinx rendering issues in the new tutorial pages so
+  the documentation builds cleanly.
+
 ## 1.1.3 - 2026-04-17
 
 ### New features

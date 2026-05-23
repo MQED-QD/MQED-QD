@@ -4,6 +4,15 @@ MQED-QD Documentation
 **MQED-QD** is a Python toolkit for simulating exciton-polariton transport
 near plasmonic interfaces using macroscopic quantum electrodynamics.
 
+Latest Update
+-------------
+
+**Version 1.1.4** adds reproducible, literature-connected tutorials for the
+Sommerfeld Green's-function and spectral-density workflows. The documentation
+now includes complete single-frequency and multi-frequency planar Ag examples,
+bundled HDF5 example data, and a spectral-density walkthrough that reproduces a
+Figure-2C-style result from Chuang *et al.*
+
 .. image:: _static/workflow_diagram.png
    :width: 600
    :align: center

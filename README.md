@@ -16,11 +16,11 @@ near plasmonic interfaces using macroscopic quantum electrodynamics (MQED).
 
 ## Latest Update
 
-**Version 1.1.3** adds model-driven dielectric options, segmented spectral sweeps, and richer spectral-density overlay controls.
+**Version 1.1.4** focuses on reproducible, literature-connected tutorials for the Sommerfeld Green's-function and spectral-density workflows.
 
-- **Dielectric source selection** now supports `excel`, `constant`, `Drude`, and `Drude-Lorentz` models from YAML.
-- **Segmented spectral grids** let you use sparse off-resonant sampling and dense windows near plasmon resonances.
-- **Spectral-density overlays** now support per-curve multipliers, colors, and linestyles for clearer multi-curve comparisons.
+- **Sommerfeld examples** now include complete single-frequency and multi-frequency configurations for planar Ag systems.
+- **Spectral-density reproduction** walks from bundled Green's-function HDF5 data to a Figure-2C-style spectral-density plot based on Chuang *et al.*
+- **Bundled example data/configs** let users follow the tutorials immediately, while still showing how to regenerate the data with Hydra, MPI, or Joblib workflows.
 
 See `CHANGELOG.md` for the full release notes.
 
