@@ -61,7 +61,7 @@ material:
 simulation:
   material: "Ag" # Material surface
   spectral_param: "energy_eV" # Choose between 'wavelength_nm' or 'energy_eV'
-  energy_eV: 
+  energy_eV: 1.864
   # Emitter energy, unit in eV, can be a single value, dictionary, or list.
   #Examples:
   # Single value: 1.50 (int or float)
@@ -71,9 +71,9 @@ simulation:
   #   - {min: 0.0, max: 3.0, points: 21}
   #   - {min: 3.0, max: 4.5, points: 301}
   #   - {min: 4.5, max: 6.0, points: 21}
-    min: 1.0
-    max: 1.0 # Set min and max to the same value for a single point
-    points: 1
+    # min: 1.0
+    # max: 1.0 # Set min and max to the same value for a single point
+    # points: 1
 
   wavelength_nm: # same usage as energy_eV, including piecewise range lists
     min: 500.0
@@ -94,7 +94,7 @@ simulation:
     epsabs: 1.0e-10     # absolute tolerance for quadrature
     epsrel: 1.0e-10     # relative tolerance for quadrature
     limit: 400          # max subintervals for quad_vec
-    split_propagating: false
+    split_propagating: false  # if true, split at k0 to treat propagating/evanescent separately
 
 # ── Parallel execution ─────────────────────────────────────────────
 # Controls how the multi-frequency loop is parallelized.
