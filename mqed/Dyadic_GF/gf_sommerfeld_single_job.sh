@@ -31,9 +31,9 @@ else
 fi
 cd "${REPO_ROOT}"
 
-# NSLOTS is set by SGE's -pe directive.  On a laptop default to 4 cores so
+# NSLOTS is set by SGE's -pe directive.  On a laptop default to 16 cores so
 # MPI does not over-subscribe a small machine.
-MPI_NPROC="${NSLOTS:-8}"
+MPI_NPROC="${NSLOTS:-16}"
 
 # Hydra config name (no .yaml extension).  Override via GF_CONFIG_NAME.
 # Set GF_CONFIG_NAME=GF_Sommerfeld_nonuniform_example to use the local
