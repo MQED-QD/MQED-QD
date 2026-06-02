@@ -196,6 +196,6 @@ References
    "MNPBEM - A Matlab toolbox for the simulation of plasmonic nanoparticles,"
    *Computer Physics Communications* **183** (2012) 370-381.
 
-.. [Liu2026BEMRec] G. Liu, S. Wang, and H. T. Chen,
-   "MQED-QD: An Open-Source Package for Quantum Dynamics Simulation in Complex
-   Dielectric Environments," arXiv:2603.05378.
+.. [Liu2026BEMRec] Liu, G., Wang, S. and Chen, H.T., 2026. 
+   MQED-QD: An Open-Source Package for Quantum Dynamics Simulation 
+   in Complex Dielectric Environments. Journal of Chemical Theory and Computation.

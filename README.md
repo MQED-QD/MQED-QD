@@ -182,7 +182,7 @@ Macroscopic-Quantum-Electrodynamics/
 ## Documentation
 
 **Full documentation:**
-[https://mqed-transport.github.io/Macroscopic-Quantum-Electrodynamics/](https://mqed-qd.github.io/MQED-QD/index.html)
+[https://mqed-qd.github.io/MQED-QD/](https://mqed-qd.github.io/MQED-QD/index.html)
 
 Build locally:
 
