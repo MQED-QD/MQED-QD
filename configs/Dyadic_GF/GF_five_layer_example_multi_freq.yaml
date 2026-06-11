@@ -1,0 +1,90 @@
+defaults:
+  - hydra: default
+  - _self_
+
+hydra:
+  job:
+    name: Dyadic_GF_NLayer
+
+materials:
+  air:
+    source_type: constant
+    constant_value: 1.0+0.0j
+  dielectric_spacer:
+    source_type: constant
+    constant_value: 2.25+0.0j
+  Ag_drude:
+    source_type: Drude
+    drude_config:
+      eps_inf: 5.3
+      omega_p_eV: 9.5
+      gamma_eV: 0.2
+
+stack:
+  source_layer: 2
+  layers:
+    - name: bottom_air
+      material: air
+      thickness_m: null
+    - name: lower_silver_film
+      material: Ag_drude
+      thickness_nm: 100.0
+    - name: emitter_spacer
+      material: air
+      thickness_nm: 600.0
+    - name: upper_silver_film
+      material: Ag_drude
+      thickness_nm: 100.0
+    - name: top_air
+      material: air
+      thickness_m: null
+
+simulation:
+  spectral_param: energy_eV
+  energy_eV:
+    segments:
+      - min: 0.1
+        max: 2.0
+        points: 19
+      - min: 2.01
+        max: 6.0
+        points: 400
+  wavelength_nm:
+    min: 620.0
+    max: 620.0
+    points: 1
+  position:
+    zD_nm: 300.0
+    zA_nm: 300.0
+    Rx_nm:
+      start: 0.0
+      stop: 12
+      points: 13
+  integration:
+    method: direct
+    qmax: null
+    epsabs: 1.0e-10
+    epsrel: 1.0e-10
+    limit: 400
+    split_propagating: false
+    dcim_q_start: 0.0
+    dcim_q_stop: 2.0e8
+    dcim_sample_count: 128
+    dcim_image_count: 16
+    hybrid_direct_q_stop: 6.0e7
+    hybrid_tail_q_stop: 2.0e8
+    hybrid_sample_count: 160
+    hybrid_image_count: 18
+    hybrid_validation_rtol: 5.0e-2
+    hybrid_validate_tail: true
+    hybrid_fallback_to_direct: true
+
+parallel:
+  backend: sequential
+  n_jobs: -1
+  mpi_nproc: 4
+  mpi_auto_launch: true
+  mpi_exec: mpiexec
+
+output:
+  prefix: "NLayer_GF_five_layer_Ag_spacer"
