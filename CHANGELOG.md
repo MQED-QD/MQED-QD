@@ -1,5 +1,34 @@
 # Changelog
 
+## 1.2.0 - 2026-06-11
+
+### New features
+
+- Added N-layer dyadic Green's-function support for finite planar stacks through
+  `mqed.Dyadic_GF.GF_NLayer`, including recursive N-layer Fresnel reflection,
+  same-layer source/observer amplitudes, and Sommerfeld kernels for total and
+  vacuum Green's-function output.
+- Added the `mqed_GF_NLayer` Hydra CLI and example five-layer Ag/spacer configs
+  for single-frequency and multi-frequency layered-media calculations.
+- Added DCIM utilities in `mqed.Dyadic_GF.dcim` and a conservative hybrid
+  direct/DCIM integration path for testing accelerated Sommerfeld tails.
+- Added MPI execution support to the N-layer CLI so large energy grids can be
+  distributed across HPC ranks, plus an SGE single-job launcher for cluster runs.
+
+### Documentation
+
+- Added API reference pages for `mqed.Dyadic_GF.GF_NLayer` and
+  `mqed.Dyadic_GF.dcim`.
+- Updated the README and documentation landing page to describe the N-layer
+  Green's-function workflow and the new `mqed_GF_NLayer` command.
+
+### Tests and validation
+
+- Added pytest coverage for N-layer Green's-function construction and numerical
+  behavior.
+- Verified the N-layer CLI with sequential, MPI smoke, and Sphinx documentation
+  builds during release preparation.
+
 ## 1.1.4 - 2026-05-23
 
 ### Documentation

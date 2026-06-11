@@ -7,11 +7,11 @@ near plasmonic interfaces using macroscopic quantum electrodynamics.
 Latest Update
 -------------
 
-**Version 1.1.4** adds reproducible, literature-connected tutorials for the
-Sommerfeld Green's-function and spectral-density workflows. The documentation
-now includes complete single-frequency and multi-frequency planar Ag examples,
-bundled HDF5 example data, and a spectral-density walkthrough that reproduces a
-Figure-2C-style result from Chuang *et al.*
+**Version 1.2.0** adds N-layer dyadic Green's functions for finite planar
+dielectric stacks. The release includes the new ``mqed_GF_NLayer`` CLI,
+five-layer Ag/spacer example configs, DCIM and hybrid direct/DCIM integration
+tools, MPI execution for HPC jobs, and API reference pages for the new layered
+Green's-function modules.
 
 .. image:: _static/workflow_diagram.png
    :width: 600
@@ -21,11 +21,11 @@ Figure-2C-style result from Chuang *et al.*
 Key Features
 ------------
 
-- Dyadic Green's functions via Sommerfeld integrals
+- Dyadic Green's functions via Sommerfeld integrals and N-layer planar stacks
 - Resonance energy transfer (RET) and field enhancement (FE) analysis
 - Open-system dynamics: Lindblad master equation & NHSE
 - Boundary Element Method (BEM) for arbitrary geometries
-- Hydra-based configuration for reproducible workflows
+- Hydra-based configuration with Joblib, MPI, and SGE workflow support
 
 .. toctree::
    :maxdepth: 1

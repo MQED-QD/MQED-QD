@@ -16,11 +16,11 @@ near plasmonic interfaces using macroscopic quantum electrodynamics (MQED).
 
 ## Latest Update
 
-**Version 1.1.4** focuses on reproducible, literature-connected tutorials for the Sommerfeld Green's-function and spectral-density workflows.
+**Version 1.2.0** adds N-layer dyadic Green's functions for finite dielectric stacks, with MPI-ready execution for HPC workflows.
 
-- **Sommerfeld examples** now include complete single-frequency and multi-frequency configurations for planar Ag systems.
-- **Spectral-density reproduction** walks from bundled Green's-function HDF5 data to a Figure-2C-style spectral-density plot based on Chuang *et al.*
-- **Bundled example data/configs** let users follow the tutorials immediately, while still showing how to regenerate the data with Hydra, MPI, or Joblib workflows.
+- **N-layer Green's functions** support arbitrary planar stacks through `mqed_GF_NLayer`, including five-layer Ag/spacer examples.
+- **DCIM acceleration tools** provide complex-image fitting and a conservative hybrid direct/DCIM integration pathway for layered-media tests.
+- **MPI and SGE workflows** let large energy/Rx grids run across HPC ranks using the same Hydra override style as the Sommerfeld workflow.
 
 See `CHANGELOG.md` for the full release notes.
 
@@ -30,7 +30,7 @@ See `CHANGELOG.md` for the full release notes.
 
 | Category | Capability |
 |----------|------------|
-| **Green's functions** | Dyadic Green's functions via Sommerfeld integrals (planar) and BEM (arbitrary nanostructures) |
+| **Green's functions** | Dyadic Green's functions via Sommerfeld integrals, N-layer planar stacks, and BEM for arbitrary nanostructures |
 | **Energy transfer** | Resonance energy transfer (RET) and field enhancement (FE) analysis |
 | **Quantum dynamics** | Lindblad master equation and non-Hermitian Schr&ouml;dinger equation (NHSE) solvers |
 | **Transport studies** | Disorder sweeps for orientation-averaged transport; MSD, RMSD, IPR, and participation ratio |
@@ -51,8 +51,8 @@ pip install -e .
 <details>
 <summary><strong>MPI support (optional)</strong></summary>
 
-If you need MPI parallelism for large-scale BEM or dynamics runs, install
-`mpi4py` after activating the environment:
+If you need MPI parallelism for large-scale N-layer Green's-function, BEM, or
+dynamics runs, install `mpi4py` after activating the environment:
 
 ```bash
 conda install -c conda-forge mpi4py openmpi
@@ -68,10 +68,13 @@ conda install -c conda-forge mpi4py openmpi
 # 1. Compute dyadic Green's function for an Ag planar interface
 mqed_GF_Sommerfeld simulation.energy_eV=1.864
 
-# 2. Run non-Hermitian dynamics
+# 2. Compute dyadic Green's function for an N-layer planar stack
+mqed_GF_NLayer --config-name GF_NLayer_five_layer
+
+# 3. Run non-Hermitian dynamics
 mqed_nhse
 
-# 3. Plot mean-squared displacement
+# 4. Plot mean-squared displacement
 mqed_plot_msd
 ```
 
@@ -91,6 +94,7 @@ For step-by-step walkthroughs, see the
 | Command | Description |
 |---------|-------------|
 | `mqed_GF_Sommerfeld` | Dyadic Green's function (planar geometry) |
+| `mqed_GF_NLayer` | Dyadic Green's function for N-layer planar stacks |
 | `mqed_RET` | Resonance energy transfer analysis |
 | `mqed_FE` | Field enhancement analysis |
 | `mqed_lindblad` | Lindblad master-equation dynamics |
