@@ -16,11 +16,12 @@ near plasmonic interfaces using macroscopic quantum electrodynamics (MQED).
 
 ## Latest Update
 
-**Version 1.2.0** adds N-layer dyadic Green's functions for finite dielectric stacks, with MPI-ready execution for HPC workflows.
+**Version 1.2.1** improves the N-layer workflow for sparse emitter separations, repeated-Rx Green's-function sweeps, and spectral-density validation plots.
 
-- **N-layer Green's functions** support arbitrary planar stacks through `mqed_GF_NLayer`, including five-layer Ag/spacer examples.
-- **DCIM acceleration tools** provide complex-image fitting and a conservative hybrid direct/DCIM integration pathway for layered-media tests.
-- **MPI and SGE workflows** let large energy/Rx grids run across HPC ranks using the same Hydra override style as the Sommerfeld workflow.
+- **Flexible Rx grids** let Green's-function runs store only the separations needed by downstream DDI and Lindblad calculations, such as `[0, d, 2d, ...]`.
+- **Batched fixed-grid N-layer integration** reuses Bessel-free Sommerfeld kernels across many Rx values while keeping the direct quadrature path as the reference.
+- **Spectral-density plotting controls** select curves by physical `Rx_nm`, switch the y-axis between eV and `s^-1`, and format large SI values with optional scientific notation.
+- **Default N-layer CLI compatibility** keeps `mqed_GF_NLayer` working with the bundled five-layer example config.
 
 See `CHANGELOG.md` for the full release notes.
 

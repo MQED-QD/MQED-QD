@@ -7,11 +7,14 @@ near plasmonic interfaces using macroscopic quantum electrodynamics.
 Latest Update
 -------------
 
-**Version 1.2.0** adds N-layer dyadic Green's functions for finite planar
-dielectric stacks. The release includes the new ``mqed_GF_NLayer`` CLI,
-five-layer Ag/spacer example configs, DCIM and hybrid direct/DCIM integration
-tools, MPI execution for HPC jobs, and API reference pages for the new layered
-Green's-function modules.
+**Version 1.2.1** improves the N-layer Green's-function workflow for sparse
+emitter-separation grids and spectral-density validation. Green's-function CLIs
+can now preserve flexible Rx grids such as ``[0, d, 2d, ...]`` in HDF5, the
+N-layer solver has an opt-in fixed-grid path that reuses Bessel-free Sommerfeld
+kernels across many Rx values, and the DDI builder accepts sparse separation
+grids with tolerant physical-value lookup. Spectral-density plots can select
+curves by physical ``Rx_nm`` values, display ``J(ω)`` in either eV or SI
+``s^-1``, and apply scientific y-axis formatting for large SI rates.
 
 .. image:: _static/workflow_diagram.png
    :width: 600

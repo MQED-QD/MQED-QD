@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.2.1 - 2026-06-12
+
+### N-layer Green's-function workflow
+
+- Added flexible Rx-grid handling for both Sommerfeld and N-layer Green's-function CLIs. Legacy `{start, stop, points}` configs still work, while scalar, list, `{values: [...]}`, `{min, max, points}`, and segmented grids can now preserve sparse physical separations in HDF5.
+- Added an opt-in `fixed_grid` N-layer integration mode that samples the Bessel-free Sommerfeld kernels once on a finite q grid and reuses them across many Rx values. The existing `direct`, `dcim`, and `hybrid_dcim` paths remain unchanged.
+- Restored the default `mqed_GF_NLayer` config name with `configs/Dyadic_GF/GF_NLayer_five_layer.yaml`, pointing to the bundled five-layer example.
+
+### Downstream DDI and plotting
+
+- Updated the DDI matrix builder to resolve required separations `0, d, 2d, ...` with a strict floating-point tolerance, so sparse Rx grids match equivalent dense grids without exact-float lookup failures.
+- Added spectral-density plotting by physical separation values through `plot_settings.separation_values_nm`, while preserving the previous `separation_indices` behavior.
+- Added plot-time spectral-density unit selection with `plot_settings.spectral_density_unit`, supporting the stored eV values and SI `s^-1` display for literature comparison.
+- Added `plot_settings.y_sci` to spectral-density plots so large SI y-axis values can use scientific notation formatting like the MSD plotter.
+
+### Tests and validation
+
+- Added regression coverage showing sparse Rx grids produce the same DDI matrices as equivalent dense grids.
+- Verified the N-layer CLI, fixed-grid sparse-Rx smoke path, spectral-density calculation, value-selected plotting, SI-unit plotting, scientific y-axis formatting, and the full pytest suite.
+
 ## 1.2.0 - 2026-06-11
 
 ### New features
