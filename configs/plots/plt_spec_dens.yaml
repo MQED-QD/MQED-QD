@@ -30,6 +30,8 @@ plot_settings:
   # For separation-indexed layout: which Rx indices to plot (0-based)
   # Example: [0, 3] overlays the curves for Rx index 0 and Rx index 3.
   separation_indices: [0]
+  separation_values_nm: []
+  separation_value_tolerance_nm: 1.0e-9
   separation_multipliers: [1.0]
   separation_colors: null
   separation_linestyles: null
@@ -43,16 +45,25 @@ plot_settings:
   pair_colors: null
   pair_linestyles: null
 
+  spectral_density_unit: "eV"
+
   # Labels
   # For separation layout, {Rx} is replaced by the Rx value in nm
   label_template: "Rx = {Rx:.1f} nm"
   xlabel: "Energy (eV)"
-  ylabel: "$J(\\omega)$ (eV)"
+  ylabel: null
   title: "Spectral Density $J(\\omega)$"
 
   # Axis scales: "linear" or "log"
   xscale: "linear"
   yscale: "linear"
+  y_sci:
+    enabled: false
+    style: "sci"
+    scilimits: [0, 0]
+    use_math_text: false
+    offset_text_size: 20
+    offset_text_weight: "bold"
 
   # Optional axis limits (null = auto)
   x_range_eV: null

@@ -27,12 +27,14 @@ from pathlib import Path
 import h5py
 import hydra
 import matplotlib.pyplot as plt
+import numpy as np
 from hydra.core.hydra_config import HydraConfig
 from loguru import logger
 from omegaconf import OmegaConf
 
-from mqed.utils.logging_utils import setup_loggers_hydra_aware
+from mqed.utils.SI_unit import eV_to_J, hbar
 from mqed.utils.hydra_local import prepare_hydra_config_path
+from mqed.utils.logging_utils import setup_loggers_hydra_aware
 
 
 # ---------------------------------------------------------------------------
@@ -119,6 +121,50 @@ def _normalize_separation_indices(raw_selection: Any) -> list[int]:
         return [0]
 
     return [int(idx) for idx in normalized]
+
+
+def _normalize_separation_values_nm(raw_selection: Any) -> list[float]:
+    normalized = _parse_index_selection(
+        raw_selection,
+        default_value=[],
+        selection_name="plot_settings.separation_values_nm",
+    )
+
+    if isinstance(normalized, (int, float)):
+        return [float(normalized)]
+
+    if not isinstance(normalized, list):
+        raise ValueError(
+            "plot_settings.separation_values_nm must be a number or a list of numbers."
+        )
+
+    return [float(value) for value in normalized]
+
+
+def _resolve_separation_indices(ps, Rx_nm) -> list[int]:
+    values_nm = _normalize_separation_values_nm(ps.get("separation_values_nm", []))
+    if not values_nm:
+        return _normalize_separation_indices(ps.get("separation_indices", [0]))
+
+    tolerance_nm = float(ps.get("separation_value_tolerance_nm", 1e-9))
+    rx_array = np.asarray(Rx_nm, dtype=float)
+    indices = []
+    for value_nm in values_nm:
+        matches = np.where(np.isclose(rx_array, value_nm, rtol=0.0, atol=tolerance_nm))[0]
+        if matches.size == 0:
+            nearest_idx = int(np.argmin(np.abs(rx_array - value_nm)))
+            nearest_value = float(rx_array[nearest_idx])
+            logger.warning(
+                "Separation value {:.6g} nm not found within {:.3g} nm; nearest is "
+                "index {} at {:.6g} nm, skipping.",
+                value_nm,
+                tolerance_nm,
+                nearest_idx,
+                nearest_value,
+            )
+            continue
+        indices.append(int(matches[0]))
+    return indices
 
 
 def _is_nested_index_collection(value: Any) -> bool:
@@ -252,15 +298,60 @@ def _resolve_curve_styles(ps, prefix: str, count: int) -> tuple[list[Any], list[
     return colors, linestyles
 
 
+def _convert_spectral_density_for_plot(J_eV, unit: str):
+    normalized_unit = str(unit).strip().lower()
+    if normalized_unit in {"ev", "electronvolt", "electronvolts"}:
+        return J_eV, "eV"
+    if normalized_unit in {"si", "s^-1", "1/s", "per_s", "per_second", "rad/s"}:
+        return J_eV * eV_to_J / hbar, r"s$^{-1}$"
+
+    raise ValueError(
+        "plot_settings.spectral_density_unit must be 'eV' or 's^-1' "
+        f"(got {unit!r})."
+    )
+
+
+def _resolve_ylabel(ps, default_label: str) -> str:
+    custom_label = ps.get("ylabel", None)
+    if custom_label is None:
+        return default_label
+    return custom_label
+
+
+def _apply_y_sci_formatting(ax, ps) -> None:
+    y_sci = ps.get("y_sci", None)
+    if not y_sci or not y_sci.get("enabled", False):
+        return
+
+    if y_sci.get("style", "sci") == "sci":
+        scilimits = y_sci.get("scilimits", [-2, 2])
+        ax.ticklabel_format(
+            axis="y",
+            style="sci",
+            scilimits=(int(scilimits[0]), int(scilimits[1])),
+            useMathText=bool(y_sci.get("use_math_text", True)),
+        )
+        offset_text = ax.yaxis.get_offset_text()
+        offset_text.set_fontsize(int(y_sci.get("offset_text_size", 16)))
+        offset_text.set_fontweight(str(y_sci.get("offset_text_weight", "normal")))
+        return
+
+    ax.ticklabel_format(axis="y", style="plain")
+
+
 def _plot_separation_layout(J_eV, energy_eV, Rx_nm, cfg):
     """Plot J(ω) for separation-indexed data.
 
     Produces one curve per selected separation Rx.
     """
     ps = cfg.plot_settings
+    J_plot, unit_label = _convert_spectral_density_for_plot(
+        J_eV,
+        ps.get("spectral_density_unit", "eV"),
+    )
 
     # Select which separations to plot
-    sep_indices = _normalize_separation_indices(ps.get("separation_indices", [0]))
+    sep_indices = _resolve_separation_indices(ps, Rx_nm)
     yscale = ps.get("yscale", "linear")
     scale_factors = _resolve_curve_multipliers(
         ps,
@@ -293,7 +384,7 @@ def _plot_separation_layout(J_eV, energy_eV, Rx_nm, cfg):
         label = _format_scaled_label(label, scale_factor)
         ax.plot(
             energy_eV,
-            scale_factor * J_eV[idx, :],
+            scale_factor * J_plot[idx, :],
             lw=ps.get("lw", 1.5),
             label=label,
             color=color,
@@ -301,7 +392,7 @@ def _plot_separation_layout(J_eV, energy_eV, Rx_nm, cfg):
         )
 
     ax.set_xlabel(ps.get("xlabel", r"Energy (eV)"))
-    ax.set_ylabel(ps.get("ylabel", r"$J(\omega)$ (eV)"))
+    ax.set_ylabel(_resolve_ylabel(ps, rf"$J(\omega)$ ({unit_label})"))
 
     title_template = ps.get("title", r"Spectral Density $J(\omega)$")
     ax.set_title(title_template)
@@ -318,6 +409,8 @@ def _plot_separation_layout(J_eV, energy_eV, Rx_nm, cfg):
     y_range = ps.get("y_range", None)
     if y_range is not None:
         ax.set_ylim(y_range)
+
+    _apply_y_sci_formatting(ax, ps)
 
     if ps.get("grid", True):
         ax.grid(True, alpha=0.3)
@@ -336,6 +429,10 @@ def _plot_pair_layout(J_eV, energy_eV, cfg):
     Produces one curve per selected (α, β) pair.
     """
     ps = cfg.plot_settings
+    J_plot, unit_label = _convert_spectral_density_for_plot(
+        J_eV,
+        ps.get("spectral_density_unit", "eV"),
+    )
 
     # Select which pairs to plot: list of [alpha, beta] pairs
     # Default: self-term of emitter 0
@@ -377,7 +474,7 @@ def _plot_pair_layout(J_eV, energy_eV, cfg):
         label = _format_scaled_label(label, scale_factor)
         ax.plot(
             energy_eV,
-            scale_factor * J_eV[alpha, beta, :],
+            scale_factor * J_plot[alpha, beta, :],
             lw=ps.get("lw", 1.5),
             label=label,
             color=color,
@@ -385,7 +482,7 @@ def _plot_pair_layout(J_eV, energy_eV, cfg):
         )
 
     ax.set_xlabel(ps.get("xlabel", r"Energy (eV)"))
-    ax.set_ylabel(ps.get("ylabel", r"$J_{\alpha\beta}(\omega)$ (eV)"))
+    ax.set_ylabel(_resolve_ylabel(ps, rf"$J_{{\alpha\beta}}(\omega)$ ({unit_label})"))
 
     title_template = ps.get(
         "title", r"Spectral Density $J_{\alpha\beta}(\omega)$"
@@ -404,6 +501,8 @@ def _plot_pair_layout(J_eV, energy_eV, cfg):
     y_range = ps.get("y_range", None)
     if y_range is not None:
         ax.set_ylim(y_range)
+
+    _apply_y_sci_formatting(ax, ps)
 
     if ps.get("grid", True):
         ax.grid(True, alpha=0.3)
