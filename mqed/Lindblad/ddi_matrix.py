@@ -21,12 +21,32 @@ which argument is provided.  The legacy function
 compatibility and is called internally for separation-indexed data.
 """
 import numpy as np
-from typing import Optional, Union
+from typing import Dict, Optional, Union
 
 from loguru import logger
 from mqed.utils.SI_unit import c, eps0, hbar, eV_to_J, D2CMM
 from mqed.utils.orientation import spherical_to_cartesian_dipole, resolve_angle_deg
 from mqed.utils.orientation_disorder import phi_wrapped_normal_deg as _phi_wrapped_normal_deg
+
+
+def _separation_lookup_indices(Rx_nm: np.ndarray, needed: np.ndarray) -> Dict[float, int]:
+    tolerance_nm = 1e-9
+    lookup = {}
+    missing = []
+    for distance_nm in needed:
+        matches = np.where(np.isclose(Rx_nm, distance_nm, rtol=0.0, atol=tolerance_nm))[0]
+        if matches.size == 0:
+            missing.append(float(distance_nm))
+        else:
+            lookup[float(distance_nm)] = int(matches[0])
+
+    if missing:
+        logger.error("Rx_nm must contain all separations 0, d, 2d, ...")
+        raise ValueError(
+            f"Rx_nm grid must contain all separations 0, d, 2d, ..., (N-1)d in nm. "
+            f"Missing: {missing[:8]}{'...' if len(missing) > 8 else ''}"
+        )
+    return lookup
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -231,15 +251,8 @@ def build_ddi_matrix_from_Gslice(
         ``(V_eV, hbarGamma_eV)`` — both ``(N, N)`` real arrays.
     """
     Rx_nm = np.asarray(Rx_nm, dtype=float)
-    dist_to_idx = {float(r): k for k, r in enumerate(Rx_nm)}
-    needed = [float(s * d_nm) for s in range(N_mol)]
-    missing = [r for r in needed if r not in dist_to_idx]
-    if missing:
-        logger.error("Rx_nm must contain all separations 0, d, 2d, ...")
-        raise ValueError(
-            f"Rx_nm grid must contain all separations 0, d, 2d, ..., (N-1)d in nm. "
-            f"Missing: {missing[:8]}{'...' if len(missing) > 8 else ''}"
-        )
+    needed = np.array([float(s * d_nm) for s in range(N_mol)], dtype=float)
+    dist_to_idx = _separation_lookup_indices(Rx_nm, needed)
 
     mu_A_debye = mu_D_debye if mu_A_debye is None else mu_A_debye
     muA = mu_A_debye * D2CMM
@@ -282,7 +295,7 @@ def build_ddi_matrix_from_Gslice(
     idx = np.arange(N_mol)
 
     for s in range(N_mol):
-        k = dist_to_idx[float(s * d_nm)]
+        k = dist_to_idx[float(needed[s])]
         Gre = G_re_full[k]
         Gim = G_im_full[k]
         if Gre.shape != (3, 3) or Gim.shape != (3, 3):

@@ -3,15 +3,11 @@ This is the script to test our Fresnel implementation generated matrix element i
 previous MATLAB generated matrix element (which is benchmark). Test results confirm our implementation is correct.
 '''
 import numpy as np
-import h5py
-from pathlib import Path
-from scipy.io import loadmat, savemat
-import pytest
+from scipy.io import loadmat
 from matplotlib import pyplot as plt
 from scipy.stats import norm
 import os
 
-from mqed.utils.SI_unit import eV_to_J, c, eps0, hbar,D2CMM
 from mqed.Lindblad.ddi_matrix import build_ddi_matrix_from_Gslice, _phi_wrapped_normal_deg
 from mqed.utils.dgf_data import load_gf_h5
 from mqed.utils.orientation import resolve_angle_deg, spherical_to_cartesian_dipole
@@ -116,7 +112,6 @@ def test_vectorize():
 def test_disorder_matrix():
     theta = 90.0
     pos_donor = spherical_to_cartesian_dipole(theta,phi_matlab)
-    pos_acceptor = spherical_to_cartesian_dipole(theta, phi_matlab)
 
     V_ab_test, Gamma_ab_test = build_ddi_matrix_from_Gslice(
         G_slice= Gtot[0],
@@ -133,6 +128,44 @@ def test_disorder_matrix():
     assert Gamma_ab_test.shape == (N_mol, N_mol)
     assert np.allclose(V_ab_test, V_ab_matlab_disorder), "V_ab matrix does not match MATLAB benchmark"
     assert np.allclose(Gamma_ab_test, Gamma_ab_matlab_disorder), "Gamma_ab matrix does not match MATLAB benchmark"
+
+
+def test_sparse_rx_grid_matches_dense_equivalent():
+    dense_rx_nm = np.arange(0.0, 13.0, 1.0)
+    sparse_rx_nm = np.array([0.0, 3.0, 6.0, 9.0, 12.0])
+    dense_g = np.zeros((len(dense_rx_nm), 3, 3), dtype=complex)
+    sparse_g = np.zeros((len(sparse_rx_nm), 3, 3), dtype=complex)
+
+    for index, rx_value in enumerate(dense_rx_nm):
+        dense_g[index, 0, 0] = rx_value + 1j * (rx_value + 1.0)
+
+    for index, rx_value in enumerate(sparse_rx_nm):
+        sparse_g[index, 0, 0] = rx_value + 1j * (rx_value + 1.0)
+
+    u_x = np.array([1.0, 0.0, 0.0])
+    dense_v, dense_gamma = build_ddi_matrix_from_Gslice(
+        G_slice=dense_g,
+        Rx_nm=dense_rx_nm,
+        energy_emitter=1.0,
+        N_mol=5,
+        d_nm=3.0,
+        mu_D_debye=1.0,
+        uA=u_x,
+        uD=u_x,
+    )
+    sparse_v, sparse_gamma = build_ddi_matrix_from_Gslice(
+        G_slice=sparse_g,
+        Rx_nm=sparse_rx_nm,
+        energy_emitter=1.0,
+        N_mol=5,
+        d_nm=3.0,
+        mu_D_debye=1.0,
+        uA=u_x,
+        uD=u_x,
+    )
+
+    assert np.allclose(sparse_v, dense_v)
+    assert np.allclose(sparse_gamma, dense_gamma)
 
 if __name__ == "__main__":
     # test_stationary()
