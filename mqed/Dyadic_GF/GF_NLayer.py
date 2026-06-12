@@ -110,6 +110,7 @@ class NLayerGreenFunction:
         hybrid_validation_rtol: float = 5e-2,
         hybrid_validate_tail: bool = True,
         hybrid_fallback_to_direct: bool = True,
+        fixed_grid_points: int = 2048,
     ):
         if len(layers) < 2:
             raise ValueError("An N-layer Green's function requires at least two layers.")
@@ -127,8 +128,10 @@ class NLayerGreenFunction:
         self.limit = int(limit)
         self.split_propagating = bool(split_propagating)
         self.integration_method = integration_method.strip().lower()
-        if self.integration_method not in {"direct", "dcim", "hybrid_dcim"}:
-            raise ValueError("integration_method must be 'direct', 'dcim', or 'hybrid_dcim'.")
+        if self.integration_method not in {"direct", "dcim", "hybrid_dcim", "fixed_grid"}:
+            raise ValueError(
+                "integration_method must be 'direct', 'dcim', 'hybrid_dcim', or 'fixed_grid'."
+            )
         self.dcim_q_start = float(dcim_q_start)
         self.dcim_q_stop = dcim_q_stop
         self.dcim_sample_count = int(dcim_sample_count)
@@ -144,6 +147,7 @@ class NLayerGreenFunction:
         self.hybrid_validation_rtol = float(hybrid_validation_rtol)
         self.hybrid_validate_tail = bool(hybrid_validate_tail)
         self.hybrid_fallback_to_direct = bool(hybrid_fallback_to_direct)
+        self.fixed_grid_points = int(fixed_grid_points)
         self.last_hybrid_dcim_report: dict[str, object] | None = None
 
         self.eps = np.array([layer.epsilon for layer in self.layers], dtype=complex)
@@ -516,6 +520,8 @@ class NLayerGreenFunction:
             return self.compute_integrals_dcim(rho, z_observer, z_source)
         if self.integration_method == "hybrid_dcim":
             return self.compute_integrals_hybrid_dcim(rho, z_observer, z_source)
+        if self.integration_method == "fixed_grid":
+            return self.compute_integrals_fixed_grid(rho, z_observer, z_source)
 
         def integrand(q: float) -> np.ndarray:
             kernels = self.bessel_free_kernels(q, z_observer, z_source)
@@ -526,6 +532,56 @@ class NLayerGreenFunction:
 
         result = self.complex_quad(integrand, a=0)
         return np.asarray(result, dtype=complex)
+
+    def _fixed_grid_q_stop(self) -> float:
+        if self.qmax is None:
+            raise ValueError("fixed_grid integration requires a finite simulation.integration.qmax.")
+        return float(self.qmax)
+
+    def _sample_fixed_grid_kernels(self, z_observer: float, z_source: float):
+        if self.fixed_grid_points < 2:
+            raise ValueError("fixed_grid_points must be at least 2.")
+        q_values = np.linspace(0.0, self._fixed_grid_q_stop(), self.fixed_grid_points)
+        kernel_samples = np.array(
+            [self.bessel_free_kernels(q, z_observer, z_source) for q in q_values],
+            dtype=complex,
+        )
+        return q_values, kernel_samples
+
+    def compute_integrals_fixed_grid(
+        self,
+        rho: float,
+        z_observer: float,
+        z_source: float,
+    ) -> np.ndarray:
+        return self.compute_integrals_fixed_grid_for_rhos(
+            np.array([rho], dtype=float),
+            z_observer,
+            z_source,
+        )[0]
+
+    def compute_integrals_fixed_grid_for_rhos(
+        self,
+        rhos: np.ndarray,
+        z_observer: float,
+        z_source: float,
+    ) -> np.ndarray:
+        q_values, kernel_samples = self._sample_fixed_grid_kernels(z_observer, z_source)
+        q_rho = q_values[:, None] * np.asarray(rhos, dtype=float)[None, :]
+        bessel_factors = np.stack(
+            [
+                jv(0, q_rho),
+                jv(2, q_rho),
+                jv(0, q_rho),
+                jv(2, q_rho),
+                jv(1, q_rho),
+                jv(1, q_rho),
+                jv(0, q_rho),
+            ],
+            axis=2,
+        )
+        integrand = kernel_samples[:, None, :] * bessel_factors
+        return np.trapezoid(integrand, x=q_values, axis=0)
 
     def _hybrid_default_direct_q_stop(self) -> float:
         if self.hybrid_direct_q_stop is not None:
@@ -761,6 +817,9 @@ class NLayerGreenFunction:
         """
         rho = np.sqrt(x**2 + y**2)
         integrals = self.compute_integrals(rho, z_observer, z_source)
+        return self.scatter_component_from_integrals(x, y, integrals)
+
+    def scatter_component_from_integrals(self, x: float, y: float, integrals: np.ndarray):
         ms = self.scattering_s_component(x, y, integrals)
         mp = self.scattering_p_component(x, y, integrals)
         return 1j / (4 * np.pi) * (ms + mp)
@@ -848,3 +907,35 @@ class NLayerGreenFunction:
             z_observer,
             z_source,
         )
+
+    def calculate_total_Green_functions_for_x_values(
+        self,
+        x_values: np.ndarray,
+        y: float,
+        z_observer: float,
+        z_source: float,
+    ):
+        if self.integration_method != "fixed_grid":
+            return np.array(
+                [
+                    self.calculate_total_Green_function(x, y, z_observer, z_source)
+                    for x in x_values
+                ],
+                dtype=complex,
+            )
+
+        rhos = np.sqrt(np.asarray(x_values, dtype=float) ** 2 + y**2)
+        integrals_by_rho = self.compute_integrals_fixed_grid_for_rhos(
+            rhos,
+            z_observer,
+            z_source,
+        )
+        values = np.zeros((len(x_values), 3, 3), dtype=complex)
+        for index, (x, integrals) in enumerate(zip(x_values, integrals_by_rho)):
+            values[index] = self.vacuum_component(
+                x,
+                y,
+                z_observer,
+                z_source,
+            ) + self.scatter_component_from_integrals(x, y, integrals)
+        return values

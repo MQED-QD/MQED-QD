@@ -78,6 +78,7 @@ simulation:
     hybrid_validation_rtol: 5.0e-2
     hybrid_validate_tail: true
     hybrid_fallback_to_direct: true
+    fixed_grid_points: 2048
 
 parallel:
   backend: sequential

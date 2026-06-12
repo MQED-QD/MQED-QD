@@ -11,7 +11,12 @@ from tqdm import tqdm
 
 from mqed.Dyadic_GF.GF_NLayer import LayerSpec, NLayerGreenFunction
 from mqed.Dyadic_GF.data_provider import DataProvider
-from mqed.Dyadic_GF.main import _deduplicate_sorted_grid, _maybe_auto_launch_mpi, build_grid
+from mqed.Dyadic_GF.main import (
+    _deduplicate_sorted_grid,
+    _maybe_auto_launch_mpi,
+    build_grid,
+    build_position_grid,
+)
 from mqed.utils.SI_unit import c, eV_to_J, hbar
 from mqed.utils.dgf_data import save_gf_h5
 from mqed.utils.hydra_local import prepare_hydra_config_path
@@ -115,10 +120,27 @@ def _compute_one_energy(
         hybrid_validation_rtol=5e-2 if integ_cfg is None else float(integ_cfg.get("hybrid_validation_rtol", 5e-2)),
         hybrid_validate_tail=True if integ_cfg is None else bool(integ_cfg.get("hybrid_validate_tail", True)),
         hybrid_fallback_to_direct=True if integ_cfg is None else bool(integ_cfg.get("hybrid_fallback_to_direct", True)),
+        fixed_grid_points=2048 if integ_cfg is None else int(integ_cfg.get("fixed_grid_points", 2048)),
     )
 
     total = np.zeros((len(rx_values_m), 3, 3), dtype=complex)
     vacuum = np.zeros_like(total)
+    if integration_method == "fixed_grid":
+        total[:] = calculator.calculate_total_Green_functions_for_x_values(
+            rx_values_m,
+            y=0.0,
+            z_observer=z_observer,
+            z_source=z_source,
+        )
+        for rx_index, rx_m in enumerate(rx_values_m):
+            vacuum[rx_index] = calculator.vacuum_component(
+                x=rx_m,
+                y=0.0,
+                z_observer=z_observer,
+                z_source=z_source,
+            )
+        return idx, total, vacuum
+
     rx_iter = enumerate(rx_values_m)
     if rx_progress_desc is not None:
         rx_iter = enumerate(tqdm(rx_values_m, desc=rx_progress_desc, ncols=100, leave=False))
@@ -277,16 +299,12 @@ def run_simulation(cfg: DictConfig) -> None:
     sim_params = cfg.simulation
     integ_cfg = getattr(sim_params, "integration", None)
     integration_method = "direct" if integ_cfg is None else str(integ_cfg.get("method", "direct"))
-    if integration_method.strip().lower() not in {"direct", "dcim", "hybrid_dcim"}:
+    if integration_method.strip().lower() not in {"direct", "dcim", "hybrid_dcim", "fixed_grid"}:
         raise ValueError(
-            "simulation.integration.method must be 'direct', 'dcim', or 'hybrid_dcim'."
+            "simulation.integration.method must be 'direct', 'dcim', 'hybrid_dcim', or 'fixed_grid'."
         )
     energy_ev_array, target_lambdas_m = _energy_grid(sim_params)
-    rx_values_nm = np.linspace(
-        sim_params.position.Rx_nm.start,
-        sim_params.position.Rx_nm.stop,
-        sim_params.position.Rx_nm.points,
-    )
+    rx_values_nm = build_position_grid(sim_params.position.Rx_nm)
     rx_values_m = rx_values_nm * 1e-9
     parallel_cfg = cfg.get("parallel", {})
     backend = parallel_cfg.get("backend", "sequential") if parallel_cfg else "sequential"

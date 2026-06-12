@@ -120,6 +120,28 @@ def build_grid(config):
         raise TypeError(f"Unsupported spectral config type: {type(config)}")
 
 
+def build_position_grid(config) -> np.ndarray:
+    """Build a 1-D position grid while preserving the legacy Rx format.
+
+    Accepted formats:
+        - Legacy dict:   ``{start: 0.0, stop: 120.0, points: 121}``
+        - Values dict:   ``{values: [0.0, 2.0, 4.0]}``
+        - Single value:  ``2.0``
+        - List:          ``[0.0, 2.0, 4.0]``
+        - Dict/linspace: ``{min: 0.0, max: 100.0, points: 51}``
+        - Piecewise:     ``{segments: [{min: 0.0, max: 20.0, points: 11}, ...]}``
+
+    Returns values in the same units as the input config, typically nm for
+    ``simulation.position.Rx_nm``.
+    """
+    if isinstance(config, (dict, DictConfig)) and "values" in config:
+        return build_grid(config["values"])
+    if isinstance(config, (dict, DictConfig)) and {"start", "stop", "points"} <= set(config):
+        return np.linspace(config.start, config.stop, config.points, dtype=float)
+
+    return build_grid(config)
+
+
 # ─────────────────────────────────────────────────────────────────────
 #  Per-energy worker (top-level function so it can be pickled by joblib)
 # ─────────────────────────────────────────────────────────────────────
@@ -408,11 +430,7 @@ def run_simulation(cfg: DictConfig) -> None:
     target_lambdas_m = 2 * np.pi * hbar * c / energy_J
 
     # ── Build Rx grid ──
-    rx_values_nm = np.linspace(
-        sim_params.position.Rx_nm.start,
-        sim_params.position.Rx_nm.stop,
-        sim_params.position.Rx_nm.points,
-    )
+    rx_values_nm = build_position_grid(sim_params.position.Rx_nm)
     rx_values_m = rx_values_nm * 1e-9
     logger.info(
         f"Grid: {len(energy_ev_array)} energies × {len(rx_values_m)} Rx points  |  backend={backend}"
