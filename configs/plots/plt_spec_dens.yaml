@@ -41,6 +41,9 @@ plot_settings:
   # Example: [[0, 0], [0, 3]] overlays both pair-resolved curves.
   pair_indices:
     - [0, 0]
+  pair_separation_values_nm: []
+  pair_reference_index: 0
+  pair_separation_tolerance_nm: 1.0e-6
   pair_multipliers: [1.0]
   pair_colors: null
   pair_linestyles: null
@@ -50,6 +53,7 @@ plot_settings:
   # Labels
   # For separation layout, {Rx} is replaced by the Rx value in nm
   label_template: "Rx = {Rx:.1f} nm"
+  pair_label_template: "R = {distance_nm:.1f} nm"
   xlabel: "Energy (eV)"
   ylabel: null
   title: "Spectral Density $J(\\omega)$"

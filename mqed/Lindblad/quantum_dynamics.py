@@ -1,14 +1,14 @@
 from __future__ import annotations
 import numpy as np 
-from qutip import *
+from qutip import Qobj, expect, mesolve, projection, qzero, sesolve
 from dataclasses import dataclass, field
 from abc import ABC, abstractmethod
-from typing import Callable, Iterable, List, Optional, Sequence, Tuple, Dict, Any, Union
+from typing import List, Optional, Sequence, Dict, Any, Union
 from loguru import logger
 
 
 from mqed.utils.au_unit import au_to_eV, ps_to_au
-from mqed.Lindblad.ddi_matrix import _phi_wrapped_normal_deg, build_ddi_matrix_from_Gslice
+from mqed.Lindblad.ddi_matrix import build_ddi_matrix
 from mqed.utils.orientation import resolve_angle_deg, spherical_to_cartesian_dipole
 from mqed.Lindblad.coupling_filter import enforce_coupling_range
 
@@ -38,6 +38,7 @@ class SimulationConfig:
     disorder_sigma_phi_deg: Union[None,float] # standard deviation of azimuthal angle
     mode: str                   # The string for angle-ordered system or disorder system.
     coupling_limit: CouplingLimitConfig = field(default_factory=CouplingLimitConfig)
+    gf_layout: str = "separation"
 
 @dataclass
 class SimulationResult:
@@ -66,38 +67,43 @@ class QuantumDynamics(ABC):
             p_acceptor = spherical_to_cartesian_dipole(self.cfg.theta_deg,
                                                     self.phi_deg)
         
-        # here V and Gamma have unit of eV. 
-            self.V_ab, self.Gamma_ab = build_ddi_matrix_from_Gslice(
-                G_slice = Green,
-                Rx_nm = self.cfg.Rx_nm,
-                energy_emitter = self.cfg.emitter_frequency,
-                N_mol= self.cfg.Nmol,
-                d_nm = self.cfg.d_nm,
-                uD = p_donor,
-                uA = p_acceptor,
-                mu_D_debye = self.cfg.mu_D_debye,
-                mu_A_debye = self.cfg.mu_A_debye,
-                mode = self.cfg.mode,
-                phi_deg = self.phi_deg,
-                theta_deg= self.cfg.theta_deg,
-                disorder_sigma_phi_deg= self.cfg.disorder_sigma_phi_deg,
-                disorder_seed= None
+            green_kwargs = {"G_pair": Green} if self.cfg.gf_layout == "pair" else {
+                "G_slice": Green,
+                "Rx_nm": self.cfg.Rx_nm,
+                "d_nm": self.cfg.d_nm,
+            }
+            self.V_ab, self.Gamma_ab = build_ddi_matrix(
+                energy_emitter=self.cfg.emitter_frequency,
+                N_mol=self.cfg.Nmol,
+                mu_D_debye=self.cfg.mu_D_debye,
+                mu_A_debye=self.cfg.mu_A_debye,
+                uD=p_donor,
+                uA=p_acceptor,
+                mode=self.cfg.mode,
+                phi_deg=self.phi_deg,
+                theta_deg=self.cfg.theta_deg,
+                disorder_sigma_phi_deg=self.cfg.disorder_sigma_phi_deg,
+                disorder_seed=None,
+                **green_kwargs,
             )
         else:  # disorder mode
             logger.info("Building Hamiltonian for orientation-disordered system.")
-            self.V_ab, self.Gamma_ab = build_ddi_matrix_from_Gslice(
-                G_slice = Green,
-                Rx_nm = self.cfg.Rx_nm,
-                energy_emitter = self.cfg.emitter_frequency,
-                N_mol= self.cfg.Nmol,
-                d_nm = self.cfg.d_nm,
-                mu_D_debye = self.cfg.mu_D_debye,
-                mu_A_debye = self.cfg.mu_A_debye,
-                mode = self.cfg.mode,
-                phi_deg = self.cfg.phi_deg,
-                theta_deg= self.cfg.theta_deg,
-                disorder_sigma_phi_deg= self.cfg.disorder_sigma_phi_deg,
-                disorder_seed= seed
+            green_kwargs = {"G_pair": Green} if self.cfg.gf_layout == "pair" else {
+                "G_slice": Green,
+                "Rx_nm": self.cfg.Rx_nm,
+                "d_nm": self.cfg.d_nm,
+            }
+            self.V_ab, self.Gamma_ab = build_ddi_matrix(
+                energy_emitter=self.cfg.emitter_frequency,
+                N_mol=self.cfg.Nmol,
+                mu_D_debye=self.cfg.mu_D_debye,
+                mu_A_debye=self.cfg.mu_A_debye,
+                mode=self.cfg.mode,
+                phi_deg=self.cfg.phi_deg,
+                theta_deg=self.cfg.theta_deg,
+                disorder_sigma_phi_deg=self.cfg.disorder_sigma_phi_deg,
+                disorder_seed=seed,
+                **green_kwargs,
             )
         cl = getattr(self.cfg, "coupling_limit", None)
         if cl is not None and cl.enable:

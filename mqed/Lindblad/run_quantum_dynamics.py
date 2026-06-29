@@ -186,15 +186,22 @@ def app_run(cfg: DictConfig, output_dir: Optional[Path] = None):
 
     logger.info("--- Starting quantum dynamics simulation---")
 # 1) Load Green's function slice at the emitter energy
-    data = load_gf_h5(cfg.greens.h5_path)   # {"G_total","G_vac","energy_eV","Rx_nm","zD","zA"}
-    G_slice  = data["G_total"]             # (M,N,3,3)
-    E_eV  = data["energy_eV"]            # (M,)
-    Rx_nm = data["Rx_nm"] 
+    data = load_gf_h5(cfg.greens.h5_path)
+    G_data = data["G_total"]
+    E_eV = data["energy_eV"]
+    gf_layout = str(data.get("gf_layout", "separation"))
+    Rx_nm = data["Rx_nm"] if gf_layout == "separation" else np.array([], dtype=float)
     
     logger.info(f"Dipole heights (nm): zD={data['zD']}  zA={data['zA']}")
     logger.info(f"inter-site distance (nm): {cfg.simulation.d_nm}")
+    logger.info(f"Green tensor layout: {gf_layout}")
 
-    G_slice = G_slice[0] # use the first energy slice for now
+    G_slice = G_data[0]
+    if gf_layout == "pair" and G_slice.shape[:2] != (cfg.simulation.Nmol, cfg.simulation.Nmol):
+        raise ValueError(
+            f"Pair-indexed GF has emitter shape {G_slice.shape[:2]}, "
+            f"but simulation.Nmol={cfg.simulation.Nmol}."
+        )
 
 
     # 2) Build SimulationConfig (unify with your abstractions)
@@ -215,6 +222,7 @@ def app_run(cfg: DictConfig, output_dir: Optional[Path] = None):
         disorder_sigma_phi_deg=cfg.simulation.get('disorder_sigma_phi_deg', None),
         mode=cfg.simulation.mode,
         coupling_limit=cfg.simulation.get('coupling_limit', None),
+        gf_layout=gf_layout,
     )
 
 
