@@ -1,0 +1,36 @@
+defaults:
+  - _self_
+  - override hydra/job_logging: default
+
+hydra:
+  job:
+    name: emission_spectrum_example
+
+input_file: "${oc.env:MQED_ROOT,./outputs}/mie_silver_sphere_ring.h5"
+output_prefix: "sphere_emission_example"
+
+green_component: structure
+shift_method: real_green
+mu_debye: 24.0
+gamma0_eV: 0.05
+normalize: true
+transition_energy_eV: null
+bright_weights: null
+
+transition_energy_grid_eV:
+  min: 2.6
+  max: 3.2
+  points: 61
+
+orientations:
+  theta_deg: 90.0
+  phi_deg: 0.0
+  emitter_orientations:
+    - [-0.0, 1.0, 0.0]
+    - [-0.7071067811865475, 0.7071067811865475, 0.0]
+    - [-1.0, 0.0, 0.0]
+    - [-0.7071067811865475, -0.7071067811865475, 0.0]
+    - [-0.0, -1.0, 0.0]
+    - [0.7071067811865475, -0.7071067811865475, 0.0]
+    - [1.0, 0.0, 0.0]
+    - [0.7071067811865475, 0.7071067811865475, 0.0]

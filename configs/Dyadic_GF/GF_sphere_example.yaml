@@ -1,0 +1,86 @@
+# Mie Green tensor example for the ring geometry in
+# Varguet et al., J. Chem. Phys. 154, 084303 (2021), Fig. 1.
+#
+# Geometry:
+#   - silver sphere radius R = 8 nm in air/vacuum
+#   - N_e orthoradial emitters in the equatorial plane
+#   - emitter-surface gap h = 2 nm, so emitter radius is R + h = 10 nm
+#   - dipole moment magnitude d = 24 D
+#
+# The pair layout stores G(r_i, r_j, omega) for every emitter pair.  The
+# emitter_orientations below are the local azimuthal unit vectors e_phi and are
+# intended for downstream projection/DDI calculations.
+
+defaults:
+  - hydra: default
+  - _self_
+
+hydra:
+  job:
+    name: GF_sphere_example
+
+simulation:
+  spectral_param: energy_eV
+  energy_eV:
+    min: 2.6
+    max: 3.2
+    points: 7
+  nmax: 20
+  strict_regions: true
+
+  geometry:
+    boundary: sphere
+    radius_nm: 8.0
+
+  sphere_example:
+    reference: "Varguet et al., J. Chem. Phys. 154, 084303 (2021), Fig. 1"
+    emitter_count: 8
+    sphere_radius_nm: 8.0
+    emitter_surface_gap_nm: 2.0
+    emitter_radius_nm: 10.0
+    dipole_moment_debye: 24.0
+    orientation: orthoradial
+
+  emitter_positions_nm:
+    - [10.0, 0.0, 0.0]
+    - [7.0710678118654755, 7.0710678118654755, 0.0]
+    - [0.0, 10.0, 0.0]
+    - [-7.0710678118654755, 7.0710678118654755, 0.0]
+    - [-10.0, 0.0, 0.0]
+    - [-7.0710678118654755, -7.0710678118654755, 0.0]
+    - [0.0, -10.0, 0.0]
+    - [7.0710678118654755, -7.0710678118654755, 0.0]
+
+  emitter_orientations:
+    - [-0.0, 1.0, 0.0]
+    - [-0.7071067811865475, 0.7071067811865475, 0.0]
+    - [-1.0, 0.0, 0.0]
+    - [-0.7071067811865475, -0.7071067811865475, 0.0]
+    - [-0.0, -1.0, 0.0]
+    - [0.7071067811865475, -0.7071067811865475, 0.0]
+    - [1.0, 0.0, 0.0]
+    - [0.7071067811865475, 0.7071067811865475, 0.0]
+
+materials:
+  regions:
+    - n: 1.0
+      name: vacuum exterior
+    - type: drude
+      eps_inf: 6.0
+      # Paper value: omega_p = 1.20e16 rad/s = 7.898543 eV.
+      omega_p_eV: 7.8985434828
+      # Paper value: Gamma_p = 7.74e13 rad/s = 0.0509456 eV.
+      gamma_eV: 0.0509456045
+      name: silver sphere
+
+parallel:
+  backend: sequential
+  n_jobs: -1
+  mpi_nproc: 4
+  mpi_auto_launch: false
+  mpi_exec: mpiexec
+
+output:
+  directory: outputs
+  prefix: mie_silver_sphere_ring
+  layout: pair

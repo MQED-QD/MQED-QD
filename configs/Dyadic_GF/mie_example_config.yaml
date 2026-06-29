@@ -1,0 +1,59 @@
+simulation:
+  spectral_param: energy_eV
+  energy_eV:
+    min: 1.8
+    max: 2.5
+    points: 5
+  nmax: 15
+  geometry:
+    boundary: coreshell
+    radii_nm:
+    - 160.0
+    - 60.0
+  emitter_positions_nm:
+  - - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 20.0
+  source_position_nm:
+  - 0.0
+  - 0.0
+  - 0.0
+  position:
+    Rx_nm:
+      min: 0.0
+      max: 120.0
+      points: 121
+  source_orientation:
+  - 0.0
+  - 0.0
+  - 1.0
+  observer_orientation:
+  - 0.0
+  - 0.0
+  - 1.0
+  compute_purcell: true
+  strict_regions: true
+materials:
+  regions:
+  - n: 1.0
+    name: vacuum exterior
+  - type: drude
+    eps_inf: 1.0
+    omega_p_eV: 12.5
+    gamma_eV: 0.0621
+    name: aluminum shell
+  - n: 1.0
+    name: vacuum core
+parallel:
+  backend: sequential
+  n_jobs: -1
+  mpi_nproc: 4
+  mpi_auto_launch: true
+  mpi_exec: mpiexec
+output:
+  directory: outputs
+  prefix: mie_shell_cavity_scan
+  layout: scan

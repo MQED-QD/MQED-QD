@@ -1,0 +1,42 @@
+defaults:
+  - _self_
+  - override hydra/job_logging: default
+
+hydra:
+  job:
+    name: plot_emission_spectrum
+
+input_file: "${oc.env:MQED_ROOT,./outputs}/emission_spectrum.h5"
+
+font:
+  family: "Arial"
+  labelsize: 18
+  ticksize: 16
+  legendsize: 14
+  titlesize: 18
+  labelweight: "bold"
+  titleweight: "bold"
+
+plot_settings:
+  plot_type: map
+  transition_indices: [0]
+  transition_values_eV: []
+  transition_value_tolerance_eV: 1.0e-9
+  label_template: "ω0 = {omega0:.3f} eV"
+  xlabel: "Emission energy (eV)"
+  ylabel: "D(ω)"
+  map_ylabel: "Transition energy (eV)"
+  curve_ylabel: "D(ω)"
+  title: "Emission spectrum"
+  colorbar_label: "D(ω)"
+  cmap: viridis
+  xscale: linear
+  yscale: linear
+  x_range_eV: null
+  y_range: null
+  figsize: [7, 5]
+  lw: 1.5
+  dpi: 300
+  grid: true
+  save_plot: true
+  filename: "emission_spectrum.png"
