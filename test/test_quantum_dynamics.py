@@ -9,10 +9,7 @@ import os
 import numpy as np
 import pytest
 
-from mqed.Lindblad.run_quantum_dynamics import app_run
 from mqed.utils.dgf_data import load_gf_h5
-from mqed.Lindblad.ddi_matrix import build_ddi_matrix_from_Gslice
-from mqed.utils.orientation import resolve_angle_deg, spherical_to_cartesian_dipole
 from mqed.Lindblad.quantum_dynamics import SimulationConfig, LindbladDynamics, NonHermitianSchDynamics
 from mqed.Lindblad.quantum_operator import position_square_operator, x_shift2_conditional_callable
 
@@ -25,8 +22,6 @@ def test_lindblad_vs_nonhermitian():
     G_slice  = data["G_total"]             # (M,N,3,3)
     E_eV  = data["energy_eV"]            # (M,)
     Rx_nm = data["Rx_nm"]
-    Z_D = data["zD"]
-
     # Build a simple simulation config
     sim_cfg = SimulationConfig(
         tlist=np.arange(0, 1, 5e-3),  # 0 to 1 ps
@@ -126,3 +121,29 @@ def test_build_collapse_ops_clips_tiny_negative_gamma_eigenvalues():
     c_ops = lindblad_dyn.build_collapse_ops()
 
     assert len(c_ops) == 1
+
+
+def test_quantum_dynamics_build_hamiltonian_accepts_pair_layout():
+    sim_cfg = SimulationConfig(
+        tlist=np.array([0.0, 0.1]),
+        emitter_frequency=3.0,
+        Nmol=2,
+        Rx_nm=np.array([], dtype=float),
+        d_nm=3.0,
+        mu_D_debye=3.8,
+        mu_A_debye=None,
+        theta_deg=0.0,
+        phi_deg=0.0,
+        disorder_sigma_phi_deg=None,
+        mode="stationary",
+        gf_layout="pair",
+    )
+    G_pair = np.zeros((2, 2, 3, 3), dtype=complex)
+    G_pair[:, :, 2, 2] = 1j
+
+    lindblad_dyn = LindbladDynamics(sim_cfg, G_pair)
+    hamiltonian = lindblad_dyn.build_hamiltonian(G_pair)
+
+    assert hamiltonian.shape == (3, 3)
+    assert lindblad_dyn.V_ab.shape == (2, 2)
+    assert lindblad_dyn.Gamma_ab.shape == (2, 2)

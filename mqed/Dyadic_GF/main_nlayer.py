@@ -121,6 +121,28 @@ def _compute_one_energy(
         hybrid_validate_tail=True if integ_cfg is None else bool(integ_cfg.get("hybrid_validate_tail", True)),
         hybrid_fallback_to_direct=True if integ_cfg is None else bool(integ_cfg.get("hybrid_fallback_to_direct", True)),
         fixed_grid_points=2048 if integ_cfg is None else int(integ_cfg.get("fixed_grid_points", 2048)),
+        pole_search_real_min_factor=0.0 if integ_cfg is None else float(integ_cfg.get("pole_search_real_min_factor", 0.0)),
+        pole_search_real_max_factor=6.0 if integ_cfg is None else float(integ_cfg.get("pole_search_real_max_factor", 6.0)),
+        pole_search_imag_min_factor=-2.0 if integ_cfg is None else float(integ_cfg.get("pole_search_imag_min_factor", -2.0)),
+        pole_search_imag_max_factor=1e-3 if integ_cfg is None else float(integ_cfg.get("pole_search_imag_max_factor", 1e-3)),
+        pole_search_max_depth=10 if integ_cfg is None else int(integ_cfg.get("pole_search_max_depth", 10)),
+        pole_search_contour_points=24 if integ_cfg is None else int(integ_cfg.get("pole_search_contour_points", 24)),
+        pole_search_residual_tol=1e-6 if integ_cfg is None else float(integ_cfg.get("pole_search_residual_tol", 1e-6)),
+        pole_search_branch_guard_factor=1e-4 if integ_cfg is None else float(integ_cfg.get("pole_search_branch_guard_factor", 1e-4)),
+        pole_residue_radius_factor=1e-4 if integ_cfg is None else float(integ_cfg.get("pole_residue_radius_factor", 1e-4)),
+        pole_residue_points=96 if integ_cfg is None else int(integ_cfg.get("pole_residue_points", 96)),
+        branch_cut_t_limit_factor=8.0 if integ_cfg is None else float(integ_cfg.get("branch_cut_t_limit_factor", 8.0)),
+        branch_cut_side_offset_factor=1e-6 if integ_cfg is None else float(integ_cfg.get("branch_cut_side_offset_factor", 1e-6)),
+        branch_cut_layers="auto" if integ_cfg is None else integ_cfg.get("branch_cut_layers", "auto"),
+        branch_cut_sample_count=128 if integ_cfg is None else int(integ_cfg.get("branch_cut_sample_count", 128)),
+        branch_cut_image_count=16 if integ_cfg is None else int(integ_cfg.get("branch_cut_image_count", 16)),
+        branch_cut_validation_rtol=5e-2 if integ_cfg is None else float(integ_cfg.get("branch_cut_validation_rtol", 5e-2)),
+        branch_cut_validate=True if integ_cfg is None else bool(integ_cfg.get("branch_cut_validate", True)),
+        branch_cut_fallback_to_singularity_aware=True if integ_cfg is None else bool(integ_cfg.get("branch_cut_fallback_to_singularity_aware", True)),
+        branch_cut_include_poles=True if integ_cfg is None else bool(integ_cfg.get("branch_cut_include_poles", True)),
+        branch_cut_prefactor=1.0 + 0.0j if integ_cfg is None else complex(integ_cfg.get("branch_cut_prefactor", 1.0 + 0.0j)),
+        branch_cut_jump_sign=1.0 if integ_cfg is None else float(integ_cfg.get("branch_cut_jump_sign", 1.0)),
+        branch_cut_use_hankel=True if integ_cfg is None else bool(integ_cfg.get("branch_cut_use_hankel", True)),
     )
 
     total = np.zeros((len(rx_values_m), 3, 3), dtype=complex)
@@ -299,9 +321,17 @@ def run_simulation(cfg: DictConfig) -> None:
     sim_params = cfg.simulation
     integ_cfg = getattr(sim_params, "integration", None)
     integration_method = "direct" if integ_cfg is None else str(integ_cfg.get("method", "direct"))
-    if integration_method.strip().lower() not in {"direct", "dcim", "hybrid_dcim", "fixed_grid"}:
+    if integration_method.strip().lower() not in {
+        "direct",
+        "dcim",
+        "hybrid_dcim",
+        "fixed_grid",
+        "singularity_aware",
+        "branch_cut_dcim",
+    }:
         raise ValueError(
-            "simulation.integration.method must be 'direct', 'dcim', 'hybrid_dcim', or 'fixed_grid'."
+            "simulation.integration.method must be 'direct', 'dcim', 'hybrid_dcim', "
+            "'fixed_grid', 'singularity_aware', or 'branch_cut_dcim'."
         )
     energy_ev_array, target_lambdas_m = _energy_grid(sim_params)
     rx_values_nm = build_position_grid(sim_params.position.Rx_nm)

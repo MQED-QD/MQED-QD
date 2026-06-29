@@ -1,0 +1,177 @@
+from pathlib import Path
+
+import h5py
+import numpy as np
+import yaml
+from omegaconf import OmegaConf
+
+from mqed.analysis.emission_spectrum import (
+    compute_emission_spectrum,
+    project_pair_green,
+    project_separation_green_to_pair,
+    resolve_emitter_orientations,
+    run_from_config,
+    self_energy_from_projected_green,
+)
+from mqed.plotting.plot_emission_spectrum import (
+    _plot_curves,
+    _plot_map,
+)
+
+
+def _write_pair_gf(path: Path) -> None:
+    energy_eV = np.array([1.0, 1.1, 1.2])
+    G_total = np.zeros((3, 2, 2, 3, 3), dtype=complex)
+    G_vac = np.zeros_like(G_total)
+    G_structure = np.zeros_like(G_total)
+    for m in range(3):
+        G_structure[m, 0, 0, 2, 2] = 1.0e7j * (m + 1)
+        G_structure[m, 1, 1, 2, 2] = 1.1e7j * (m + 1)
+        G_structure[m, 0, 1, 2, 2] = 2.0e6j * (m + 1)
+        G_structure[m, 1, 0, 2, 2] = 2.0e6j * (m + 1)
+    G_total[:] = G_vac + G_structure
+    with h5py.File(path, "w") as h5:
+        h5.attrs["gf_layout"] = "pair"
+        h5.create_dataset("green_function_total", data=G_total)
+        h5.create_dataset("green_function_vacuum", data=G_vac)
+        h5.create_dataset("green_function_structure", data=G_structure)
+        h5.create_dataset("energy_eV", data=energy_eV)
+        h5.create_dataset("emitter_positions_nm", data=np.array([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]]))
+        position_fixed = h5.create_group("position_fixed")
+        position_fixed.attrs["zD_meters"] = 0.0
+        position_fixed.attrs["zA_meters"] = 0.0
+
+
+def test_resolve_emitter_orientations_accepts_explicit_vectors():
+    cfg = OmegaConf.create({"orientations": {"emitter_orientations": [[0, 0, 2], [0, 3, 0]]}})
+
+    orientations = resolve_emitter_orientations(cfg, 2)
+
+    assert np.allclose(orientations, [[0, 0, 1], [0, 1, 0]])
+
+
+def test_project_pair_green_uses_left_observer_and_right_source_orientations():
+    G_pair = np.zeros((1, 2, 2, 3, 3), dtype=complex)
+    G_pair[0, 0, 1, 0, 2] = 5.0 + 1.0j
+    orientations = np.array([[1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
+
+    projected = project_pair_green(G_pair, orientations)
+
+    assert projected.shape == (1, 2, 2)
+    assert projected[0, 0, 1] == 5.0 + 1.0j
+
+
+def test_project_separation_green_to_pair_maps_chain_separations():
+    G_sep = np.zeros((1, 3, 3, 3), dtype=complex)
+    G_sep[0, 0, 2, 2] = 1.0
+    G_sep[0, 1, 2, 2] = 2.0
+    G_sep[0, 2, 2, 2] = 3.0
+    orientations = np.tile([0.0, 0.0, 1.0], (3, 1))
+
+    projected = project_separation_green_to_pair(G_sep, np.array([0.0, 2.0, 4.0]), 3, 2.0, orientations)
+
+    assert np.allclose(projected[0], [[1.0, 2.0, 3.0], [2.0, 1.0, 2.0], [3.0, 2.0, 1.0]])
+
+
+def test_emission_spectrum_peaks_at_transition_without_self_energy():
+    energy_eV = np.array([1.0, 1.1, 1.2])
+    self_energy = np.zeros((3, 2, 2), dtype=complex)
+
+    spectrum = compute_emission_spectrum(self_energy, energy_eV, np.array([1.1]), gamma0_eV=0.05)
+
+    assert spectrum.shape == (1, 3)
+    assert int(np.argmax(spectrum[0])) == 1
+    assert np.all(spectrum >= 0.0)
+
+
+def test_self_energy_from_projected_green_returns_energy_units():
+    projected_G = np.zeros((2, 1, 1), dtype=complex)
+    projected_G[:, 0, 0] = [1.0e7j, 2.0e7j]
+
+    self_energy = self_energy_from_projected_green(
+        projected_G,
+        np.array([1.0, 2.0]),
+        mu_debye=3.8,
+        shift_method="real_green",
+    )
+
+    assert self_energy.shape == (2, 1, 1)
+    assert np.all(np.imag(self_energy[:, 0, 0]) > 0.0)
+
+
+def test_run_from_config_writes_emission_hdf5(tmp_path):
+    gf_path = tmp_path / "gf_pair.h5"
+    _write_pair_gf(gf_path)
+    cfg = OmegaConf.create({
+        "input_file": str(gf_path),
+        "output_prefix": "emission_test",
+        "green_component": "structure",
+        "shift_method": "real_green",
+        "mu_debye": 3.8,
+        "gamma0_eV": 0.05,
+        "transition_energy_eV": [1.1],
+        "normalize": True,
+        "orientations": {"theta_deg": 0.0, "phi_deg": 0.0},
+    })
+
+    output_path = run_from_config(cfg, tmp_path, tmp_path)
+
+    with h5py.File(output_path, "r") as h5:
+        assert h5["emission_spectrum"].shape == (1, 3)
+        assert h5["projected_G"].shape == (3, 2, 2)
+        assert h5["self_energy_eV"].shape == (3, 2, 2)
+        assert h5["emitter_orientations"].shape == (2, 3)
+        assert h5.attrs["gf_layout"] == "pair"
+        assert h5.attrs["green_component"] == "structure"
+        assert np.isclose(np.max(h5["emission_spectrum"][:]), 1.0)
+
+
+def test_plot_emission_map_and_curves_create_figures():
+    spectrum = np.array([[1.0, 2.0, 1.5], [0.5, 1.0, 0.7]])
+    emission_energy = np.array([1.0, 1.1, 1.2])
+    transition_energy = np.array([1.05, 1.15])
+    map_cfg = OmegaConf.create({"plot_settings": {"figsize": [4, 3], "title": "Map"}})
+    curves_cfg = OmegaConf.create({
+        "plot_settings": {
+            "figsize": [4, 3],
+            "transition_values_eV": [1.15],
+            "label_template": "E0 = {omega0:.2f} eV",
+        }
+    })
+
+    map_fig = _plot_map(spectrum, emission_energy, transition_energy, map_cfg)
+    curves_fig = _plot_curves(spectrum, emission_energy, transition_energy, curves_cfg)
+
+    assert map_fig.axes[0].get_title() == "Map"
+    assert len(curves_fig.axes[0].lines) == 1
+    assert curves_fig.axes[0].lines[0].get_label() == "E0 = 1.15 eV"
+
+
+def test_plot_emission_spectrum_hydra_entry_saves_png(tmp_path):
+    cfg = OmegaConf.create({
+        "font": {},
+        "plot_settings": {
+            "plot_type": "curves",
+            "transition_indices": [0],
+            "filename": "emission.png",
+            "save_plot": True,
+            "dpi": 80,
+        },
+    })
+    fig = _plot_curves(np.array([[1.0, 2.0, 1.0]]), np.array([1.0, 1.1, 1.2]), np.array([1.1]), cfg)
+    out = tmp_path / "emission.png"
+    fig.savefig(out)
+
+    assert out.exists()
+    assert out.stat().st_size > 0
+
+
+def test_emission_spectrum_configs_parse():
+    for relpath in [
+        "configs/analysis/emission_spectrum.yaml",
+        "configs/analysis/emission_spectrum_example.yaml",
+        "configs/plots/plt_emission_spectrum.yaml",
+    ]:
+        with open(relpath, "r", encoding="utf-8") as handle:
+            loaded = yaml.safe_load(handle)
+        assert loaded is not None

@@ -1,10 +1,17 @@
 import numpy as np
-
+import pytest
 from mqed.Dyadic_GF.GF_NLayer import LayerSpec, NLayerGreenFunction
 from mqed.Dyadic_GF.dcim import (
     fit_exponentials,
     integrate_complex_images,
     integrate_complex_images_range,
+)
+from mqed.Dyadic_GF.sommerfeld_singularities import (
+    BranchCutConfig,
+    PoleSearchConfig,
+    find_poles_by_winding,
+    residue_vector_by_contour,
+    residue_vector_by_limit,
 )
 from mqed.utils.SI_unit import c
 
@@ -152,3 +159,319 @@ def test_hybrid_dcim_fallback_runs_and_records_report():
     assert integrals.shape == (7,)
     assert np.all(np.isfinite(integrals))
     assert solver.last_hybrid_dcim_report is not None
+
+
+def test_winding_pole_search_finds_artificial_simple_root():
+    target = 2.0 - 0.25j
+    config = PoleSearchConfig(
+        real_min=0.0,
+        real_max=3.0,
+        imag_min=-1.0,
+        imag_max=0.25,
+        contour_points_per_side=12,
+        max_depth=5,
+        min_box_size=1e-4,
+        residual_tol=1e-10,
+        dedup_tol=1e-3,
+    )
+
+    poles = find_poles_by_winding(lambda q: q - target, "p", config)
+
+    assert len(poles) == 1
+    assert poles[0].polarization == "p"
+    assert np.isclose(poles[0].q, target)
+    assert poles[0].residual < 1e-10
+
+
+def test_pole_residue_helpers_recover_artificial_vector_residue():
+    pole = find_poles_by_winding(
+        lambda q: q - (1.0 - 0.2j),
+        "s",
+        PoleSearchConfig(
+            real_min=0.0,
+            real_max=2.0,
+            imag_min=-0.6,
+            imag_max=0.1,
+            contour_points_per_side=12,
+            max_depth=5,
+            min_box_size=1e-4,
+            residual_tol=1e-10,
+        ),
+    )[0]
+    expected = np.array([1.5 - 0.25j, -0.75 + 0.5j], dtype=complex)
+
+    def kernel(q):
+        return expected / (q - pole.q) + np.array([2.0, -1.0j], dtype=complex)
+
+    contour = residue_vector_by_contour(kernel, pole, radius=0.05, points=64)
+    limit = residue_vector_by_limit(kernel, pole, step=0.05)
+
+    assert np.allclose(contour.residues, expected, rtol=1e-10, atol=1e-10)
+    assert np.allclose(limit.residues, expected, rtol=1e-12, atol=1e-12)
+
+
+def test_singularity_aware_direct_quadrature_records_report_for_no_contrast_stack():
+    omega = 2.0e15
+    solver = NLayerGreenFunction(
+        layers=[
+            LayerSpec(epsilon=2.25 + 0.0j, thickness_m=None),
+            LayerSpec(epsilon=2.25 + 0.0j, thickness_m=80e-9),
+            LayerSpec(epsilon=2.25 + 0.0j, thickness_m=None),
+        ],
+        source_layer=1,
+        omega=omega,
+        qmax=2.0e7,
+        epsabs=1e-7,
+        epsrel=1e-7,
+        limit=40,
+        integration_method="singularity_aware",
+        pole_search_max_depth=3,
+    )
+
+    integrals = solver.compute_integrals(20e-9, 40e-9, 40e-9)
+
+    assert integrals.shape == (7,)
+    assert np.allclose(integrals, np.zeros(7, dtype=complex), atol=1e-18)
+    assert solver.last_singularity_report is not None
+    assert solver.last_singularity_report["method"] == "singularity_aware"
+    assert solver.last_singularity_report["pole_count"] == 0
+    assert solver.singularity_breakpoints(include_poles=False)
+
+
+def test_branch_cut_samples_are_finite_for_no_contrast_stack():
+    omega = 2.0e15
+    solver = NLayerGreenFunction(
+        layers=[
+            LayerSpec(epsilon=2.25 + 0.0j, thickness_m=None),
+            LayerSpec(epsilon=2.25 + 0.0j, thickness_m=80e-9),
+            LayerSpec(epsilon=2.25 + 0.0j, thickness_m=None),
+        ],
+        source_layer=1,
+        omega=omega,
+        qmax=2.0e7,
+        dcim_sample_count=6,
+    )
+    t_values = np.linspace(-0.2 * solver.k0, 0.2 * solver.k0, 5)
+
+    q_values, samples = solver.branch_cut_samples(40e-9, 40e-9, t_values=t_values)
+    values = solver.branch_cut_integrals(
+        20e-9,
+        40e-9,
+        40e-9,
+        config=BranchCutConfig.from_k0(
+            solver.k0,
+            branch_layer=1,
+            t_limit_factor=0.2,
+            side_offset_factor=1e-6,
+            epsabs=1e-7,
+            epsrel=1e-7,
+            limit=40,
+        ),
+    )
+
+    assert q_values.shape == (5,)
+    assert samples.shape == (5, 7)
+    assert values.shape == (7,)
+    assert np.all(np.isfinite(q_values))
+    assert np.all(np.isfinite(samples))
+    assert np.all(np.isfinite(values))
+    assert np.allclose(samples, np.zeros((5, 7), dtype=complex), atol=1e-18)
+    assert np.allclose(values, np.zeros(7, dtype=complex), atol=1e-18)
+
+
+def test_find_poles_rejects_unknown_polarization():
+    solver = NLayerGreenFunction(
+        layers=[
+            LayerSpec(epsilon=1.0 + 0.0j, thickness_m=None),
+            LayerSpec(epsilon=2.25 + 0.0j, thickness_m=80e-9),
+            LayerSpec(epsilon=1.0 + 0.0j, thickness_m=None),
+        ],
+        source_layer=1,
+        omega=2.0e15,
+        qmax=2.0e7,
+    )
+
+    with pytest.raises(ValueError, match="polarizations"):
+        solver.find_poles(polarizations=("x",))
+
+
+def test_main_nlayer_passes_singularity_aware_options(monkeypatch):
+    main_nlayer = pytest.importorskip("mqed.Dyadic_GF.main_nlayer")
+    captured = {}
+
+    class AttrDict(dict):
+        def __getattr__(self, name):
+            try:
+                return self[name]
+            except KeyError as exc:
+                raise AttributeError(name) from exc
+
+
+    class FakeCalculator:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+        def calculate_total_Green_function(self, x, y, z_observer, z_source):
+            return np.eye(3, dtype=complex) * (1.0 + x + y + z_observer + z_source)
+
+        def vacuum_component(self, x, y, z_observer, z_source):
+            return np.eye(3, dtype=complex)
+
+    monkeypatch.setattr(
+        main_nlayer,
+        "build_layers",
+        lambda stack_cfg, materials_cfg, omega: [
+            LayerSpec(epsilon=1.0 + 0.0j, thickness_m=None),
+            LayerSpec(epsilon=2.25 + 0.0j, thickness_m=80e-9),
+            LayerSpec(epsilon=1.0 + 0.0j, thickness_m=None),
+        ],
+    )
+    monkeypatch.setattr(main_nlayer, "NLayerGreenFunction", FakeCalculator)
+    stack_cfg = AttrDict({"source_layer": 1})
+    integ_cfg = AttrDict(
+        {
+            "method": "singularity_aware",
+            "qmax": 2.0e7,
+            "epsabs": 1e-6,
+            "epsrel": 1e-6,
+            "limit": 50,
+            "split_propagating": True,
+            "pole_search_real_min_factor": 0.1,
+            "pole_search_real_max_factor": 8.0,
+            "pole_search_imag_min_factor": -3.0,
+            "pole_search_imag_max_factor": 1e-4,
+            "pole_search_max_depth": 7,
+            "pole_search_contour_points": 16,
+            "pole_search_residual_tol": 1e-7,
+            "pole_search_branch_guard_factor": 2e-4,
+            "pole_residue_radius_factor": 3e-4,
+            "pole_residue_points": 80,
+            "branch_cut_t_limit_factor": 5.0,
+            "branch_cut_side_offset_factor": 2e-6,
+            "branch_cut_layers": "source",
+            "branch_cut_sample_count": 17,
+            "branch_cut_image_count": 4,
+            "branch_cut_validation_rtol": 0.25,
+            "branch_cut_validate": True,
+            "branch_cut_fallback_to_singularity_aware": False,
+            "branch_cut_include_poles": False,
+            "branch_cut_prefactor": "1+0j",
+            "branch_cut_jump_sign": -1.0,
+            "branch_cut_use_hankel": False,
+        }
+    )
+
+    _, total, vacuum = main_nlayer._compute_one_energy(
+        idx=0,
+        energy_eV=2.0,
+        lambda_m=600e-9,
+        rx_values_m=np.array([10e-9]),
+        z_observer=40e-9,
+        z_source=40e-9,
+        stack_cfg=stack_cfg,
+        materials_cfg=AttrDict({}),
+        integ_cfg=integ_cfg,
+    )
+
+    assert total.shape == (1, 3, 3)
+    assert vacuum.shape == (1, 3, 3)
+    assert captured["integration_method"] == "singularity_aware"
+    assert captured["pole_search_real_min_factor"] == 0.1
+    assert captured["pole_search_real_max_factor"] == 8.0
+    assert captured["pole_search_imag_min_factor"] == -3.0
+    assert captured["pole_search_imag_max_factor"] == 1e-4
+    assert captured["pole_search_max_depth"] == 7
+    assert captured["pole_search_contour_points"] == 16
+    assert captured["pole_search_residual_tol"] == 1e-7
+    assert captured["pole_search_branch_guard_factor"] == 2e-4
+    assert captured["pole_residue_radius_factor"] == 3e-4
+    assert captured["pole_residue_points"] == 80
+    assert captured["branch_cut_t_limit_factor"] == 5.0
+    assert captured["branch_cut_side_offset_factor"] == 2e-6
+    assert captured["branch_cut_layers"] == "source"
+    assert captured["branch_cut_sample_count"] == 17
+    assert captured["branch_cut_image_count"] == 4
+    assert captured["branch_cut_validation_rtol"] == 0.25
+    assert captured["branch_cut_validate"] is True
+    assert captured["branch_cut_fallback_to_singularity_aware"] is False
+    assert captured["branch_cut_include_poles"] is False
+    assert captured["branch_cut_prefactor"] == 1.0 + 0.0j
+    assert captured["branch_cut_jump_sign"] == -1.0
+    assert captured["branch_cut_use_hankel"] is False
+
+def test_branch_cut_dcim_zero_stack_accepts_zero_approximation():
+    omega = 2.0e15
+    solver = NLayerGreenFunction(
+        layers=[
+            LayerSpec(epsilon=2.25 + 0.0j, thickness_m=None),
+            LayerSpec(epsilon=2.25 + 0.0j, thickness_m=80e-9),
+            LayerSpec(epsilon=2.25 + 0.0j, thickness_m=None),
+        ],
+        source_layer=1,
+        omega=omega,
+        qmax=2.0e7,
+        epsabs=1e-7,
+        epsrel=1e-7,
+        limit=40,
+        integration_method="branch_cut_dcim",
+        branch_cut_layers="source",
+        branch_cut_sample_count=9,
+        branch_cut_image_count=3,
+        branch_cut_t_limit_factor=0.2,
+        branch_cut_include_poles=False,
+        branch_cut_use_hankel=False,
+        branch_cut_validate=True,
+        pole_search_max_depth=2,
+    )
+
+    integrals = solver.compute_integrals(20e-9, 40e-9, 40e-9)
+
+    assert integrals.shape == (7,)
+    assert np.all(np.isfinite(integrals))
+    assert np.allclose(integrals, np.zeros(7, dtype=complex), atol=1e-18)
+    assert solver.last_branch_cut_dcim_report is not None
+    assert solver.last_branch_cut_dcim_report["method"] == "branch_cut_dcim"
+    assert solver.last_branch_cut_dcim_report["accepted"] is True
+    assert solver.last_branch_cut_dcim_report["branch_layers"] == [1]
+    assert solver.last_branch_cut_dcim_report["pole_count"] == 0
+
+
+def test_branch_cut_dcim_falls_back_when_validation_fails():
+    omega = 2.0e15
+    solver = NLayerGreenFunction(
+        layers=[
+            LayerSpec(epsilon=1.0 + 0.0j, thickness_m=None),
+            LayerSpec(epsilon=2.25 + 0.0j, thickness_m=80e-9),
+            LayerSpec(epsilon=1.0 + 0.0j, thickness_m=None),
+        ],
+        source_layer=1,
+        omega=omega,
+        qmax=8.0e6,
+        epsabs=1e-6,
+        epsrel=1e-6,
+        limit=40,
+        integration_method="branch_cut_dcim",
+        branch_cut_layers="source",
+        branch_cut_sample_count=9,
+        branch_cut_image_count=3,
+        branch_cut_t_limit_factor=0.15,
+        branch_cut_prefactor=0.0 + 0.0j,
+        branch_cut_include_poles=False,
+        branch_cut_use_hankel=False,
+        branch_cut_validation_rtol=0.0,
+        branch_cut_fallback_to_singularity_aware=True,
+        pole_search_real_max_factor=1.0,
+        pole_search_max_depth=2,
+        pole_search_contour_points=8,
+    )
+
+    integrals = solver.compute_integrals(20e-9, 40e-9, 40e-9)
+    report = solver.last_branch_cut_dcim_report
+
+    assert report is not None
+    assert report["accepted"] is False
+    assert report["reference"] is not None
+    assert np.all(np.isfinite(integrals))
+    assert np.allclose(integrals, report["reference"])
+    assert report["max_relative_error"] > 0.0
+

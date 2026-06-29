@@ -204,6 +204,71 @@ def _normalize_pair_indices(raw_selection: Any) -> list[list[int]]:
     return pair_indices
 
 
+def _normalize_pair_separation_values_nm(raw_selection: Any) -> list[float]:
+    normalized = _parse_index_selection(
+        raw_selection,
+        default_value=[],
+        selection_name="plot_settings.pair_separation_values_nm",
+    )
+
+    if isinstance(normalized, (int, float)):
+        return [float(normalized)]
+
+    if not isinstance(normalized, list):
+        raise ValueError(
+            "plot_settings.pair_separation_values_nm must be a number or a list of numbers."
+        )
+
+    return [float(value) for value in normalized]
+
+
+def _resolve_pair_indices(ps, emitter_positions_nm, n_emitters: int) -> tuple[list[list[int]], list[float | None]]:
+    values_nm = _normalize_pair_separation_values_nm(ps.get("pair_separation_values_nm", []))
+    if not values_nm:
+        pair_indices = _normalize_pair_indices(ps.get("pair_indices", [[0, 0]]))
+        return pair_indices, [None] * len(pair_indices)
+
+    if emitter_positions_nm is None:
+        raise ValueError(
+            "plot_settings.pair_separation_values_nm requires emitter_positions_nm in the "
+            "spectral-density HDF5 file."
+        )
+
+    positions = np.asarray(emitter_positions_nm, dtype=float)
+    if positions.shape != (n_emitters, 3):
+        raise ValueError(
+            f"emitter_positions_nm shape {positions.shape} does not match J shape with N={n_emitters}."
+        )
+
+    reference_index = int(ps.get("pair_reference_index", 0))
+    if reference_index < 0 or reference_index >= n_emitters:
+        raise ValueError(f"plot_settings.pair_reference_index {reference_index} is out of range for N={n_emitters}.")
+
+    tolerance_nm = float(ps.get("pair_separation_tolerance_nm", 1e-6))
+    distances_nm = np.linalg.norm(positions - positions[reference_index], axis=1)
+    pairs: list[list[int]] = []
+    resolved_values: list[float | None] = []
+    for value_nm in values_nm:
+        matches = np.where(np.isclose(distances_nm, value_nm, rtol=0.0, atol=tolerance_nm))[0]
+        if matches.size == 0:
+            nearest_idx = int(np.argmin(np.abs(distances_nm - value_nm)))
+            logger.warning(
+                "Pair separation {:.6g} nm not found within {:.3g} nm from emitter {}; "
+                "nearest is emitter {} at {:.6g} nm, skipping.",
+                value_nm,
+                tolerance_nm,
+                reference_index,
+                nearest_idx,
+                float(distances_nm[nearest_idx]),
+            )
+            continue
+        beta = int(matches[0])
+        pairs.append([reference_index, beta])
+        resolved_values.append(float(distances_nm[beta]))
+
+    return pairs, resolved_values
+
+
 def _normalize_curve_scales(raw_scales: Any, count: int, setting_name: str) -> list[float]:
     """Return one multiplicative scale factor per plotted curve."""
     normalized = _parse_index_selection(
@@ -423,7 +488,7 @@ def _plot_separation_layout(J_eV, energy_eV, Rx_nm, cfg):
     return fig
 
 
-def _plot_pair_layout(J_eV, energy_eV, cfg):
+def _plot_pair_layout(J_eV, energy_eV, cfg, emitter_positions_nm=None):
     """Plot J_αβ(ω) for pair-indexed data.
 
     Produces one curve per selected (α, β) pair.
@@ -434,9 +499,7 @@ def _plot_pair_layout(J_eV, energy_eV, cfg):
         ps.get("spectral_density_unit", "eV"),
     )
 
-    # Select which pairs to plot: list of [alpha, beta] pairs
-    # Default: self-term of emitter 0
-    pair_indices = _normalize_pair_indices(ps.get("pair_indices", [[0, 0]]))
+    pair_indices, pair_distances_nm = _resolve_pair_indices(ps, emitter_positions_nm, J_eV.shape[0])
     yscale = ps.get("yscale", "linear")
     scale_factors = _resolve_curve_multipliers(
         ps,
@@ -449,8 +512,9 @@ def _plot_pair_layout(J_eV, energy_eV, cfg):
     fig, ax = plt.subplots(figsize=tuple(ps.get("figsize", [8, 5])))
 
     N = J_eV.shape[0]
-    for pair, scale_factor, color, linestyle in zip(
+    for pair, distance_nm, scale_factor, color, linestyle in zip(
         pair_indices,
+        pair_distances_nm,
         scale_factors,
         colors,
         linestyles,
@@ -467,10 +531,21 @@ def _plot_pair_layout(J_eV, energy_eV, cfg):
             setting_name="plot_settings.pair_multipliers",
         )
 
-        label = ps.get(
-            "label_template",
-            r"$J_{{\alpha={a},\beta={b}}}(\omega)$"
-        ).format(a=alpha, b=beta)
+        label_template = ps.get(
+            "pair_label_template",
+            ps.get(
+                "label_template",
+                r"$J_{{\alpha={a},\beta={b}}}(\omega)$",
+            ),
+        )
+        try:
+            label = label_template.format(a=alpha, b=beta, distance_nm=distance_nm, Rx=distance_nm)
+        except (KeyError, TypeError, ValueError):
+            label = (
+                r"$J_{{\alpha={a},\beta={b}}}(\omega)$"
+            ).format(a=alpha, b=beta)
+        if distance_nm is not None and "distance_nm" not in label_template and "Rx" not in label_template:
+            label = f"{label} ({distance_nm:g} nm)"
         label = _format_scaled_label(label, scale_factor)
         ax.plot(
             energy_eV,
@@ -564,7 +639,7 @@ def plot_spectral_density(cfg=None) -> None:
         Rx_nm = data["Rx_nm"]
         fig = _plot_separation_layout(J_eV, energy_eV, Rx_nm, cfg)
     elif gf_layout == "pair":
-        fig = _plot_pair_layout(J_eV, energy_eV, cfg)
+        fig = _plot_pair_layout(J_eV, energy_eV, cfg, data.get("emitter_positions_nm", None))
     else:
         raise ValueError(f"Unknown GF layout: {gf_layout}")
 
