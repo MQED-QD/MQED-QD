@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.3.0 - 2026-06-29
+
+### N-layer singularity diagnostics
+
+- Added `mqed.Dyadic_GF.sommerfeld_singularities` with argument-principle pole search, residue extraction, and vertical-wavenumber branch-cut sampling/integration helpers.
+- Extended `NLayerGreenFunction` with `singularity_aware` quadrature, pole diagnostics, branch-cut diagnostics, and an experimental `branch_cut_dcim` mode that validates against `singularity_aware` and falls back by default when the fitted branch/pole decomposition is not accurate enough.
+- Added Hydra pass-through options for pole search, branch-cut diagnostics, and `branch_cut_dcim` validation controls in the N-layer runner.
+
+### Experimental Mie and emission-spectrum workflows
+
+- Added an experimental Mie Green's-function workflow (`GF_Mie.py`, `main_mie.py`, and `mqed_GF_Mie`) with example Hydra configs for spherical geometries.
+- Added experimental emission-spectrum calculation and plotting entry points with Hydra configs.
+- Important: `GF_Mie.py` and `emission_spectrum.py` have not yet been verified against literature results. They are included for development/testing and should not be used as validated production workflows until benchmark comparisons are completed.
+
+### Pair-layout analysis and plotting
+
+- Added pair-indexed Green tensor handling for Lindblad/DDI construction and downstream spectral-density plotting.
+- Added spectral-density plot selection by pair separation values and configurable pair labels.
+
+### Tests and validation
+
+- Added regression tests for pole search, residue extraction, branch-cut diagnostics, `singularity_aware`, `branch_cut_dcim` validation/fallback, pair-layout dynamics, Mie output shape handling, emission-spectrum calculation, and pair spectral-density plotting.
+
 ## 1.2.1 - 2026-06-12
 
 ### N-layer Green's-function workflow

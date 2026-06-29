@@ -16,12 +16,12 @@ near plasmonic interfaces using macroscopic quantum electrodynamics (MQED).
 
 ## Latest Update
 
-**Version 1.2.1** improves the N-layer workflow for sparse emitter separations, repeated-Rx Green's-function sweeps, and spectral-density validation plots.
+**Version 1.3.0** adds singularity-aware N-layer Green's-function diagnostics, an experimental branch-cut DCIM path, and early Mie/emission-spectrum workflows.
 
-- **Flexible Rx grids** let Green's-function runs store only the separations needed by downstream DDI and Lindblad calculations, such as `[0, d, 2d, ...]`.
-- **Batched fixed-grid N-layer integration** reuses Bessel-free Sommerfeld kernels across many Rx values while keeping the direct quadrature path as the reference.
-- **Spectral-density plotting controls** select curves by physical `Rx_nm`, switch the y-axis between eV and `s^-1`, and format large SI values with optional scientific notation.
-- **Default N-layer CLI compatibility** keeps `mqed_GF_NLayer` working with the bundled five-layer example config.
+- **N-layer pole and branch-cut tools** add Airy-denominator pole search, pole-residue extraction, branch-cut sampling/integration, and `singularity_aware` direct quadrature split at light lines and near-real pole projections.
+- **Experimental `branch_cut_dcim` integration** samples Sommerfeld branch cuts in the vertical-wavenumber plane, fits the branch contribution with exponentials, optionally adds extracted pole terms, and validates/falls back to `singularity_aware` by default.
+- **Experimental Mie Green's-function and emission-spectrum workflows** are included for development and API testing, but `GF_Mie.py` and `emission_spectrum.py` have not yet been verified against literature benchmarks and should not be treated as production-ready.
+- **Pair-indexed Green tensor support** lets downstream Lindblad and spectral-density tooling consume pair-layout Green-function output in addition to separation-layout data.
 
 See `CHANGELOG.md` for the full release notes.
 
@@ -96,8 +96,13 @@ For step-by-step walkthroughs, see the
 |---------|-------------|
 | `mqed_GF_Sommerfeld` | Dyadic Green's function (planar geometry) |
 | `mqed_GF_NLayer` | Dyadic Green's function for N-layer planar stacks |
+| `mqed_GF_Mie` | Experimental Mie Green's function workflow; not literature-validated yet |
 | `mqed_RET` | Resonance energy transfer analysis |
 | `mqed_FE` | Field enhancement analysis |
+| `mqed_calc_spec_dens` | Compute spectral density from Green tensors |
+| `mqed_plot_spec_dens` | Plot spectral density |
+| `mqed_calc_emission_spectrum` | Experimental emission-spectrum calculation; not literature-validated yet |
+| `mqed_plot_emission_spectrum` | Plot experimental emission-spectrum output |
 | `mqed_lindblad` | Lindblad master-equation dynamics |
 | `mqed_nhse` | Non-Hermitian dynamics (recommended for large systems) |
 | `mqed_plot_msd` | Plot mean-squared displacement |
