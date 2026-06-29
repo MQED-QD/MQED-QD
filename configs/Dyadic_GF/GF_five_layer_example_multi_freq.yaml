@@ -61,6 +61,11 @@ simulation:
       stop: 12
       points: 13
   integration:
+    # This verified literature-reproduction config keeps the original direct
+    # quadrature as the default. To test the pole/branch-aware paths, override
+    # this value from the CLI, for example:
+    #   simulation.integration.method=singularity_aware
+    #   simulation.integration.method=branch_cut_dcim
     method: direct
     qmax: null
     epsabs: 1.0e-10
@@ -79,6 +84,50 @@ simulation:
     hybrid_validate_tail: true
     hybrid_fallback_to_direct: true
     fixed_grid_points: 2048
+
+    # Singularity-aware direct quadrature options.
+    # The Sommerfeld integration variable is the transverse wave number q [1/m].
+    # All pole_search_*_factor values below are dimensionless multipliers of
+    # |k0| = omega / c [1/m], so the complex pole-search box is
+    #   Re(q) / |k0| in [real_min_factor, real_max_factor]
+    #   Im(q) / |k0| in [imag_min_factor, imag_max_factor]
+    # For plasmonic metal stacks, poles can move into the high-k evanescent
+    # region q/|k0| >> 1. Increase pole_search_real_max_factor, e.g. 10-20,
+    # when validating near-field, guided-mode, or strongly confined plasmonic
+    # behavior. Use broader/deeper searches only as diagnostics because they
+    # are slower and may reveal heavily damped poles with little observable
+    # contribution.
+    # The solver detects Airy-denominator poles in the complex q plane and
+    # splits the real-axis Sommerfeld quadrature at branch points and near-real
+    # pole projections. Explicit pole/branch-cut contributions remain
+    # diagnostic; they are not automatically added to the Green tensor.
+    pole_search_real_min_factor: 0.0
+    pole_search_real_max_factor: 6.0
+    pole_search_imag_min_factor: -2.0
+    pole_search_imag_max_factor: 1.0e-3
+    pole_search_max_depth: 10
+    pole_search_contour_points: 24
+    pole_search_residual_tol: 1.0e-6
+    pole_search_branch_guard_factor: 1.0e-4
+    pole_residue_radius_factor: 1.0e-4
+    pole_residue_points: 96
+
+    # Branch-cut diagnostics and experimental branch-cut DCIM options.
+    # Use branch_cut_dcim as an opt-in experimental method only after comparing
+    # against singularity_aware for this stack/frequency range. When validation
+    # fails, branch_cut_dcim falls back to singularity_aware by default.
+    branch_cut_t_limit_factor: 8.0
+    branch_cut_side_offset_factor: 1.0e-6
+    branch_cut_layers: auto
+    branch_cut_sample_count: 128
+    branch_cut_image_count: 16
+    branch_cut_validation_rtol: 5.0e-2
+    branch_cut_validate: true
+    branch_cut_fallback_to_singularity_aware: true
+    branch_cut_include_poles: true
+    branch_cut_prefactor: "1.0+0.0j"
+    branch_cut_jump_sign: 1.0
+    branch_cut_use_hankel: true
 
 parallel:
   backend: sequential
