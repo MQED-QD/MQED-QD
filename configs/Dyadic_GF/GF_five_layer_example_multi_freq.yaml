@@ -61,10 +61,57 @@ simulation:
       stop: 12
       points: 13
   integration:
-    # This verified literature-reproduction config keeps the original direct
-    # quadrature as the default. To test the pole/branch-aware paths, override
-    # this value from the CLI, for example:
+    # Available N-layer integration methods and practical guidance:
+    #   direct
+    #     Pros: plain real-axis quad_vec reference; simplest and least modeled.
+    #     Cons: can miss narrow pole/branch-adjacent features unless q sampling
+    #       and adaptive subdivision happen to resolve them. Good baseline only.
+    #   singularity_aware
+    #     Pros: recommended robust benchmark for this plasmonic five-layer stack;
+    #       still direct Bessel-form quadrature, but split at branch points and
+    #       near-real pole projections. Best first choice for Rx=0 Purcell/LDOS.
+    #     Cons: slower than DCIM; explicit pole/branch terms are diagnostic only.
+    #   hybrid_dcim
+    #     Pros: useful near-field accelerator; direct low-q part plus fitted
+    #       high-q evanescent tail. Often more relevant than branch-cut DCIM for
+    #       small Rx dominated by high-k evanescent/plasmonic coupling.
+    #     Cons: tail fit can fail near sharp poles/branch features; keep validation
+    #       and fallback enabled when using metal stacks. At Rx=0 this solver
+    #       automatically routes to singularity_aware.
+    #   pole_subtracted_direct
+    #     Pros: Stage-1 Bessel-form pole subtraction. Detected simple-pole
+    #       residues are subtracted from the real-axis kernels and numerically
+    #       added back over the same Bessel convention, avoiding double counting.
+    #     Cons: not an analytic pole add-back yet; use as a validated diagnostic
+    #       against singularity_aware before trusting production sweeps.
+    #   pole_aware_hybrid_dcim
+    #     Pros: Stage-2 method. Fits only the pole-subtracted smooth high-q tail
+    #       with hybrid DCIM, then compares the full result to singularity_aware.
+    #       This is the method to test next against singularity_aware for Rx>0.
+    #     Cons: experimental until benchmarked; rejected fits fall back to
+    #       singularity_aware when fallback is enabled. At Rx=0 it also
+    #       automatically routes to singularity_aware.
+    #   branch_cut_dcim
+    #     Pros: future/intermediate-far-field research path based on outgoing
+    #       Hankel branch contours; most relevant for larger lateral distances.
+    #     Cons: not derived as a fully consistent replacement for the current
+    #       half-line Bessel integrals; currently diagnostic/experimental only.
+    #       At Rx=0 this solver automatically routes to singularity_aware.
+    #   fixed_grid
+    #     Pros: reproducible q-grid diagnostic for checking quadrature behavior.
+    #     Cons: not adaptive; can be inefficient or inaccurate near singularities.
+    #   dcim
+    #     Pros: legacy whole-domain exponential fit.
+    #     Cons: least robust here; prefer hybrid_dcim or pole_aware_hybrid_dcim.
+    #
+    # This verified literature-reproduction config keeps direct quadrature as the
+    # default. For new validation jobs, first run singularity_aware, then compare
+    # candidate accelerated methods with identical energies/Rx/stack settings.
+    # Example CLI overrides:
     #   simulation.integration.method=singularity_aware
+    #   simulation.integration.method=hybrid_dcim
+    #   simulation.integration.method=pole_subtracted_direct
+    #   simulation.integration.method=pole_aware_hybrid_dcim
     #   simulation.integration.method=branch_cut_dcim
     method: direct
     qmax: null
@@ -72,12 +119,23 @@ simulation:
     epsrel: 1.0e-10
     limit: 400
     split_propagating: false
+
+    # DCIM q-window controls.  Prefer the *_factor entries for new configs:
+    # they are dimensionless multipliers of |k0| = omega/c, so values like
+    # dcim_q_stop_factor: 10.0 mean q_stop = 10 |k0| at each frequency.
+    # The older absolute-SI entries dcim_q_start/dcim_q_stop and
+    # hybrid_*_q_stop remain supported for backward compatibility; if a factor
+    # is provided, it takes precedence over the absolute value.
     dcim_q_start: 0.0
     dcim_q_stop: 2.0e8
+    dcim_q_start_factor: 0.0
+    dcim_q_stop_factor: 20.0
     dcim_sample_count: 128
     dcim_image_count: 16
     hybrid_direct_q_stop: 6.0e7
     hybrid_tail_q_stop: 2.0e8
+    hybrid_direct_q_stop_factor: 6.0
+    hybrid_tail_q_stop_factor: 20.0
     hybrid_sample_count: 160
     hybrid_image_count: 18
     hybrid_validation_rtol: 5.0e-2
@@ -128,6 +186,18 @@ simulation:
     branch_cut_prefactor: "1.0+0.0j"
     branch_cut_jump_sign: 1.0
     branch_cut_use_hankel: true
+
+    # Stage-1/2 Bessel-form pole subtraction options.
+    # pole_subtracted_direct subtracts detected simple-pole residues from the
+    # real-axis Bessel kernels and numerically adds that same pole model back to
+    # avoid double counting. pole_aware_hybrid_dcim fits only the pole-subtracted
+    # smooth high-q tail, then validates against singularity_aware.
+    pole_subtraction_validate: true
+    pole_subtraction_validation_rtol: 5.0e-2
+    pole_subtraction_validation_atol: 1.0e-12
+    pole_subtraction_fallback_to_singularity_aware: true
+    pole_subtraction_include_poles: true
+    pole_subtraction_residue_method: contour
 
 parallel:
   backend: sequential
