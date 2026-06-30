@@ -16,12 +16,12 @@ near plasmonic interfaces using macroscopic quantum electrodynamics (MQED).
 
 ## Latest Update
 
-**Version 1.3.0** adds singularity-aware N-layer Green's-function diagnostics, an experimental branch-cut DCIM path, and early Mie/emission-spectrum workflows.
+**Version 1.3.1** refines the N-layer singularity-aware/DCIM workflow and expands spectral-density comparison plotting.
 
-- **N-layer pole and branch-cut tools** add Airy-denominator pole search, pole-residue extraction, branch-cut sampling/integration, and `singularity_aware` direct quadrature split at light lines and near-real pole projections.
-- **Experimental `branch_cut_dcim` integration** samples Sommerfeld branch cuts in the vertical-wavenumber plane, fits the branch contribution with exponentials, optionally adds extracted pole terms, and validates/falls back to `singularity_aware` by default.
-- **Experimental Mie Green's-function and emission-spectrum workflows** are included for development and API testing, but `GF_Mie.py` and `emission_spectrum.py` have not yet been verified against literature benchmarks and should not be treated as production-ready.
-- **Pair-indexed Green tensor support** lets downstream Lindblad and spectral-density tooling consume pair-layout Green-function output in addition to separation-layout data.
+- **Pole-aware N-layer integration** adds `pole_subtracted_direct` and `pole_aware_hybrid_dcim`, which subtract detected simple-pole residue models from the Bessel-form Sommerfeld kernels, integrate or fit the smoother remainder, add the same pole model back, and validate against `singularity_aware` with fallback enabled.
+- **Safer DCIM defaults** route `Rx = 0` calculations through `singularity_aware` for DCIM-family methods, add `|k0|`-scaled q-window factors for DCIM/hybrid tails, and document method tradeoffs in the five-layer example config.
+- **Spectral-density comparison plotting** now supports multiple input HDF5 files with file-level styles plus per-selected separation/pair overrides, so color can identify the numerical method while linestyle/marker identifies `Rx` or emitter pair.
+- **Experimental Mie Green's-function and emission-spectrum workflows** remain included for development and API testing, but `GF_Mie.py` and `emission_spectrum.py` have not yet been verified against literature benchmarks and should not be treated as production-ready.
 
 See `CHANGELOG.md` for the full release notes.
 

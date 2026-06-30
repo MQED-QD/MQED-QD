@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.3.1 - 2026-06-30
+
+### N-layer pole-aware integration
+
+- Added `pole_subtracted_direct`, a Stage-1 Bessel-form pole-subtraction reference path that subtracts detected simple-pole residue models from the real-axis Sommerfeld kernels, integrates the smooth remainder and pole model separately, then validates against `singularity_aware` with mixed absolute/relative tolerances.
+- Added `pole_aware_hybrid_dcim`, a Stage-2 hybrid path that fits only the pole-subtracted smooth high-q tail with DCIM, adds the pole model back in the same Bessel convention, and falls back to `singularity_aware` when validation rejects the approximation.
+- Added diagnostics/report fields for pole-aware methods, including whether the returned result is the approximation or the `singularity_aware` fallback.
+
+### DCIM safety and q-window controls
+
+- Routed `Rx = 0` calculations for DCIM-family methods (`dcim`, `hybrid_dcim`, `branch_cut_dcim`, and `pole_aware_hybrid_dcim`) through `singularity_aware`, avoiding Hankel/DCIM singular behavior for local LDOS/Purcell-style calculations.
+- Added dimensionless `|k0|`-scaled q-window factors for DCIM and hybrid DCIM ranges while preserving the previous absolute SI q cutoffs for backward compatibility.
+- Expanded `configs/Dyadic_GF/GF_five_layer_example_multi_freq.yaml` with method-choice annotations, q-window unit guidance, pole-search range comments, and warnings for experimental branch-cut/pole-aware methods.
+
+### Spectral-density plotting
+
+- Added multi-file spectral-density comparison plotting, matching the `plot_msd.py` / `plot_pr.py` style of a `curves` list with `path` or `use_latest_glob`.
+- Added file-level and per-selected separation/pair styling, so comparison plots can use color for the input file or numerical method and linestyle/marker for individual `Rx` values or emitter pairs.
+- Updated spectral-density plot YAML files with tutorial-style examples for direct, `singularity_aware`, and pole-aware/hybrid comparison plots.
+
+### Tests and validation
+
+- Added regression tests for pole-subtracted direct integration, pole-aware hybrid fallback/reporting, `Rx = 0` DCIM routing, q-window factor conversion, multi-file spectral-density plotting, and per-separation/per-pair style precedence.
+
 ## 1.3.0 - 2026-06-29
 
 ### N-layer singularity diagnostics
