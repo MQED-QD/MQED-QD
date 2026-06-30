@@ -12,8 +12,49 @@ hydra:
 
 # --- Input ---
 # Path to the spectral density HDF5 file produced by
-# mqed.analysis.spectral_density.
+# mqed.analysis.spectral_density. This single-file key is kept for backward
+# compatibility. For comparison plots, use the optional curves list below.
 input_file: "${oc.env:MQED_ROOT,./data}/example/spec_dens_data/spec_dens_10D_10D_Emin_0.10_Emax_6.00_359pts_height_1nm.hdf5"
+
+# Optional multi-file comparison mode. Uncomment and edit to overlay spectral
+# density curves from multiple HDF5 files, e.g. direct vs singularity_aware vs
+# pole_aware_hybrid_dcim.
+#
+# Style precedence for multi-file plots:
+#   1. Per-selected-curve styles in each file entry: separation_styles or
+#      compact lists such as separation_linestyles / separation_markers.
+#   2. File-level defaults in that entry: color, linestyle, lw, marker, alpha.
+#   3. Global plot_settings.separation_colors / separation_linestyles.
+#
+# Recommended comparison convention:
+#   - color identifies the input file / numerical method.
+#   - linestyle or marker identifies Rx = 0, 3, 33 nm.
+curves: []
+# curves:
+#   - label: "Direct"
+#     path: "${oc.env:MQED_ROOT,./data}/example/spec_dens_data/spec_dens_direct.h5"
+#     color: "tab:blue"
+#     lw: 2.0
+#     separation_styles:
+#       - {linestyle: "-",  marker: "o"}   # Rx index/value 0
+#       - {linestyle: "--", marker: "s"}   # Rx index/value 3
+#       - {linestyle: ":",  marker: "^"}   # Rx index/value 33
+#   - label: "Singularity-aware"
+#     path: "${oc.env:MQED_ROOT,./data}/example/spec_dens_data/spec_dens_sg_aware.h5"
+#     color: "tab:orange"
+#     lw: 2.0
+#     separation_styles:
+#       - {linestyle: "-",  marker: "o"}
+#       - {linestyle: "--", marker: "s"}
+#       - {linestyle: ":",  marker: "^"}
+#   - label: "Pole-aware hybrid"
+#     path: "${oc.env:MQED_ROOT,./data}/example/spec_dens_data/spec_dens_pole_aware_hybrid.h5"
+#     color: "tab:green"
+#     lw: 2.0
+#     # Compact list form is equivalent to separation_styles for single fields:
+#     separation_linestyles: ["-", "--", ":"]
+#     separation_markers: ["o", "s", "^"]
+# For pair-layout HDF5 files, use pair_styles / pair_linestyles / pair_markers.
 
 # --- Font settings (following plot_pr.py conventions) ---
 font:

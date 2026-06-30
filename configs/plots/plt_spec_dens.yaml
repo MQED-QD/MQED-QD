@@ -12,8 +12,51 @@ hydra:
 
 # --- Input ---
 # Path to the spectral density HDF5 file produced by
-# mqed.analysis.spectral_density.
+# mqed.analysis.spectral_density. This single-file key is kept for backward
+# compatibility. For comparison plots, use the optional curves list below.
 input_file: "${oc.env:MQED_ROOT,./outputs}/spectral_density/spectral_density.h5"
+
+# Optional multi-file comparison mode, matching plot_msd.py and plot_pr.py.
+# When this list is non-empty, each entry loads one spectral-density HDF5 file
+# and overlays the selected separation/pair curves on the same axes.
+#
+# Style precedence for multi-file plots:
+#   1. Per-selected-curve style inside a file entry, e.g. separation_styles[0]
+#      for the first selected Rx and separation_styles[1] for the second.
+#   2. File-level defaults inside that entry, e.g. color/linestyle/lw/marker.
+#   3. Global plot_settings.separation_colors / separation_linestyles or
+#      pair_colors / pair_linestyles.
+# This lets you encode two dimensions at once. A common convention is:
+#   - color = input file / numerical method
+#   - linestyle or marker = separation or emitter pair
+curves: []
+# Tutorial example for three separations from two files:
+# curves:
+#   - label: "Direct"
+#     path: "${oc.env:MQED_ROOT,./outputs}/spectral_density/direct.h5"
+#     color: "tab:blue"       # file-level default: all Direct curves are blue
+#     lw: 2.0
+#     separation_styles:       # order follows plot_settings.separation_indices
+#       - {linestyle: "-",  marker: "o"}   # first selected Rx, e.g. index 0
+#       - {linestyle: "--", marker: "s"}   # second selected Rx, e.g. index 3
+#       - {linestyle: ":",  marker: "^"}   # third selected Rx, e.g. index 33
+#   - label: "Pole-aware hybrid DCIM"
+#     path: "${oc.env:MQED_ROOT,./outputs}/spectral_density/pole_aware_hybrid.h5"
+#     color: "tab:orange"     # file-level default: all hybrid curves are orange
+#     lw: 2.0
+#     separation_styles:
+#       - {linestyle: "-",  marker: "o"}
+#       - {linestyle: "--", marker: "s"}
+#       - {linestyle: ":",  marker: "^"}
+# Compact equivalent if only one property changes per selected Rx:
+#   - label: "Singularity-aware"
+#     path: "${oc.env:MQED_ROOT,./outputs}/spectral_density/sg_aware.h5"
+#     color: "tab:green"
+#     separation_linestyles: ["-", "--", ":"]
+#     separation_markers: ["o", "s", "^"]
+# Pair-layout files support the same pattern with pair_styles,
+# pair_linestyles, pair_colors, pair_markers, pair_lws, and pair_alphas.
+# Each curve may use either 'path' or 'use_latest_glob'.
 
 # --- Font settings (following plot_pr.py conventions) ---
 font:
