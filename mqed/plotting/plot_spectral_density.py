@@ -33,6 +33,7 @@ from loguru import logger
 from omegaconf import OmegaConf
 
 from mqed.utils.SI_unit import eV_to_J, hbar
+from mqed.utils.file_utils import _resolve_input_path
 from mqed.utils.hydra_local import prepare_hydra_config_path
 from mqed.utils.logging_utils import setup_loggers_hydra_aware
 
@@ -404,7 +405,144 @@ def _apply_y_sci_formatting(ax, ps) -> None:
     ax.ticklabel_format(axis="y", style="plain")
 
 
-def _plot_separation_layout(J_eV, energy_eV, Rx_nm, cfg):
+def _curve_label_prefix(curve_cfg: Any) -> str | None:
+    if curve_cfg is None:
+        return None
+    label = curve_cfg.get("label", None)
+    if label is None:
+        return None
+    return str(label)
+
+
+def _with_curve_label(label: str, curve_cfg: Any) -> str:
+    prefix = _curve_label_prefix(curve_cfg)
+    if prefix is None:
+        return label
+    return f"{prefix}: {label}"
+
+
+def _curve_style(curve_cfg: Any, key: str, fallback: Any = None) -> Any:
+    if curve_cfg is None:
+        return fallback
+    return curve_cfg.get(key, fallback)
+
+
+def _style_list_key(style_key: str) -> str:
+    """Return the plural config key used for per-selected-curve style lists."""
+    if style_key == "linestyle":
+        return "linestyles"
+    if style_key == "lw":
+        return "lws"
+    if style_key == "alpha":
+        return "alphas"
+    if style_key == "marker":
+        return "markers"
+    return f"{style_key}s"
+
+
+def _style_entry_value(entry: Any, style_key: str) -> Any:
+    """Read one style value from a per-selection style entry."""
+    if entry is None:
+        return None
+    if isinstance(entry, str):
+        if style_key in {"color", "linestyle", "marker"}:
+            return entry
+        return None
+    if not hasattr(entry, "get"):
+        return None
+    if style_key == "lw":
+        return entry.get("lw", entry.get("linewidth", None))
+    if style_key == "linestyle":
+        return entry.get("linestyle", entry.get("style", None))
+    return entry.get(style_key, None)
+
+
+def _curve_sequence_style(curve_cfg: Any, prefix: str, selection_position: int, style_key: str) -> Any:
+    """Return a per-selected separation/pair style from a curve config, if present.
+
+    Supported forms under each ``curves`` entry are either explicit style dicts::
+
+        separation_styles:
+          - {linestyle: "-", marker: "o"}
+          - {linestyle: "--", marker: "s"}
+
+    or compact per-property lists/scalars::
+
+        separation_linestyles: ["-", "--"]
+        separation_markers: ["o", "s"]
+
+    The list order follows ``plot_settings.separation_indices`` or
+    ``plot_settings.pair_indices`` after physical-value resolution.
+    """
+    if curve_cfg is None:
+        return None
+
+    style_entries = curve_cfg.get(f"{prefix}_styles", None)
+    if style_entries is not None:
+        entries = list(style_entries)
+        if len(entries) == 1:
+            value = _style_entry_value(entries[0], style_key)
+        elif selection_position < len(entries):
+            value = _style_entry_value(entries[selection_position], style_key)
+        else:
+            raise ValueError(
+                f"curves[].{prefix}_styles must contain at least "
+                f"{selection_position + 1} entry(ies) for the selected {prefix} curves."
+            )
+        if value is not None:
+            return value
+
+    raw_values = curve_cfg.get(f"{prefix}_{_style_list_key(style_key)}", None)
+    if raw_values is None and style_key == "lw":
+        raw_values = curve_cfg.get(f"{prefix}_linewidths", None)
+    if raw_values is None:
+        return None
+
+    if isinstance(raw_values, str):
+        return raw_values
+
+    if not isinstance(raw_values, list):
+        raw_values = list(raw_values)
+
+    if not raw_values:
+        return None
+    if len(raw_values) == 1:
+        return raw_values[0]
+    if selection_position >= len(raw_values):
+        raise ValueError(
+            f"curves[].{prefix}_{_style_list_key(style_key)} must contain at least "
+            f"{selection_position + 1} value(s) for the selected {prefix} curves."
+        )
+    return raw_values[selection_position]
+
+
+def _curve_style_for_selection(
+    curve_cfg: Any,
+    prefix: str,
+    selection_position: int,
+    style_key: str,
+    fallback: Any = None,
+) -> Any:
+    """Resolve style precedence for one selected separation or pair.
+
+    Precedence is:
+    1. per-selected style on the input-file curve (``separation_styles`` /
+       ``pair_styles`` or compact property lists),
+    2. file-level curve default (``color``, ``linestyle``, ``lw``, ``marker``),
+    3. global plot-settings fallback for that selected separation/pair.
+    """
+    selected_style = _curve_sequence_style(curve_cfg, prefix, selection_position, style_key)
+    if selected_style is not None:
+        return selected_style
+
+    if style_key == "linestyle":
+        return _curve_style(curve_cfg, "linestyle", _curve_style(curve_cfg, "style", fallback))
+    if style_key == "lw":
+        return _curve_style(curve_cfg, "lw", _curve_style(curve_cfg, "linewidth", fallback))
+    return _curve_style(curve_cfg, style_key, fallback)
+
+
+def _plot_separation_layout(J_eV, energy_eV, Rx_nm, cfg, ax=None, curve_cfg=None):
     """Plot J(ω) for separation-indexed data.
 
     Produces one curve per selected separation Rx.
@@ -426,14 +564,17 @@ def _plot_separation_layout(J_eV, energy_eV, Rx_nm, cfg):
     )
     colors, linestyles = _resolve_curve_styles(ps, prefix="separation", count=len(sep_indices))
 
-    fig, ax = plt.subplots(figsize=tuple(ps.get("figsize", [8, 5])))
+    if ax is None:
+        fig, ax = plt.subplots(figsize=tuple(ps.get("figsize", [8, 5])))
+    else:
+        fig = ax.figure
 
-    for idx, scale_factor, color, linestyle in zip(
+    for selection_position, (idx, scale_factor, color, linestyle) in enumerate(zip(
         sep_indices,
         scale_factors,
         colors,
         linestyles,
-    ):
+    )):
         if idx >= len(Rx_nm):
             logger.warning(f"Separation index {idx} out of range "
                            f"(max {len(Rx_nm) - 1}), skipping.")
@@ -446,14 +587,23 @@ def _plot_separation_layout(J_eV, energy_eV, Rx_nm, cfg):
         )
 
         label = ps.get("label_template", "Rx = {Rx:.1f} nm").format(Rx=Rx_nm[idx])
+        label = _with_curve_label(label, curve_cfg)
         label = _format_scaled_label(label, scale_factor)
         ax.plot(
             energy_eV,
             scale_factor * J_plot[idx, :],
-            lw=ps.get("lw", 1.5),
+            lw=_curve_style_for_selection(curve_cfg, "separation", selection_position, "lw", ps.get("lw", 1.5)),
             label=label,
-            color=color,
-            linestyle=linestyle,
+            color=_curve_style_for_selection(curve_cfg, "separation", selection_position, "color", color),
+            linestyle=_curve_style_for_selection(
+                curve_cfg,
+                "separation",
+                selection_position,
+                "linestyle",
+                linestyle,
+            ),
+            marker=_curve_style_for_selection(curve_cfg, "separation", selection_position, "marker", None),
+            alpha=_curve_style_for_selection(curve_cfg, "separation", selection_position, "alpha", None),
         )
 
     ax.set_xlabel(ps.get("xlabel", r"Energy (eV)"))
@@ -488,7 +638,7 @@ def _plot_separation_layout(J_eV, energy_eV, Rx_nm, cfg):
     return fig
 
 
-def _plot_pair_layout(J_eV, energy_eV, cfg, emitter_positions_nm=None):
+def _plot_pair_layout(J_eV, energy_eV, cfg, emitter_positions_nm=None, ax=None, curve_cfg=None):
     """Plot J_αβ(ω) for pair-indexed data.
 
     Produces one curve per selected (α, β) pair.
@@ -509,16 +659,19 @@ def _plot_pair_layout(J_eV, energy_eV, cfg, emitter_positions_nm=None):
     )
     colors, linestyles = _resolve_curve_styles(ps, prefix="pair", count=len(pair_indices))
 
-    fig, ax = plt.subplots(figsize=tuple(ps.get("figsize", [8, 5])))
+    if ax is None:
+        fig, ax = plt.subplots(figsize=tuple(ps.get("figsize", [8, 5])))
+    else:
+        fig = ax.figure
 
     N = J_eV.shape[0]
-    for pair, distance_nm, scale_factor, color, linestyle in zip(
+    for selection_position, (pair, distance_nm, scale_factor, color, linestyle) in enumerate(zip(
         pair_indices,
         pair_distances_nm,
         scale_factors,
         colors,
         linestyles,
-    ):
+    )):
         alpha, beta = int(pair[0]), int(pair[1])
         if alpha >= N or beta >= N:
             logger.warning(f"Pair ({alpha}, {beta}) out of range "
@@ -546,14 +699,23 @@ def _plot_pair_layout(J_eV, energy_eV, cfg, emitter_positions_nm=None):
             ).format(a=alpha, b=beta)
         if distance_nm is not None and "distance_nm" not in label_template and "Rx" not in label_template:
             label = f"{label} ({distance_nm:g} nm)"
+        label = _with_curve_label(label, curve_cfg)
         label = _format_scaled_label(label, scale_factor)
         ax.plot(
             energy_eV,
             scale_factor * J_plot[alpha, beta, :],
-            lw=ps.get("lw", 1.5),
+            lw=_curve_style_for_selection(curve_cfg, "pair", selection_position, "lw", ps.get("lw", 1.5)),
             label=label,
-            color=color,
-            linestyle=linestyle,
+            color=_curve_style_for_selection(curve_cfg, "pair", selection_position, "color", color),
+            linestyle=_curve_style_for_selection(
+                curve_cfg,
+                "pair",
+                selection_position,
+                "linestyle",
+                linestyle,
+            ),
+            marker=_curve_style_for_selection(curve_cfg, "pair", selection_position, "marker", None),
+            alpha=_curve_style_for_selection(curve_cfg, "pair", selection_position, "alpha", None),
         )
 
     ax.set_xlabel(ps.get("xlabel", r"Energy (eV)"))
@@ -590,6 +752,42 @@ def _plot_pair_layout(J_eV, energy_eV, cfg, emitter_positions_nm=None):
     return fig
 
 
+def _resolve_single_input_path(cfg) -> Path:
+    input_path = Path(cfg.input_file)
+    if not input_path.is_absolute():
+        input_path = Path(hydra.utils.get_original_cwd()) / input_path
+    return input_path
+
+
+def _plot_dataset_on_axes(data: dict, cfg, ax, curve_cfg=None) -> None:
+    J_eV = data["J_eV"]
+    energy_eV = data["energy_eV"]
+    gf_layout = data["gf_layout"]
+    logger.info(f"GF layout: {gf_layout}, J shape: {J_eV.shape}")
+
+    if gf_layout == "separation":
+        _plot_separation_layout(J_eV, energy_eV, data["Rx_nm"], cfg, ax=ax, curve_cfg=curve_cfg)
+        return
+    if gf_layout == "pair":
+        _plot_pair_layout(
+            J_eV,
+            energy_eV,
+            cfg,
+            data.get("emitter_positions_nm", None),
+            ax=ax,
+            curve_cfg=curve_cfg,
+        )
+        return
+    raise ValueError(f"Unknown GF layout: {gf_layout}")
+
+
+def _iter_input_curves(cfg) -> list[Any]:
+    curves = cfg.get("curves", None)
+    if curves:
+        return list(curves)
+    return []
+
+
 # ---------------------------------------------------------------------------
 #  Hydra CLI entry point
 # ---------------------------------------------------------------------------
@@ -617,31 +815,31 @@ def plot_spectral_density(cfg=None) -> None:
     logger.info("Plotting spectral density")
     logger.info(f"Config:\n{OmegaConf.to_yaml(cfg)}")
 
-    # --- Resolve input ---
-    input_path = Path(cfg.input_file)
-    if not input_path.is_absolute():
-        input_path = Path(hydra.utils.get_original_cwd()) / input_path
-    logger.info(f"Loading spectral density from: {input_path}")
-
-    data = _load_spectral_density_h5(str(input_path))
-    J_eV = data["J_eV"]
-    energy_eV = data["energy_eV"]
-    gf_layout = data["gf_layout"]
-
-    logger.info(f"GF layout: {gf_layout}, J shape: {J_eV.shape}")
-
     # --- Apply font config ---
     _apply_font_config(cfg)
 
     # --- Plot ---
     ps = cfg.plot_settings
-    if gf_layout == "separation":
-        Rx_nm = data["Rx_nm"]
-        fig = _plot_separation_layout(J_eV, energy_eV, Rx_nm, cfg)
-    elif gf_layout == "pair":
-        fig = _plot_pair_layout(J_eV, energy_eV, cfg, data.get("emitter_positions_nm", None))
+    input_curves = _iter_input_curves(cfg)
+    if input_curves:
+        fig, ax = plt.subplots(figsize=tuple(ps.get("figsize", [8, 5])))
+        for curve_cfg in input_curves:
+            input_path = _resolve_input_path(curve_cfg)
+            logger.info(f"Loading spectral density from: {input_path}")
+            data = _load_spectral_density_h5(str(input_path))
+            _plot_dataset_on_axes(data, cfg, ax, curve_cfg=curve_cfg)
     else:
-        raise ValueError(f"Unknown GF layout: {gf_layout}")
+        input_path = _resolve_single_input_path(cfg)
+        logger.info(f"Loading spectral density from: {input_path}")
+        data = _load_spectral_density_h5(str(input_path))
+        fig, ax = plt.subplots(figsize=tuple(ps.get("figsize", [8, 5])))
+        _plot_dataset_on_axes(data, cfg, ax)
+
+    if ax.lines:
+        ax.legend()
+    else:
+        logger.warning("No valid spectral-density curves were plotted.")
+    fig.tight_layout()
 
     # --- Save ---
     filename = ps.get("filename", "spectral_density.png")
