@@ -4,9 +4,11 @@ from omegaconf import OmegaConf
 
 from mqed.plotting.plot_spectral_density import (
     _format_scaled_label,
+    _iter_input_curves,
     _normalize_curve_scales,
     _normalize_pair_indices,
     _normalize_separation_indices,
+    _plot_dataset_on_axes,
     _plot_pair_layout,
     _plot_separation_layout,
     _resolve_pair_indices,
@@ -171,3 +173,135 @@ def test_plot_pair_layout_selects_curves_by_physical_separation():
     assert np.allclose(fig.axes[0].lines[0].get_ydata(), j_eV[0, 0, :])
     assert np.allclose(fig.axes[0].lines[1].get_ydata(), j_eV[0, 1, :])
     assert np.allclose(fig.axes[0].lines[2].get_ydata(), j_eV[0, 2, :])
+
+
+def test_iter_input_curves_preserves_single_file_default():
+    cfg = OmegaConf.create({"input_file": "single.h5", "curves": []})
+
+    assert _iter_input_curves(cfg) == []
+
+
+def test_plot_dataset_on_axes_overlays_multiple_input_labels():
+    cfg = OmegaConf.create({
+        "plot_settings": {
+            "separation_indices": [0],
+            "separation_multipliers": [1.0],
+            "label_template": "Rx = {Rx:.0f} nm",
+            "figsize": [4, 3],
+        }
+    })
+    energy_eV = np.array([1.0, 2.0])
+    data_a = {
+        "gf_layout": "separation",
+        "J_eV": np.array([[1.0, 2.0]]),
+        "energy_eV": energy_eV,
+        "Rx_nm": np.array([0.0]),
+    }
+    data_b = {
+        "gf_layout": "separation",
+        "J_eV": np.array([[3.0, 4.0]]),
+        "energy_eV": energy_eV,
+        "Rx_nm": np.array([0.0]),
+    }
+
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(4, 3))
+    _plot_dataset_on_axes(data_a, cfg, ax, curve_cfg=OmegaConf.create({"label": "direct"}))
+    _plot_dataset_on_axes(data_b, cfg, ax, curve_cfg=OmegaConf.create({"label": "dcim"}))
+
+    assert len(ax.lines) == 2
+    assert ax.lines[0].get_label() == "direct: Rx = 0 nm"
+    assert ax.lines[1].get_label() == "dcim: Rx = 0 nm"
+    assert np.allclose(ax.lines[1].get_ydata(), [3.0, 4.0])
+    plt.close(fig)
+
+
+def test_multi_file_separation_styles_override_file_defaults():
+    cfg = OmegaConf.create({
+        "plot_settings": {
+            "separation_indices": [0, 1],
+            "separation_multipliers": [1.0, 1.0],
+            "separation_colors": ["black", "gray"],
+            "separation_linestyles": [":", "-."],
+            "label_template": "Rx = {Rx:.0f} nm",
+            "figsize": [4, 3],
+        }
+    })
+    data = {
+        "gf_layout": "separation",
+        "J_eV": np.array([[1.0, 2.0], [3.0, 4.0]]),
+        "energy_eV": np.array([1.0, 2.0]),
+        "Rx_nm": np.array([0.0, 3.0]),
+    }
+
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(4, 3))
+    _plot_dataset_on_axes(
+        data,
+        cfg,
+        ax,
+        curve_cfg=OmegaConf.create({
+            "label": "direct",
+            "color": "tab:blue",
+            "linestyle": "-",
+            "separation_styles": [
+                {"linestyle": "-", "marker": "o"},
+                {"linestyle": "--", "marker": "s", "color": "tab:red"},
+            ],
+        }),
+    )
+
+    assert len(ax.lines) == 2
+    assert ax.lines[0].get_label() == "direct: Rx = 0 nm"
+    assert ax.lines[0].get_color() == "tab:blue"
+    assert ax.lines[0].get_linestyle() == "-"
+    assert ax.lines[0].get_marker() == "o"
+    assert ax.lines[1].get_label() == "direct: Rx = 3 nm"
+    assert ax.lines[1].get_color() == "tab:red"
+    assert ax.lines[1].get_linestyle() == "--"
+    assert ax.lines[1].get_marker() == "s"
+    plt.close(fig)
+
+
+def test_multi_file_pair_styles_support_compact_lists():
+    cfg = OmegaConf.create({
+        "plot_settings": {
+            "pair_indices": [[0, 0], [0, 1]],
+            "pair_multipliers": [1.0, 1.0],
+            "pair_colors": ["black", "gray"],
+            "pair_linestyles": [":", "-."],
+            "figsize": [4, 3],
+        }
+    })
+    data = {
+        "gf_layout": "pair",
+        "J_eV": np.arange(8, dtype=float).reshape(2, 2, 2),
+        "energy_eV": np.array([1.0, 2.0]),
+    }
+
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(4, 3))
+    _plot_dataset_on_axes(
+        data,
+        cfg,
+        ax,
+        curve_cfg=OmegaConf.create({
+            "label": "hybrid",
+            "color": "tab:green",
+            "pair_linestyles": ["-", "--"],
+            "pair_markers": ["o", "^"],
+        }),
+    )
+
+    assert len(ax.lines) == 2
+    assert ax.lines[0].get_color() == "tab:green"
+    assert ax.lines[0].get_linestyle() == "-"
+    assert ax.lines[0].get_marker() == "o"
+    assert ax.lines[1].get_color() == "tab:green"
+    assert ax.lines[1].get_linestyle() == "--"
+    assert ax.lines[1].get_marker() == "^"
+    plt.close(fig)
+
