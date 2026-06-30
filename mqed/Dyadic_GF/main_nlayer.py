@@ -111,10 +111,14 @@ def _compute_one_energy(
         integration_method=integration_method,
         dcim_q_start=0.0 if integ_cfg is None else float(integ_cfg.get("dcim_q_start", 0.0)),
         dcim_q_stop=None if integ_cfg is None else integ_cfg.get("dcim_q_stop", integ_cfg.qmax),
+        dcim_q_start_factor=None if integ_cfg is None else integ_cfg.get("dcim_q_start_factor", None),
+        dcim_q_stop_factor=None if integ_cfg is None else integ_cfg.get("dcim_q_stop_factor", None),
         dcim_sample_count=128 if integ_cfg is None else int(integ_cfg.get("dcim_sample_count", 128)),
         dcim_image_count=16 if integ_cfg is None else int(integ_cfg.get("dcim_image_count", 16)),
         hybrid_direct_q_stop=None if integ_cfg is None else integ_cfg.get("hybrid_direct_q_stop", None),
         hybrid_tail_q_stop=None if integ_cfg is None else integ_cfg.get("hybrid_tail_q_stop", None),
+        hybrid_direct_q_stop_factor=None if integ_cfg is None else integ_cfg.get("hybrid_direct_q_stop_factor", None),
+        hybrid_tail_q_stop_factor=None if integ_cfg is None else integ_cfg.get("hybrid_tail_q_stop_factor", None),
         hybrid_sample_count=None if integ_cfg is None else integ_cfg.get("hybrid_sample_count", None),
         hybrid_image_count=None if integ_cfg is None else integ_cfg.get("hybrid_image_count", None),
         hybrid_validation_rtol=5e-2 if integ_cfg is None else float(integ_cfg.get("hybrid_validation_rtol", 5e-2)),
@@ -143,6 +147,12 @@ def _compute_one_energy(
         branch_cut_prefactor=1.0 + 0.0j if integ_cfg is None else complex(integ_cfg.get("branch_cut_prefactor", 1.0 + 0.0j)),
         branch_cut_jump_sign=1.0 if integ_cfg is None else float(integ_cfg.get("branch_cut_jump_sign", 1.0)),
         branch_cut_use_hankel=True if integ_cfg is None else bool(integ_cfg.get("branch_cut_use_hankel", True)),
+        pole_subtraction_validate=True if integ_cfg is None else bool(integ_cfg.get("pole_subtraction_validate", True)),
+        pole_subtraction_validation_rtol=5e-2 if integ_cfg is None else float(integ_cfg.get("pole_subtraction_validation_rtol", 5e-2)),
+        pole_subtraction_validation_atol=1e-12 if integ_cfg is None else float(integ_cfg.get("pole_subtraction_validation_atol", 1e-12)),
+        pole_subtraction_fallback_to_singularity_aware=True if integ_cfg is None else bool(integ_cfg.get("pole_subtraction_fallback_to_singularity_aware", True)),
+        pole_subtraction_include_poles=True if integ_cfg is None else bool(integ_cfg.get("pole_subtraction_include_poles", True)),
+        pole_subtraction_residue_method="contour" if integ_cfg is None else str(integ_cfg.get("pole_subtraction_residue_method", "contour")),
     )
 
     total = np.zeros((len(rx_values_m), 3, 3), dtype=complex)
@@ -328,10 +338,13 @@ def run_simulation(cfg: DictConfig) -> None:
         "fixed_grid",
         "singularity_aware",
         "branch_cut_dcim",
+        "pole_subtracted_direct",
+        "pole_aware_hybrid_dcim",
     }:
         raise ValueError(
             "simulation.integration.method must be 'direct', 'dcim', 'hybrid_dcim', "
-            "'fixed_grid', 'singularity_aware', or 'branch_cut_dcim'."
+            "'fixed_grid', 'singularity_aware', 'branch_cut_dcim', "
+            "'pole_subtracted_direct', or 'pole_aware_hybrid_dcim'."
         )
     energy_ev_array, target_lambdas_m = _energy_grid(sim_params)
     rx_values_nm = build_position_grid(sim_params.position.Rx_nm)

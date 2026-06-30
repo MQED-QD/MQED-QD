@@ -15,6 +15,7 @@ from typing import Callable, Optional, Sequence, Union
 
 import numpy as np
 from loguru import logger
+from numpy.linalg import LinAlgError
 from scipy.integrate import quad_vec
 from scipy.special import hankel1, jv
 
@@ -103,12 +104,16 @@ class NLayerGreenFunction:
             pole projections; explicit pole/branch terms remain diagnostic.
             ``branch_cut_dcim`` is an experimental pole-plus-branch-cut
             exponential-fit method validated against ``singularity_aware``.
-        dcim_q_start: Lower q bound for legacy DCIM sampling.
-        dcim_q_stop: Upper q bound for legacy DCIM sampling.
+        dcim_q_start: Lower q bound for legacy DCIM sampling in SI units.
+        dcim_q_stop: Upper q bound for legacy DCIM sampling in SI units.
+        dcim_q_start_factor: Optional lower q bound as a multiplier of ``abs(k0)``.
+        dcim_q_stop_factor: Optional upper q bound as a multiplier of ``abs(k0)``.
         dcim_sample_count: Number of spectral samples used by DCIM diagnostics.
         dcim_image_count: Number of exponentials/images in DCIM fits.
-        hybrid_direct_q_stop: Direct-quadrature cutoff for hybrid DCIM.
-        hybrid_tail_q_stop: Tail-fit endpoint for hybrid DCIM validation.
+        hybrid_direct_q_stop: Direct-quadrature cutoff for hybrid DCIM in SI units.
+        hybrid_tail_q_stop: Tail-fit endpoint for hybrid DCIM validation in SI units.
+        hybrid_direct_q_stop_factor: Optional direct cutoff as a multiplier of ``abs(k0)``.
+        hybrid_tail_q_stop_factor: Optional tail endpoint as a multiplier of ``abs(k0)``.
         hybrid_sample_count: Tail sample count for hybrid DCIM.
         hybrid_image_count: Number of tail exponentials in hybrid DCIM.
         hybrid_validation_rtol: Maximum accepted relative finite-tail error.
@@ -140,6 +145,18 @@ class NLayerGreenFunction:
         branch_cut_prefactor: Explicit multiplier for fitted branch-cut contour terms.
         branch_cut_jump_sign: Sign multiplying the two-side branch-cut jump.
         branch_cut_use_hankel: Use outgoing Hankel functions on branch contours.
+        pole_subtraction_validate: If true, compare pole-subtracted methods against
+            the ``singularity_aware`` split-quadrature reference.
+        pole_subtraction_validation_rtol: Accepted relative error for
+            pole-subtracted direct and pole-aware hybrid modes.
+        pole_subtraction_validation_atol: Accepted absolute error floor for
+            pole-subtracted validation when reference components are near zero.
+        pole_subtraction_fallback_to_singularity_aware: If true, rejected
+            pole-subtracted results return ``singularity_aware``.
+        pole_subtraction_include_poles: If false, keep the new methods as
+            branch-aware direct/hybrid solvers without residue subtraction.
+        pole_subtraction_residue_method: Residue extraction method, ``contour``
+            or ``limit``.
     """
 
     def __init__(
@@ -155,10 +172,14 @@ class NLayerGreenFunction:
         integration_method: str = "direct",
         dcim_q_start: float = 0.0,
         dcim_q_stop: Optional[float] = None,
+        dcim_q_start_factor: Optional[float] = None,
+        dcim_q_stop_factor: Optional[float] = None,
         dcim_sample_count: int = 128,
         dcim_image_count: int = 16,
         hybrid_direct_q_stop: Optional[float] = None,
         hybrid_tail_q_stop: Optional[float] = None,
+        hybrid_direct_q_stop_factor: Optional[float] = None,
+        hybrid_tail_q_stop_factor: Optional[float] = None,
         hybrid_sample_count: Optional[int] = None,
         hybrid_image_count: Optional[int] = None,
         hybrid_validation_rtol: float = 5e-2,
@@ -188,6 +209,12 @@ class NLayerGreenFunction:
         branch_cut_prefactor: complex = 1.0 + 0.0j,
         branch_cut_jump_sign: float = 1.0,
         branch_cut_use_hankel: bool = True,
+        pole_subtraction_validate: bool = True,
+        pole_subtraction_validation_rtol: float = 5e-2,
+        pole_subtraction_validation_atol: float = 1e-12,
+        pole_subtraction_fallback_to_singularity_aware: bool = True,
+        pole_subtraction_include_poles: bool = True,
+        pole_subtraction_residue_method: str = "contour",
     ):
         if len(layers) < 2:
             raise ValueError("An N-layer Green's function requires at least two layers.")
@@ -212,18 +239,25 @@ class NLayerGreenFunction:
             "fixed_grid",
             "singularity_aware",
             "branch_cut_dcim",
+            "pole_subtracted_direct",
+            "pole_aware_hybrid_dcim",
         }
         if self.integration_method not in valid_methods:
             raise ValueError(
                 "integration_method must be 'direct', 'dcim', 'hybrid_dcim', "
-                "'fixed_grid', 'singularity_aware', or 'branch_cut_dcim'."
+                "'fixed_grid', 'singularity_aware', 'branch_cut_dcim', "
+                "'pole_subtracted_direct', or 'pole_aware_hybrid_dcim'."
             )
         self.dcim_q_start = float(dcim_q_start)
         self.dcim_q_stop = dcim_q_stop
+        self.dcim_q_start_factor = dcim_q_start_factor
+        self.dcim_q_stop_factor = dcim_q_stop_factor
         self.dcim_sample_count = int(dcim_sample_count)
         self.dcim_image_count = int(dcim_image_count)
         self.hybrid_direct_q_stop = hybrid_direct_q_stop
         self.hybrid_tail_q_stop = hybrid_tail_q_stop
+        self.hybrid_direct_q_stop_factor = hybrid_direct_q_stop_factor
+        self.hybrid_tail_q_stop_factor = hybrid_tail_q_stop_factor
         self.hybrid_sample_count = int(
             self.dcim_sample_count if hybrid_sample_count is None else hybrid_sample_count
         )
@@ -259,9 +293,22 @@ class NLayerGreenFunction:
         self.branch_cut_prefactor = complex(branch_cut_prefactor)
         self.branch_cut_jump_sign = float(branch_cut_jump_sign)
         self.branch_cut_use_hankel = bool(branch_cut_use_hankel)
+        self.pole_subtraction_validate = bool(pole_subtraction_validate)
+        self.pole_subtraction_validation_rtol = float(pole_subtraction_validation_rtol)
+        self.pole_subtraction_validation_atol = float(pole_subtraction_validation_atol)
+        self.pole_subtraction_fallback_to_singularity_aware = bool(
+            pole_subtraction_fallback_to_singularity_aware
+        )
+        self.pole_subtraction_include_poles = bool(pole_subtraction_include_poles)
+        residue_method = str(pole_subtraction_residue_method).strip().lower()
+        if residue_method not in {"contour", "limit"}:
+            raise ValueError("pole_subtraction_residue_method must be 'contour' or 'limit'.")
+        self.pole_subtraction_residue_method = residue_method
         self.last_hybrid_dcim_report: dict[str, object] | None = None
         self.last_singularity_report: dict[str, object] | None = None
         self.last_branch_cut_dcim_report: dict[str, object] | None = None
+        self.last_pole_subtraction_report: dict[str, object] | None = None
+        self.last_pole_aware_hybrid_report: dict[str, object] | None = None
         self._pole_cache: dict[tuple, list[SommerfeldPole]] = {}
 
         self.eps = np.array([layer.epsilon for layer in self.layers], dtype=complex)
@@ -805,6 +852,451 @@ class NLayerGreenFunction:
         }
         return values
 
+    @staticmethod
+    def _relative_error_summary(candidate: np.ndarray, reference: np.ndarray) -> tuple[np.ndarray, float]:
+        """Return componentwise and maximum relative errors with a small floor."""
+        scale = np.maximum(np.abs(reference), 1e-30)
+        relative_errors = np.abs(candidate - reference) / scale
+        finite_errors = relative_errors[np.isfinite(relative_errors)]
+        max_relative_error = float(np.max(finite_errors)) if finite_errors.size else np.inf
+        return relative_errors, max_relative_error
+
+    @staticmethod
+    def _mixed_validation_summary(
+        candidate: np.ndarray,
+        reference: np.ndarray,
+        rtol: float,
+        atol: float,
+    ) -> tuple[np.ndarray, float, np.ndarray, float, bool]:
+        """Return relative/absolute errors and mixed-tolerance acceptance."""
+        absolute_errors = np.abs(candidate - reference)
+        scale = np.maximum(np.abs(reference), 1e-30)
+        relative_errors = absolute_errors / scale
+        finite_relative = relative_errors[np.isfinite(relative_errors)]
+        finite_absolute = absolute_errors[np.isfinite(absolute_errors)]
+        max_relative_error = float(np.max(finite_relative)) if finite_relative.size else np.inf
+        max_absolute_error = float(np.max(finite_absolute)) if finite_absolute.size else np.inf
+        tolerances = atol + rtol * np.abs(reference)
+        accepted = bool(
+            np.all(np.isfinite(candidate))
+            and np.all(np.isfinite(reference))
+            and np.all(absolute_errors <= tolerances)
+        )
+        return relative_errors, max_relative_error, absolute_errors, max_absolute_error, accepted
+
+    def _pole_subtraction_q_stop(self) -> float:
+        """Finite endpoint where the explicit pole model is subtracted and added back."""
+        if self.qmax is not None:
+            return float(self.qmax)
+        return self._hybrid_default_tail_q_stop(self._hybrid_default_direct_q_stop())
+
+    def _pole_subtraction_edges(
+        self,
+        q_stop: float,
+        config: PoleSearchConfig | None = None,
+    ) -> list[float]:
+        """Return sorted real-axis integration edges for pole-subtracted modes."""
+        breakpoints = self.singularity_breakpoints(config=config, include_poles=True)
+        finite_breaks = [point for point in breakpoints if point > 0 and point < q_stop]
+        return [0.0] + finite_breaks + [q_stop]
+
+    def _pole_residue_model(
+        self,
+        q: float | complex,
+        residues: Sequence[PoleResidue],
+    ) -> np.ndarray:
+        r"""Evaluate the rational pole model ``sum_p A_p/(q-q_p)``.
+
+        The vector ``A_p`` contains residues of the seven Bessel-free kernels,
+        before multiplication by ``J_n(q rho)``.  This is intentionally the
+        real-axis Bessel model, not the diagnostic Hankel pole contribution.
+        """
+        model = np.zeros(7, dtype=complex)
+        for residue in residues:
+            model += np.asarray(residue.residues, dtype=complex) / (q - residue.pole.q)
+        return model
+
+    def _pole_subtraction_data(
+        self,
+        z_observer: float,
+        z_source: float,
+    ) -> tuple[list[SommerfeldPole], list[PoleResidue]]:
+        """Find poles and kernel residues used by pole-subtracted solvers."""
+        if not self.pole_subtraction_include_poles:
+            return [], []
+        poles = self.find_poles()
+        residues = self.pole_residues(
+            z_observer,
+            z_source,
+            poles=poles,
+            method=self.pole_subtraction_residue_method,
+        )
+        return poles, residues
+
+    def _integrate_over_edges(
+        self,
+        kernel: Callable[[float], np.ndarray],
+        rho: float,
+        edges: Sequence[float],
+        epsabs: Optional[float] = None,
+        epsrel: Optional[float] = None,
+        limit: Optional[int] = None,
+    ) -> np.ndarray:
+        """Integrate a Bessel-free kernel over consecutive real-axis edges."""
+        values = np.zeros(7, dtype=complex)
+        for lower, upper in zip(edges[:-1], edges[1:]):
+            if upper > lower:
+                values += self._integrals_over_range_for_kernel(
+                    kernel,
+                    rho,
+                    lower,
+                    upper,
+                    epsabs=epsabs,
+                    epsrel=epsrel,
+                    limit=limit,
+                )
+        return values
+
+    def compute_integrals_pole_subtracted_direct(
+        self,
+        rho: float,
+        z_observer: float,
+        z_source: float,
+    ) -> np.ndarray:
+        r"""Stage-1 pole subtraction with numerical Bessel add-back.
+
+        The Bessel-free kernels are decomposed on the real axis as
+
+        .. math::
+
+           F_m(q)=F_m^{\mathrm{smooth}}(q)+\sum_p\frac{A_{mp}}{q-q_p}.
+
+        Both terms are integrated with the same half-line ``J_n`` Sommerfeld
+        convention.  This avoids double counting and avoids importing the
+        Hankel-contour pole prefactor into the Bessel-form production solver.
+        The method is therefore an identity-style smoothing tool first; analytic
+        pole add-back is intentionally left for later validation.
+        """
+        poles, residues = self._pole_subtraction_data(z_observer, z_source)
+        q_stop = self._pole_subtraction_q_stop()
+        edges = self._pole_subtraction_edges(q_stop)
+
+        def pole_kernel(q: float) -> np.ndarray:
+            return self._pole_residue_model(q, residues)
+
+        def smooth_kernel(q: float) -> np.ndarray:
+            return self.bessel_free_kernels(q, z_observer, z_source) - pole_kernel(q)
+
+        smooth_values = self._integrate_over_edges(smooth_kernel, rho, edges)
+        pole_values = self._integrate_over_edges(pole_kernel, rho, edges)
+        raw_tail_values = np.zeros(7, dtype=complex)
+        if self.qmax is None:
+            raw_tail_values = self.direct_integrals_over_range(
+                rho,
+                z_observer,
+                z_source,
+                q_stop,
+                np.inf,
+            )
+        approximation = smooth_values + pole_values + raw_tail_values
+        result = approximation
+        returned = "approximation"
+        reference = None
+        relative_errors = None
+        max_relative_error = None
+        absolute_errors = None
+        max_absolute_error = None
+        accepted = True
+        reason = "validation disabled"
+
+        if self.pole_subtraction_validate:
+            reference = self.compute_integrals_singularity_aware(rho, z_observer, z_source)
+            (
+                relative_errors,
+                max_relative_error,
+                absolute_errors,
+                max_absolute_error,
+                accepted,
+            ) = self._mixed_validation_summary(
+                approximation,
+                reference,
+                self.pole_subtraction_validation_rtol,
+                self.pole_subtraction_validation_atol,
+            )
+            if accepted:
+                reason = (
+                    "pole-subtracted direct validation accepted: max absolute error "
+                    f"{max_absolute_error:.3e}, max relative error {max_relative_error:.3e}"
+                )
+            else:
+                reason = (
+                    "pole-subtracted direct validation failed: max absolute error "
+                    f"{max_absolute_error:.3e} exceeds mixed tolerance "
+                    f"atol={self.pole_subtraction_validation_atol:.3e}, "
+                    f"rtol={self.pole_subtraction_validation_rtol:.3e}"
+                )
+                logger.warning(
+                    "Pole-subtracted direct rejected; {}. {}",
+                    reason,
+                    "Falling back to singularity_aware."
+                    if self.pole_subtraction_fallback_to_singularity_aware
+                    else "Returning rejected approximation.",
+                )
+                if self.pole_subtraction_fallback_to_singularity_aware:
+                    result = reference
+                    returned = "singularity_aware"
+
+        self.last_pole_subtraction_report = {
+            "method": "pole_subtracted_direct",
+            "accepted": accepted,
+            "reason": reason,
+            "pole_count": len(poles),
+            "poles": poles,
+            "residues": residues,
+            "breakpoints": edges[1:-1],
+            "pole_subtraction_q_stop": q_stop,
+            "smooth_values": smooth_values,
+            "pole_values": pole_values,
+            "raw_tail_values": raw_tail_values,
+            "approximation": approximation,
+            "reference": reference,
+            "relative_errors": relative_errors,
+            "max_relative_error": max_relative_error,
+            "absolute_errors": absolute_errors,
+            "max_absolute_error": max_absolute_error,
+            "returned": returned,
+            "fallback_to_singularity_aware": self.pole_subtraction_fallback_to_singularity_aware,
+        }
+        return result
+
+    def compute_integrals_pole_aware_hybrid_dcim(
+        self,
+        rho: float,
+        z_observer: float,
+        z_source: float,
+    ) -> np.ndarray:
+        r"""Stage-2 pole-subtracted hybrid DCIM.
+
+        This method subtracts detected simple-pole residues from the Bessel-free
+        kernels, integrates the smooth low-q region directly, fits only the
+        smooth high-q tail by the existing Bessel-form hybrid DCIM machinery, and
+        numerically adds the subtracted pole model back in the same real-axis
+        Bessel convention.  Full validation against ``singularity_aware`` decides
+        whether the approximation is accepted or falls back.
+        """
+        direct_stop = self._hybrid_default_direct_q_stop()
+        tail_stop = self._hybrid_default_tail_q_stop(direct_stop)
+        if tail_stop <= direct_stop:
+            raise ValueError("hybrid_tail_q_stop/dcim_q_stop/qmax must exceed hybrid_direct_q_stop.")
+        if self.hybrid_sample_count < 2 * self.hybrid_image_count + 1:
+            raise ValueError("hybrid_sample_count must be at least 2 * hybrid_image_count + 1.")
+
+        poles, residues = self._pole_subtraction_data(z_observer, z_source)
+
+        def pole_kernel(q: float) -> np.ndarray:
+            return self._pole_residue_model(q, residues)
+
+        def smooth_kernel(q: float) -> np.ndarray:
+            return self.bessel_free_kernels(q, z_observer, z_source) - pole_kernel(q)
+
+        low_edges = [edge for edge in self._pole_subtraction_edges(direct_stop) if edge <= direct_stop]
+        if low_edges[-1] != direct_stop:
+            low_edges.append(direct_stop)
+        smooth_low = self._integrate_over_edges(smooth_kernel, rho, low_edges)
+
+        q_values = np.linspace(direct_stop, tail_stop, self.hybrid_sample_count)
+        fits = []
+        fit_residuals = []
+        smooth_tail = np.zeros(7, dtype=complex)
+        try:
+            kernel_samples = np.array([smooth_kernel(q) for q in q_values], dtype=complex)
+            if not np.all(np.isfinite(kernel_samples)):
+                raise FloatingPointError("pole-aware hybrid smooth-tail samples contain non-finite values.")
+            for kernel_index, order in enumerate(self._bessel_orders()):
+                fit = fit_exponentials(
+                    q_values,
+                    kernel_samples[:, kernel_index],
+                    self.hybrid_image_count,
+                    q_origin=float(q_values[0]),
+                )
+                fits.append(fit)
+                fit_residuals.append(np.inf if fit.relative_residual is None else fit.relative_residual)
+                smooth_tail[kernel_index] = integrate_complex_images_range(
+                    fit,
+                    rho,
+                    order,
+                    lower=direct_stop,
+                    upper=np.inf,
+                    epsabs=self.epsabs,
+                    epsrel=self.epsrel,
+                    limit=max(80, self.limit // 2),
+                )
+        except (FloatingPointError, LinAlgError, ValueError) as exc:
+            reason = f"smooth-tail fitting failed before validation: {exc}"
+            logger.warning(
+                "Pole-aware hybrid DCIM fitting failed; {}. {}",
+                reason,
+                "Falling back to singularity_aware."
+                if self.pole_subtraction_fallback_to_singularity_aware
+                else "Reraising because fallback is disabled.",
+            )
+            if not self.pole_subtraction_fallback_to_singularity_aware:
+                raise
+            reference = self.compute_integrals_singularity_aware(rho, z_observer, z_source)
+            self.last_pole_aware_hybrid_report = {
+                "method": "pole_aware_hybrid_dcim",
+                "accepted": False,
+                "reason": reason,
+                "returned": "singularity_aware",
+                "direct_q_stop": direct_stop,
+                "tail_fit_q_stop": tail_stop,
+                "pole_count": len(poles),
+                "poles": poles,
+                "residues": residues,
+                "low_breakpoints": low_edges[1:-1],
+                "pole_breakpoints": [],
+                "smooth_low_values": smooth_low,
+                "smooth_tail_values": smooth_tail,
+                "pole_values": np.zeros(7, dtype=complex),
+                "approximation": smooth_low,
+                "reference": reference,
+                "relative_errors": None,
+                "max_relative_error": None,
+                "absolute_errors": None,
+                "max_absolute_error": None,
+                "fit_residuals": fit_residuals,
+                "finite_tail_reference": None,
+                "finite_tail_fit": None,
+                "tail_relative_errors": None,
+                "max_tail_relative_error": None,
+                "fallback_to_singularity_aware": self.pole_subtraction_fallback_to_singularity_aware,
+            }
+            return reference
+
+        pole_q_stop = self._pole_subtraction_q_stop()
+        if not np.isfinite(pole_q_stop):
+            pole_q_stop = tail_stop
+        pole_edges = self._pole_subtraction_edges(pole_q_stop)
+        pole_values = self._integrate_over_edges(pole_kernel, rho, pole_edges)
+        approximation = smooth_low + smooth_tail + pole_values
+        result = approximation
+        returned = "approximation"
+        reference = None
+        relative_errors = None
+        max_relative_error = None
+        absolute_errors = None
+        max_absolute_error = None
+        accepted = True
+        reason = "validation disabled"
+        finite_tail_reference = None
+        finite_tail_fit = None
+        tail_relative_errors = None
+        max_tail_relative_error = None
+
+        if self.hybrid_validate_tail:
+            finite_tail_reference = self._integrals_over_range_for_kernel(
+                smooth_kernel,
+                rho,
+                direct_stop,
+                tail_stop,
+                epsabs=max(self.epsabs, 1e-7),
+                epsrel=max(self.epsrel, 1e-7),
+                limit=max(80, self.limit // 2),
+            )
+            finite_tail_fit = np.zeros(7, dtype=complex)
+            for kernel_index, order in enumerate(self._bessel_orders()):
+                finite_tail_fit[kernel_index] = integrate_complex_images_range(
+                    fits[kernel_index],
+                    rho,
+                    order,
+                    lower=direct_stop,
+                    upper=tail_stop,
+                    epsabs=max(self.epsabs, 1e-7),
+                    epsrel=max(self.epsrel, 1e-7),
+                    limit=max(80, self.limit // 2),
+                )
+            tail_relative_errors, max_tail_relative_error = self._relative_error_summary(
+                finite_tail_fit,
+                finite_tail_reference,
+            )
+            if max_tail_relative_error > self.hybrid_validation_rtol:
+                accepted = False
+                reason = (
+                    "smooth finite-tail validation failed: max relative error "
+                    f"{max_tail_relative_error:.3e} exceeds {self.hybrid_validation_rtol:.3e}"
+                )
+
+        if accepted and self.pole_subtraction_validate:
+            reference = self.compute_integrals_singularity_aware(rho, z_observer, z_source)
+            (
+                relative_errors,
+                max_relative_error,
+                absolute_errors,
+                max_absolute_error,
+                accepted,
+            ) = self._mixed_validation_summary(
+                approximation,
+                reference,
+                self.pole_subtraction_validation_rtol,
+                self.pole_subtraction_validation_atol,
+            )
+            if accepted:
+                reason = (
+                    "pole-aware hybrid validation accepted: max absolute error "
+                    f"{max_absolute_error:.3e}, max relative error {max_relative_error:.3e}"
+                )
+            else:
+                reason = (
+                    "pole-aware hybrid validation failed: max absolute error "
+                    f"{max_absolute_error:.3e} exceeds mixed tolerance "
+                    f"atol={self.pole_subtraction_validation_atol:.3e}, "
+                    f"rtol={self.pole_subtraction_validation_rtol:.3e}"
+                )
+
+        if not accepted:
+            logger.warning(
+                "Pole-aware hybrid DCIM rejected; {}. {}",
+                reason,
+                "Falling back to singularity_aware."
+                if self.pole_subtraction_fallback_to_singularity_aware
+                else "Returning rejected approximation.",
+            )
+            if self.pole_subtraction_fallback_to_singularity_aware:
+                if reference is None:
+                    reference = self.compute_integrals_singularity_aware(rho, z_observer, z_source)
+                result = reference
+                returned = "singularity_aware"
+
+        self.last_pole_aware_hybrid_report = {
+            "method": "pole_aware_hybrid_dcim",
+            "accepted": accepted,
+            "reason": reason,
+            "direct_q_stop": direct_stop,
+            "tail_fit_q_stop": tail_stop,
+            "pole_count": len(poles),
+            "poles": poles,
+            "residues": residues,
+            "low_breakpoints": low_edges[1:-1],
+            "pole_breakpoints": pole_edges[1:-1],
+            "smooth_low_values": smooth_low,
+            "smooth_tail_values": smooth_tail,
+            "pole_values": pole_values,
+            "approximation": approximation,
+            "reference": reference,
+            "relative_errors": relative_errors,
+            "max_relative_error": max_relative_error,
+            "absolute_errors": absolute_errors,
+            "max_absolute_error": max_absolute_error,
+            "returned": returned,
+            "fit_residuals": fit_residuals,
+            "finite_tail_reference": finite_tail_reference,
+            "finite_tail_fit": finite_tail_fit,
+            "tail_relative_errors": tail_relative_errors,
+            "max_tail_relative_error": max_tail_relative_error,
+            "fallback_to_singularity_aware": self.pole_subtraction_fallback_to_singularity_aware,
+        }
+        return result
+
     def _branch_cut_dcim_layer_indices(self) -> list[int]:
         """Return unique layer indices used by the branch-cut DCIM contour."""
         layers = self.branch_cut_layers
@@ -917,6 +1409,14 @@ class NLayerGreenFunction:
                     - minus_kernels * minus_special * minus_dqdt
                 )
 
+            if not np.all(np.isfinite(samples)):
+                raise FloatingPointError(
+                    "branch-cut DCIM samples contain non-finite values. "
+                    "This commonly occurs for Hankel branch-cut sampling at rho=0; "
+                    "use singularity_aware for coincident lateral points or set "
+                    "branch_cut_use_hankel=false for diagnostic fits."
+                )
+
             layer_values = np.zeros(7, dtype=complex)
             residuals: list[float] = []
             for kernel_index in range(7):
@@ -962,26 +1462,47 @@ class NLayerGreenFunction:
         the ``singularity_aware`` split-quadrature reference unless validation is
         explicitly disabled.
         """
-        branch_values, branch_reports = self._branch_cut_dcim_contribution(
-            rho,
-            z_observer,
-            z_source,
-        )
-        poles = self.find_poles() if self.branch_cut_include_poles else []
-        pole_values = (
-            self.pole_contribution_integrals(rho, z_observer, z_source, poles=poles)
-            if self.branch_cut_include_poles
-            else np.zeros(7, dtype=complex)
-        )
-        approximation = branch_values + pole_values
-
+        branch_values = np.zeros(7, dtype=complex)
+        branch_reports: list[dict[str, object]] = []
+        poles: list[SommerfeldPole] = []
+        pole_values = np.zeros(7, dtype=complex)
+        approximation = np.zeros(7, dtype=complex)
         reference = None
         relative_errors = None
         max_relative_error = None
         accepted = True
         reason = "validation disabled"
         result = approximation
-        if self.branch_cut_validate:
+
+        try:
+            branch_values, branch_reports = self._branch_cut_dcim_contribution(
+                rho,
+                z_observer,
+                z_source,
+            )
+            poles = self.find_poles() if self.branch_cut_include_poles else []
+            pole_values = (
+                self.pole_contribution_integrals(rho, z_observer, z_source, poles=poles)
+                if self.branch_cut_include_poles
+                else np.zeros(7, dtype=complex)
+            )
+            approximation = branch_values + pole_values
+            result = approximation
+        except (FloatingPointError, LinAlgError, ValueError) as exc:
+            accepted = False
+            reason = f"branch-cut DCIM fitting failed before validation: {exc}"
+            logger.warning(
+                "Branch-cut DCIM fitting failed; {}. {}",
+                reason,
+                "Falling back to singularity_aware."
+                if self.branch_cut_fallback_to_singularity_aware
+                else "Reraising because fallback is disabled.",
+            )
+            if not self.branch_cut_fallback_to_singularity_aware:
+                raise
+            reference = self.compute_integrals_singularity_aware(rho, z_observer, z_source)
+            result = reference
+        if self.branch_cut_validate and reason == "validation disabled":
             reference = self.compute_integrals_singularity_aware(rho, z_observer, z_source)
             scale = np.maximum(np.abs(reference), 1e-30)
             relative_errors = np.abs(approximation - reference) / scale
@@ -1071,38 +1592,43 @@ class NLayerGreenFunction:
             return _segment(a, light_line) + _segment(light_line, upper)
         return _segment(a, upper)
 
-    def direct_integrals_over_range(
+    @staticmethod
+    def _bessel_orders() -> list[int]:
+        """Bessel orders paired with the seven scalar Sommerfeld kernels."""
+        return [0, 2, 0, 2, 1, 1, 0]
+
+    def _integrals_over_range_for_kernel(
         self,
+        kernel: Callable[[float], np.ndarray],
         rho: float,
-        z_observer: float,
-        z_source: float,
         lower: float,
         upper: float,
         epsabs: Optional[float] = None,
         epsrel: Optional[float] = None,
         limit: Optional[int] = None,
     ) -> np.ndarray:
-        r"""Directly integrate the seven scalar Sommerfeld integrals on a finite interval.
+        r"""Integrate an arbitrary seven-component Bessel-free kernel.
 
-        For Bessel orders ``nu = [0,2,0,2,1,1,0]`` and Bessel-free kernels
-        ``F_m(q)``, this returns
+        For Bessel-free values ``K_m(q)``, this computes
 
         .. math::
 
-           I_m(\rho; q_a,q_b)=\int_{q_a}^{q_b}F_m(q)J_{\nu_m}(q\rho)\,dq.
+           \int_{q_a}^{q_b}K_m(q)J_{\nu_m}(q\rho)\,dq,
 
-        This finite-interval form is used by both the validated direct solver
-        and the hybrid DCIM finite-tail validation.
+        using the same half-line Bessel convention as the production direct
+        solver.  Pole-subtracted methods use it to subtract a rational pole
+        model and numerically add that same model back without changing contour
+        conventions.
         """
         if upper <= lower:
             return np.zeros(7, dtype=complex)
 
+        orders = self._bessel_orders()
+
         def integrand(q: float) -> np.ndarray:
-            kernels = self.bessel_free_kernels(q, z_observer, z_source)
-            j0 = jv(0, q * rho)
-            j1 = jv(1, q * rho)
-            j2 = jv(2, q * rho)
-            return kernels * np.array([j0, j2, j0, j2, j1, j1, j0], dtype=complex)
+            kernels = np.asarray(kernel(q), dtype=complex)
+            bessel_factors = np.array([jv(order, q * rho) for order in orders], dtype=complex)
+            return kernels * bessel_factors
 
         result = self.complex_quad(
             integrand,
@@ -1114,6 +1640,39 @@ class NLayerGreenFunction:
             split_propagating=False,
         )
         return np.asarray(result, dtype=complex)
+
+    def direct_integrals_over_range(
+        self,
+        rho: float,
+        z_observer: float,
+        z_source: float,
+        lower: float,
+        upper: float,
+        epsabs: Optional[float] = None,
+        epsrel: Optional[float] = None,
+        limit: Optional[int] = None,
+    ) -> np.ndarray:
+        r"""Directly integrate the seven scalar Sommerfeld integrals on an interval.
+
+        For Bessel orders ``nu = [0,2,0,2,1,1,0]`` and Bessel-free kernels
+        ``F_m(q)``, this returns
+
+        .. math::
+
+           I_m(\rho; q_a,q_b)=\int_{q_a}^{q_b}F_m(q)J_{\nu_m}(q\rho)\,dq.
+
+        This interval form is used by the validated direct solver, the hybrid
+        DCIM finite-tail validation, and pole-subtracted add-back tests.
+        """
+        return self._integrals_over_range_for_kernel(
+            lambda q: self.bessel_free_kernels(q, z_observer, z_source),
+            rho,
+            lower,
+            upper,
+            epsabs=epsabs,
+            epsrel=epsrel,
+            limit=limit,
+        )
 
     def bessel_free_kernels(self, q: float, z_observer: float, z_source: float) -> np.ndarray:
         r"""Seven Bessel-free scalar kernels before angular integration.
@@ -1155,8 +1714,39 @@ class NLayerGreenFunction:
             dtype=complex,
         )
 
+    def _resolve_q_value(
+        self,
+        absolute_value: Optional[float],
+        factor_value: Optional[float],
+    ) -> Optional[float]:
+        """Resolve an SI q value, preferring dimensionless ``abs(k0)`` factors."""
+        if factor_value is not None:
+            return float(factor_value) * abs(self.k0)
+        if absolute_value is None:
+            return None
+        return float(absolute_value)
+
+    @staticmethod
+    def _is_zero_lateral_distance(rho: float) -> bool:
+        """Return true when a lateral point should use local Green-function quadrature."""
+        return abs(float(rho)) < 1e-18
+
+    def _uses_dcim_family_method(self) -> bool:
+        """Return true for methods that should not handle coincident lateral points."""
+        return self.integration_method in {
+            "dcim",
+            "hybrid_dcim",
+            "branch_cut_dcim",
+            "pole_aware_hybrid_dcim",
+        }
+
     def compute_integrals(self, rho: float, z_observer: float, z_source: float) -> np.ndarray:
         r"""Compute the seven Sommerfeld integrals for the selected method.
+
+        For coincident lateral points, all DCIM-family methods automatically use
+        ``singularity_aware`` because ``rho=0`` is the local Purcell/LDOS limit,
+        not a lateral-propagation regime, and Hankel/complex-image fits are less
+        reliable there.
 
         Direct mode evaluates
 
@@ -1166,7 +1756,12 @@ class NLayerGreenFunction:
 
         ``dcim`` performs the legacy whole-domain exponential fit.  ``hybrid_dcim``
         evaluates the low-q interval directly and fits only the evanescent tail.
+        ``pole_subtracted_direct`` subtracts detected simple-pole residues and
+        numerically adds them back in the same Bessel convention.
+        ``pole_aware_hybrid_dcim`` fits only the pole-subtracted smooth tail.
         """
+        if self._is_zero_lateral_distance(rho) and self._uses_dcim_family_method():
+            return self.compute_integrals_singularity_aware(rho, z_observer, z_source)
         if self.integration_method == "dcim":
             return self.compute_integrals_dcim(rho, z_observer, z_source)
         if self.integration_method == "hybrid_dcim":
@@ -1177,6 +1772,10 @@ class NLayerGreenFunction:
             return self.compute_integrals_singularity_aware(rho, z_observer, z_source)
         if self.integration_method == "branch_cut_dcim":
             return self.compute_integrals_branch_cut_dcim(rho, z_observer, z_source)
+        if self.integration_method == "pole_subtracted_direct":
+            return self.compute_integrals_pole_subtracted_direct(rho, z_observer, z_source)
+        if self.integration_method == "pole_aware_hybrid_dcim":
+            return self.compute_integrals_pole_aware_hybrid_dcim(rho, z_observer, z_source)
 
         def integrand(q: float) -> np.ndarray:
             kernels = self.bessel_free_kernels(q, z_observer, z_source)
@@ -1239,17 +1838,26 @@ class NLayerGreenFunction:
         return np.trapezoid(integrand, x=q_values, axis=0)
 
     def _hybrid_default_direct_q_stop(self) -> float:
-        if self.hybrid_direct_q_stop is not None:
-            return float(self.hybrid_direct_q_stop)
+        resolved = self._resolve_q_value(
+            self.hybrid_direct_q_stop,
+            self.hybrid_direct_q_stop_factor,
+        )
+        if resolved is not None:
+            return resolved
         source_light_line = abs(np.sqrt(self.eps[self.source_layer] + 0j) * self.k0)
         branch_scale = float(np.max(np.abs(self.branch_points())))
         return max(6.0 * branch_scale, 2.0 * source_light_line, 1e6)
 
     def _hybrid_default_tail_q_stop(self, direct_stop: float) -> float:
-        if self.hybrid_tail_q_stop is not None:
-            return float(self.hybrid_tail_q_stop)
-        if self.dcim_q_stop is not None:
-            return float(self.dcim_q_stop)
+        resolved = self._resolve_q_value(
+            self.hybrid_tail_q_stop,
+            self.hybrid_tail_q_stop_factor,
+        )
+        if resolved is not None:
+            return resolved
+        resolved_dcim_stop = self._resolve_q_value(self.dcim_q_stop, self.dcim_q_stop_factor)
+        if resolved_dcim_stop is not None:
+            return resolved_dcim_stop
         if self.qmax is not None:
             return float(self.qmax)
         return 5.0 * direct_stop
@@ -1415,10 +2023,13 @@ class NLayerGreenFunction:
             "Sommerfeld kernels. Use integration_method='direct' as the reference and "
             "accept DCIM results only after stack-specific validation."
         )
-        q_stop = self.dcim_q_stop if self.dcim_q_stop is not None else self.qmax
+        q_start = self._resolve_q_value(self.dcim_q_start, self.dcim_q_start_factor)
+        q_stop = self._resolve_q_value(self.dcim_q_stop, self.dcim_q_stop_factor)
         if q_stop is None:
-            raise ValueError("DCIM requires a finite dcim_q_stop or qmax.")
-        q_values = np.linspace(self.dcim_q_start, float(q_stop), self.dcim_sample_count)
+            q_stop = self.qmax
+        if q_stop is None:
+            raise ValueError("DCIM requires a finite dcim_q_stop/dcim_q_stop_factor or qmax.")
+        q_values = np.linspace(float(q_start), float(q_stop), self.dcim_sample_count)
         kernel_samples = np.array(
             [self.bessel_free_kernels(q, z_observer, z_source) for q in q_values],
             dtype=complex,
