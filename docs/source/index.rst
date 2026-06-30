@@ -7,14 +7,18 @@ near plasmonic interfaces using macroscopic quantum electrodynamics.
 Latest Update
 -------------
 
-**Version 1.2.1** improves the N-layer Green's-function workflow for sparse
-emitter-separation grids and spectral-density validation. Green's-function CLIs
-can now preserve flexible Rx grids such as ``[0, d, 2d, ...]`` in HDF5, the
-N-layer solver has an opt-in fixed-grid path that reuses Bessel-free Sommerfeld
-kernels across many Rx values, and the DDI builder accepts sparse separation
-grids with tolerant physical-value lookup. Spectral-density plots can select
-curves by physical ``Rx_nm`` values, display ``J(ω)`` in either eV or SI
-``s^-1``, and apply scientific y-axis formatting for large SI rates.
+**Version 1.3.1** refines the N-layer Green's-function workflow for
+plasmonic stacks. The N-layer solver now includes singularity-aware quadrature,
+pole diagnostics, pole-subtracted direct integration, and a validation-gated
+``pole_aware_hybrid_dcim`` path for high-q tail acceleration. DCIM-family methods
+automatically route ``Rx = 0`` local calculations through ``singularity_aware``,
+and q-window controls can be written as dimensionless multiples of ``|k0|``.
+Spectral-density plotting also supports multi-file comparison curves with
+file-level styles and per-selected separation/pair overrides.
+
+The Mie Green's-function and emission-spectrum workflows are still experimental
+and should be treated as development APIs until they are benchmarked against
+literature results.
 
 .. image:: _static/workflow_diagram.png
    :width: 600
