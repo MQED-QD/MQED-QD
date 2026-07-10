@@ -44,7 +44,6 @@ import sys
 from typing import Any, Mapping, Sequence
 import warnings
 
-import h5py
 import hydra
 import numpy as np
 import yaml
@@ -66,7 +65,7 @@ try:  # installed as a sibling file or as mqed.Dyadic_GF.GF_Mie
 except Exception:  # pragma: no cover
     from mqed.Dyadic_GF.GF_Mie import MieGreenFunction, c, eV_to_J, hbar  # type: ignore
 
-from mqed.utils.dgf_data import save_gf_pair_h5
+from mqed.utils.dgf_data import save_gf_pair_h5, save_gf_scan_h5
 from mqed.utils.hydra_local import prepare_hydra_config_path
 from mqed.utils.logging_utils import setup_loggers_hydra_aware
 
@@ -983,75 +982,13 @@ def _json_default(obj: Any) -> Any:
     raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
 
 
-def save_hdf5(
-    path: Path,
-    total: np.ndarray,
-    vacuum: np.ndarray,
-    structure: np.ndarray,
-    energy_eV: np.ndarray,
-    wavelength_m: np.ndarray,
-    observer_positions: np.ndarray,
-    source_position: np.ndarray,
-    regions: np.ndarray,
-    config: Mapping[str, Any],
-    projected: np.ndarray | None = None,
-    purcell: np.ndarray | None = None,
-) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with h5py.File(path, "w") as h5:
-        h5.create_dataset("G_total", data=total)
-        h5.create_dataset("G_vacuum", data=vacuum)
-        h5.create_dataset("G_structure", data=structure)
-        h5.create_dataset("energy_eV", data=energy_eV)
-        h5.create_dataset("wavelength_m", data=wavelength_m)
-        h5.create_dataset("wavelength_nm", data=wavelength_m * 1e9)
-        h5.create_dataset("observer_positions_m", data=observer_positions)
-        h5.create_dataset("source_position_m", data=source_position)
-        h5.create_dataset("observer_region", data=regions)
-        if projected is not None:
-            h5.create_dataset("projected_G", data=projected)
-            h5.create_dataset("projected_ImG", data=np.imag(projected))
-            h5.create_dataset("projected_abs2", data=np.abs(projected) ** 2)
-        if purcell is not None:
-            h5.create_dataset("purcell", data=purcell)
-        h5.attrs["description"] = "Generalized Mie dyadic Green tensor for spherical dielectrics."
-        h5.attrs["config_json"] = json.dumps(config, default=_json_default)
-        h5.attrs["units_G"] = "meter^-1 in the Green-tensor convention used by GF_Sommerfeld.py"
-        h5.attrs["coordinate_basis"] = "Cartesian x,y,z"
-
-
-def save_pair_hdf5(
-    path: Path,
-    total: np.ndarray,
-    vacuum: np.ndarray,
-    structure: np.ndarray,
-    energy_eV: np.ndarray,
-    wavelength_m: np.ndarray,
-    emitter_positions: np.ndarray,
-    regions: np.ndarray,
-    config: Mapping[str, Any],
-) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    emitter_positions_nm = emitter_positions * 1e9
-    reference_z = float(emitter_positions[0, 2])
-    save_gf_pair_h5(
-        str(path),
-        total,
-        vacuum,
-        energy_eV,
-        emitter_positions_nm,
-        zD=reference_z,
-        zA=reference_z,
-    )
-    with h5py.File(path, "a") as h5:
-        h5.create_dataset("green_function_structure", data=structure)
-        h5.create_dataset("wavelength_m", data=wavelength_m)
-        h5.create_dataset("wavelength_nm", data=wavelength_m * 1e9)
-        h5.create_dataset("observer_region", data=regions)
-        h5.attrs["description"] = "Generalized Mie pair-indexed dyadic Green tensor."
-        h5.attrs["config_json"] = json.dumps(config, default=_json_default)
-        h5.attrs["units_G"] = "meter^-1 in the Green-tensor convention used by GF_Sommerfeld.py"
-        h5.attrs["coordinate_basis"] = "Cartesian x,y,z"
+def _hdf5_attrs(config: Mapping[str, Any], description: str) -> dict[str, str]:
+    return {
+        "description": description,
+        "config_json": json.dumps(config, default=_json_default),
+        "units_G": "meter^-1 in the Green-tensor convention used by GF_Sommerfeld.py",
+        "coordinate_basis": "Cartesian x,y,z",
+    }
 
 
 # -----------------------------------------------------------------------------
@@ -1099,7 +1036,18 @@ def output_path_from_config(config: Mapping[str, Any], config_path: Path) -> Pat
     prefix = str(output_cfg.get("prefix", "mie_green"))
     simulation = config["simulation"]
     energy, _, _ = spectral_grid(simulation)
-    return out_dir / f"{prefix}_Emin_{energy[0]:.3f}_Emax_{energy[-1]:.3f}_{energy.size}pts.h5"
+    layout = output_layout_from_config(config)
+    if layout == "pair":
+        position_suffix = f"_emitters_{emitter_positions_m(simulation).shape[0]}pts"
+    else:
+        observers = observer_positions_m(simulation)
+        rx_span_nm = np.linalg.norm(observers[-1] - observers[0]) * 1e9 if observers.shape[0] > 1 else 0.0
+        position_suffix = f"_Rx_{rx_span_nm:.0f}nm_{observers.shape[0]}pts"
+    return out_dir / (
+        f"{prefix}"
+        f"_Emin_{energy[0]:.2f}_Emax_{energy[-1]:.2f}_{energy.size}pts"
+        f"{position_suffix}.hdf5"
+    )
 
 
 def load_config(path: Path) -> dict[str, Any]:
@@ -1171,7 +1119,21 @@ def run_config(config: Mapping[str, Any], config_base_dir: Path, output_override
         if total is None or vacuum is None or structure is None or regions is None:
             return out
 
-        save_pair_hdf5(out, total, vacuum, structure, energy_eV, wavelength_m, emitters, regions, config)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        reference_z = float(emitters[0, 2])
+        save_gf_pair_h5(
+            str(out),
+            total,
+            vacuum,
+            energy_eV,
+            emitters * 1e9,
+            zD=reference_z,
+            zA=reference_z,
+            Gstructure=structure,
+            wavelength_m=wavelength_m,
+            observer_region=regions,
+            attrs=_hdf5_attrs(config, "Generalized Mie pair-indexed dyadic Green tensor."),
+        )
         logger.success("Mie pair Green-function simulation complete: {}", out)
         return out
 
@@ -1233,19 +1195,24 @@ def run_config(config: Mapping[str, Any], config_base_dir: Path, output_override
     if total is None or vacuum is None or structure is None or regions is None:
         return out
 
-    save_hdf5(
-        out,
+    out.parent.mkdir(parents=True, exist_ok=True)
+    save_gf_scan_h5(
+        str(out),
         total,
         vacuum,
-        structure,
         energy_eV,
-        wavelength_m,
-        observers,
-        source_pos,
-        regions,
-        config,
+        observers * 1e9,
+        source_pos * 1e9,
+        zD=float(source_pos[2]),
+        zA=float(observers[0, 2]),
+        Gstructure=structure,
+        wavelength_m=wavelength_m,
+        observer_region=regions,
+        observer_positions_m=observers,
+        source_position_m=source_pos,
         projected=projected,
         purcell=purcell,
+        attrs=_hdf5_attrs(config, "Generalized Mie dyadic Green tensor for spherical dielectrics."),
     )
     logger.success("Mie Green-function simulation complete: {}", out)
     return out

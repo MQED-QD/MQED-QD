@@ -37,13 +37,30 @@ Pair-indexed (``gf_layout = "pair"``)
         emitter_positions_nm   (N, 3)            float64
         position_fixed         group  {zD_meters, zA_meters}
 
-Backward compatibility: files written by older code (no ``gf_layout``
-attribute) are treated as separation-indexed.
+Scan-indexed (``gf_layout = "scan"``)
+    The Green's function is stored as ``(M, P, 3, 3)`` where *P* is the
+    number of explicit observer positions for one fixed source position.
+    No translational symmetry is assumed between observer points.
+
+    Applicable to: spherical particles/cavities or arbitrary point scans.
+
+    Datasets::
+
+        green_function_total   (M, P, 3, 3)   complex128
+        green_function_vacuum  (M, P, 3, 3)   complex128
+        energy_eV              (M,)           float64
+        observer_positions_nm  (P, 3)         float64
+        source_position_nm     (3,)           float64
+        position_fixed         group  {zD_meters, zA_meters}
+
+Backward compatibility: files written by older planar code (no ``gf_layout``
+attribute) are treated as separation-indexed, while older Mie scan files are
+recognized from their explicit position datasets and ``G_total`` aliases.
 """
 from __future__ import annotations
 import h5py
 import numpy as np
-from typing import Dict
+from typing import Any, Dict
 from loguru import logger
 
 
@@ -90,6 +107,10 @@ def save_gf_pair_h5(
     emitter_positions_nm: np.ndarray,
     zD: float,
     zA: float,
+    Gstructure: np.ndarray | None = None,
+    wavelength_m: np.ndarray | None = None,
+    observer_region: np.ndarray | None = None,
+    attrs: Dict[str, Any] | None = None,
 ) -> None:
     """Save pair-indexed Green's function arrays to HDF5.
 
@@ -112,6 +133,85 @@ def save_gf_pair_h5(
         pos = f.create_group("position_fixed")
         pos.attrs["zD_meters"] = zD
         pos.attrs["zA_meters"] = zA
+        _write_optional_common_metadata(
+            f,
+            Gstructure=Gstructure,
+            wavelength_m=wavelength_m,
+            observer_region=observer_region,
+            attrs=attrs,
+        )
+
+
+# ── Fixed-source scan layout ─────────────────────────────────────────
+
+def save_gf_scan_h5(
+    h5_path: str,
+    Gtot: np.ndarray,
+    Gvac: np.ndarray,
+    E: np.ndarray,
+    observer_positions_nm: np.ndarray,
+    source_position_nm: np.ndarray,
+    zD: float,
+    zA: float,
+    Gstructure: np.ndarray | None = None,
+    wavelength_m: np.ndarray | None = None,
+    observer_region: np.ndarray | None = None,
+    observer_positions_m: np.ndarray | None = None,
+    source_position_m: np.ndarray | None = None,
+    projected: np.ndarray | None = None,
+    purcell: np.ndarray | None = None,
+    attrs: Dict[str, Any] | None = None,
+) -> None:
+    with h5py.File(h5_path, "w") as f:
+        f.attrs["gf_layout"] = "scan"
+        total = f.create_dataset("green_function_total", data=Gtot)
+        vacuum = f.create_dataset("green_function_vacuum", data=Gvac)
+        f.create_dataset("energy_eV", data=E)
+        f.create_dataset("observer_positions_nm", data=observer_positions_nm)
+        f.create_dataset("source_position_nm", data=source_position_nm)
+        pos = f.create_group("position_fixed")
+        pos.attrs["zD_meters"] = zD
+        pos.attrs["zA_meters"] = zA
+
+        f["G_total"] = total
+        f["G_vacuum"] = vacuum
+        if observer_positions_m is not None:
+            f.create_dataset("observer_positions_m", data=observer_positions_m)
+        if source_position_m is not None:
+            f.create_dataset("source_position_m", data=source_position_m)
+        if projected is not None:
+            f.create_dataset("projected_G", data=projected)
+            f.create_dataset("projected_ImG", data=np.imag(projected))
+            f.create_dataset("projected_abs2", data=np.abs(projected) ** 2)
+        if purcell is not None:
+            f.create_dataset("purcell", data=purcell)
+        _write_optional_common_metadata(
+            f,
+            Gstructure=Gstructure,
+            wavelength_m=wavelength_m,
+            observer_region=observer_region,
+            attrs=attrs,
+        )
+
+
+def _write_optional_common_metadata(
+    h5,
+    Gstructure: np.ndarray | None,
+    wavelength_m: np.ndarray | None,
+    observer_region: np.ndarray | None,
+    attrs: Dict[str, Any] | None,
+) -> None:
+    if Gstructure is not None:
+        structure = h5.create_dataset("green_function_structure", data=Gstructure)
+        h5["G_structure"] = structure
+    if wavelength_m is not None:
+        h5.create_dataset("wavelength_m", data=wavelength_m)
+        h5.create_dataset("wavelength_nm", data=wavelength_m * 1e9)
+    if observer_region is not None:
+        h5.create_dataset("observer_region", data=observer_region)
+    if attrs is not None:
+        for key, value in attrs.items():
+            h5.attrs[key] = value
 
 
 # ── Unified loader ───────────────────────────────────────────────────
@@ -141,13 +241,25 @@ def load_gf_h5(h5_path: str) -> Dict[str, np.ndarray]:
             layout = f.attrs.get("gf_layout", "separation")
             if isinstance(layout, bytes):
                 layout = layout.decode()
+            if "gf_layout" not in f.attrs and "observer_positions_m" in f:
+                layout = "scan"
 
-            Gtot = f["green_function_total"][:]
-            Gvac = f["green_function_vacuum"][:]
+            total_key = "green_function_total" if "green_function_total" in f else "G_total"
+            vacuum_key = "green_function_vacuum" if "green_function_vacuum" in f else "G_vacuum"
+            Gtot = f[total_key][:]
+            Gvac = f[vacuum_key][:]
             E = f["energy_eV"][:].astype(float)
-            pos = f["position_fixed"]
-            zD = float(pos.attrs["zD_meters"])
-            zA = float(pos.attrs["zA_meters"])
+            if "position_fixed" in f:
+                pos = f["position_fixed"]
+                zD = float(pos.attrs["zD_meters"])
+                zA = float(pos.attrs["zA_meters"])
+            elif layout == "scan" and "source_position_m" in f and "observer_positions_m" in f:
+                zD = float(f["source_position_m"][:][2])
+                zA = float(f["observer_positions_m"][:][0, 2])
+            else:
+                pos = f["position_fixed"]
+                zD = float(pos.attrs["zD_meters"])
+                zA = float(pos.attrs["zA_meters"])
 
             result = {
                 "G_total": Gtot,
@@ -158,11 +270,29 @@ def load_gf_h5(h5_path: str) -> Dict[str, np.ndarray]:
                 "gf_layout": layout,
             }
 
+            if "green_function_structure" in f:
+                result["G_structure"] = f["green_function_structure"][:]
+            elif "G_structure" in f:
+                result["G_structure"] = f["G_structure"][:]
+
             if layout == "pair":
                 result["emitter_positions_nm"] = f["emitter_positions_nm"][:].astype(float)
                 logger.success(
                     f"Loaded pair-indexed GF from {h5_path}: "
                     f"{Gtot.shape[1]} emitters, {len(E)} energies"
+                )
+            elif layout == "scan":
+                if "observer_positions_nm" in f:
+                    result["observer_positions_nm"] = f["observer_positions_nm"][:].astype(float)
+                else:
+                    result["observer_positions_nm"] = f["observer_positions_m"][:].astype(float) * 1e9
+                if "source_position_nm" in f:
+                    result["source_position_nm"] = f["source_position_nm"][:].astype(float)
+                else:
+                    result["source_position_nm"] = f["source_position_m"][:].astype(float) * 1e9
+                logger.success(
+                    f"Loaded scan-indexed GF from {h5_path}: "
+                    f"{Gtot.shape[1]} observer positions, {len(E)} energies"
                 )
             else:
                 result["Rx_nm"] = f["Rx_nm"][:].astype(float)

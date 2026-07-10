@@ -173,13 +173,46 @@ def test_mie_scan_output_supports_energy_ev_and_horizontal_rx_points(tmp_path):
     run_from_config(config_path, output_path)
 
     with h5py.File(output_path, "r") as h5:
+        assert h5.attrs["gf_layout"] == "scan"
+        assert h5["green_function_total"].shape == (2, 2, 3, 3)
         assert h5["G_total"].shape == (2, 2, 3, 3)
+        assert h5["G_structure"].shape == (2, 2, 3, 3)
         assert np.allclose(h5["energy_eV"][:], [1.8, 2.0])
         assert np.allclose(
             h5["observer_positions_m"][:] * 1e9,
             [[0.0, 0.0, 10.0], [20.0, 0.0, 10.0]],
         )
         assert np.linalg.norm(h5["G_total"][0, 1]) > 0.0
+
+    data = load_gf_h5(str(output_path))
+    assert data["gf_layout"] == "scan"
+    assert data["G_structure"].shape == (2, 2, 3, 3)
+    assert np.allclose(data["observer_positions_nm"], [[0.0, 0.0, 10.0], [20.0, 0.0, 10.0]])
+
+
+def test_mie_output_path_uses_yaml_prefix_and_hdf5_parameter_suffix(tmp_path):
+    config = {
+        "simulation": {
+            "spectral_param": "energy_eV",
+            "energy_eV": [1.8, 2.0],
+            "nmax": 1,
+            "geometry": {"boundary": "sphere", "radius_nm": 1.0},
+            "source_position_nm": [0.0, 0.0, 5.0],
+            "position": {"Rx_nm": [0.0, 20.0]},
+            "strict_regions": True,
+        },
+        "materials": {"regions": [{"n": 1.0}, {"n": 1.0}]},
+        "parallel": {"backend": "sequential"},
+        "output": {"layout": "scan", "directory": str(tmp_path), "prefix": "mie_yaml_prefix"},
+    }
+    config_path = tmp_path / "mie_filename.yaml"
+    config_path.write_text(yaml.safe_dump(config), encoding="utf-8")
+
+    output_path = run_from_config(config_path)
+
+    assert output_path.name == "mie_yaml_prefix_Emin_1.80_Emax_2.00_2pts_Rx_20nm_2pts.hdf5"
+    assert output_path.exists()
+    assert load_gf_h5(str(output_path))["gf_layout"] == "scan"
 
 
 def test_mie_scan_mpi_backend_runs_single_rank_when_mpi4py_available(tmp_path):
