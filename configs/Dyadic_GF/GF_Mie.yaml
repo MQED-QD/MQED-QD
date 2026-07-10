@@ -7,30 +7,101 @@ hydra:
     name: GF_Mie
 
 simulation:
+  # ---------------------------------------------------------------------------
+  # Spectral grid
+  # ---------------------------------------------------------------------------
+  # The Mie driver accepts either an energy grid (energy_eV) or a wavelength
+  # grid (wavelength_nm).  Here we scan five energies between 1.8 and 2.5 eV.
   spectral_param: energy_eV
   energy_eV:
-    min: 1.8
-    max: 2.5
-    points: 5
+    segments:
+      - min: 0.1
+        max: 6.0
+        points: 59
+      - min: 6.01
+        max: 6.5
+        points: 49
+      - min: 6.6
+        max: 8.0
+        points: 14
+
+  # Maximum multipole order in the spherical-wave expansion.  Larger values
+  # improve convergence for larger particles or shorter wavelengths, but cost
+  # more time.
   nmax: 15
+
+  # ---------------------------------------------------------------------------
+  # Geometry and regions
+  # ---------------------------------------------------------------------------
+  # Core-shell convention for radii_nm is [outer_shell_radius, core_radius].
+  # With [160, 60], the regions are:
+  #   region 0: exterior/vacuum, r >= 160 nm
+  #   region 1: shell,           60 nm <= r < 160 nm
+  #   region 2: core/cavity,     r < 60 nm
+  # This example keeps the source and observer inside the core/cavity.  Shell-
+  # region observation points are outside the supported region for this driver
+  # path and return zero structure terms with a warning.
   geometry:
     boundary: coreshell
     radii_nm: [160.0, 60.0]
-  emitter_positions_nm:
-    - [0.0, 0.0, 0.0]
-    - [0.0, 0.0, 20.0]
+
+  # ---------------------------------------------------------------------------
+  # Output layout choice: scan vs pair
+  # ---------------------------------------------------------------------------
+  # This file uses output.layout: scan below.
+  #
+  # In scan layout, the active position inputs are:
+  #   source_position_nm: one fixed source/donor dipole position
+  #   position.Rx_nm:    observer/acceptor positions generated from horizontal
+  #                      offsets relative to the source position
+  # The output tensor has shape:
+  #   green_function_total[energy_index, observer_index, 3, 3]
+  #
+  # Do not set emitter_positions_nm for scan layout.  emitter_positions_nm is
+  # used only by output.layout: pair, where the driver computes all tensors
+  # G(r_observer_i, r_source_j) for an emitter list and writes shape
+  # [energy_index, observer_index, source_index, 3, 3].
+  #
+  # Pair-layout example, for quantum dynamics in a non-translational geometry:
+  #   emitter_positions_nm:
+  #     - [0.0, 0.0, 0.0]
+  #     - [0.0, 0.0, 20.0]
+  #   output:
+  #     layout: pair
+
+  # Fixed source/donor dipole for scan layout.  Because this is at the origin,
+  # it is inside the core/cavity region (region 2).
   source_position_nm: [0.0, 0.0, 0.0]
+
+  # Observer/acceptor scan for scan layout.
+  # Rx_nm is interpreted by main_mie.py as an x-offset from source_position_nm:
+  #   observer_position_nm = [source_x + Rx_nm, source_y, source_z]
+  # Keep Rx_nm strictly below the core radius (60 nm) if every observer point
+  # should be in the supported core/cavity region.  Larger values enter the
+  # shell region and return zero structure terms with a warning.
   position:
-    Rx_nm:
-      min: 0.0
-      max: 120.0
-      points: 121
+    Rx_nm: [0.0, 2.0, 20.0]
+
+  # Optional projected scalar Green function.  If both orientations are given,
+  # the driver also writes projected_G = e_observer · G · e_source and related
+  # projected_ImG/projected_abs2 datasets.
   source_orientation: [0.0, 0.0, 1.0]
   observer_orientation: [0.0, 0.0, 1.0]
+
+  # compute_purcell evaluates the source self-term at source_position_nm using
+  # source_orientation.  It does not depend on Rx_nm.
   compute_purcell: true
+
+  # strict_regions=true raises errors for unsupported source regions.  Some
+  # unsupported observer regions, such as the core-shell shell region, currently
+  # warn and return zero structure terms.
   strict_regions: true
 
 materials:
+  # Material list follows the same region order as the geometry above:
+  #   regions[0] -> exterior
+  #   regions[1] -> shell
+  #   regions[2] -> core/cavity
   regions:
     - n: 1.0
       name: vacuum exterior
@@ -43,6 +114,8 @@ materials:
       name: vacuum core
 
 parallel:
+  # sequential is easiest for small examples and debugging.  joblib/mpi are
+  # available for larger energy or observer grids.
   backend: sequential
   n_jobs: -1
   mpi_nproc: 4
@@ -50,6 +123,10 @@ parallel:
   mpi_exec: mpiexec
 
 output:
+  # The output filename is generated from this prefix and the runtime grid:
+  #   {prefix}_Emin_{...}_Emax_{...}_{nE}pts_Rx_{...}nm_{nRx}pts.hdf5
+  # Because layout is scan, the file stores explicit observer_positions_nm and
+  # source_position_nm rather than a reusable translational-symmetry Rx table.
   directory: outputs
   prefix: mie_shell_cavity_scan
   layout: scan
