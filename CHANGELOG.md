@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.3.2 - 2026-07-10
+
+### Mie Green's-function HDF5 workflow
+
+- Moved Mie scan and pair output writing onto the shared `mqed.utils.dgf_data` helpers, removing the duplicate local `save_hdf5` and `save_pair_hdf5` implementations from `main_mie.py`.
+- Added a shared scan-indexed HDF5 layout for fixed-source, explicit-observer Green tensors, including canonical datasets, compatibility aliases, Mie structure terms, wavelength metadata, projected scalars, Purcell factors, and explicit source/observer position datasets.
+- Extended the shared loader to read scan-indexed Mie files while preserving pair and separation layout support.
+
+### Core-shell cavity configuration and launch scripts
+
+- Updated `configs/Dyadic_GF/GF_Mie.yaml` with detailed annotations for scan vs pair layouts, source/observer semantics, segmented energy grids, supported core-region scans, and the `[0, 2, 20]` nm positions used for the current core-shell cavity spectral-density reproduction.
+- Changed Mie output paths to use the N-layer-style YAML prefix plus `.hdf5` parameter suffixes.
+- Added `mqed/Dyadic_GF/gf_mie_single_job.sh`, an annotated SGE/MPI launcher for many-frequency Mie jobs.
+
+### Tests and validation
+
+- Updated Mie output tests to cover the shared scan schema, loader compatibility, and generated `.hdf5` filename convention.
+- Verified the annotated Mie config parses to a scan layout with 122 segmented energy points and observer positions at 0, 2, and 20 nm.
+
 ## 1.3.1 - 2026-06-30
 
 ### N-layer pole-aware integration

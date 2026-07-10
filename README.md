@@ -16,12 +16,12 @@ near plasmonic interfaces using macroscopic quantum electrodynamics (MQED).
 
 ## Latest Update
 
-**Version 1.3.1** refines the N-layer singularity-aware/DCIM workflow and expands spectral-density comparison plotting.
+**Version 1.3.2** consolidates the experimental Mie Green's-function workflow around the shared dyadic-Green HDF5 schema and adds a documented core-shell cavity run path.
 
-- **Pole-aware N-layer integration** adds `pole_subtracted_direct` and `pole_aware_hybrid_dcim`, which subtract detected simple-pole residue models from the Bessel-form Sommerfeld kernels, integrate or fit the smoother remainder, add the same pole model back, and validate against `singularity_aware` with fallback enabled.
-- **Safer DCIM defaults** route `Rx = 0` calculations through `singularity_aware` for DCIM-family methods, add `|k0|`-scaled q-window factors for DCIM/hybrid tails, and document method tradeoffs in the five-layer example config.
-- **Spectral-density comparison plotting** now supports multiple input HDF5 files with file-level styles plus per-selected separation/pair overrides, so color can identify the numerical method while linestyle/marker identifies `Rx` or emitter pair.
-- **Experimental Mie Green's-function and emission-spectrum workflows** remain included for development and API testing, but `GF_Mie.py` and `emission_spectrum.py` have not yet been verified against literature benchmarks and should not be treated as production-ready.
+- **Shared Mie HDF5 output** now routes scan and pair Mie tensors through `mqed.utils.dgf_data`, including a canonical scan layout with explicit source/observer positions and compatibility aliases for existing analysis tools.
+- **Mie output filenames** follow the N-layer-style `.hdf5` convention with YAML-controlled prefixes and parameterized energy/position suffixes.
+- **Annotated core-shell cavity config** documents scan vs pair semantics, source/observer positions, segmented energy grids, supported core-region scans, and the `[0, 2, 20]` nm literature-reproduction positions.
+- **Mie SGE launcher** adds `mqed/Dyadic_GF/gf_mie_single_job.sh` for many-frequency Mie jobs with MPI/Hydra run-control annotations.
 
 See `CHANGELOG.md` for the full release notes.
 

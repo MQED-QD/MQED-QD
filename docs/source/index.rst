@@ -7,18 +7,18 @@ near plasmonic interfaces using macroscopic quantum electrodynamics.
 Latest Update
 -------------
 
-**Version 1.3.1** refines the N-layer Green's-function workflow for
-plasmonic stacks. The N-layer solver now includes singularity-aware quadrature,
-pole diagnostics, pole-subtracted direct integration, and a validation-gated
-``pole_aware_hybrid_dcim`` path for high-q tail acceleration. DCIM-family methods
-automatically route ``Rx = 0`` local calculations through ``singularity_aware``,
-and q-window controls can be written as dimensionless multiples of ``|k0|``.
-Spectral-density plotting also supports multi-file comparison curves with
-file-level styles and per-selected separation/pair overrides.
+**Version 1.3.2** refines the experimental Mie Green's-function workflow for
+core-shell spherical-cavity studies. Mie scan and pair outputs now use the shared
+dyadic-Green HDF5 utilities, scan files store explicit source/observer positions,
+and generated filenames follow the N-layer-style ``.hdf5`` parameter suffixes.
+The default Mie config documents scan vs pair semantics, segmented energy grids,
+and the ``0``, ``2``, and ``20`` nm core-cavity positions used for spectral-density
+literature reproduction. A new SGE launcher, ``gf_mie_single_job.sh``, provides a
+documented MPI run path for many-frequency Mie calculations.
 
-The Mie Green's-function and emission-spectrum workflows are still experimental
-and should be treated as development APIs until they are benchmarked against
-literature results.
+The Mie Green's-function workflow is still experimental and should be treated as
+a development API until benchmark comparisons against literature results are
+completed.
 
 .. image:: _static/workflow_diagram.png
    :width: 600
