@@ -10,8 +10,10 @@ from mqed.plotting.plot_spectral_density import (
     _normalize_separation_indices,
     _plot_dataset_on_axes,
     _plot_pair_layout,
+    _plot_scan_layout,
     _plot_separation_layout,
     _resolve_pair_indices,
+    _resolve_scan_indices,
 )
 
 
@@ -175,6 +177,47 @@ def test_plot_pair_layout_selects_curves_by_physical_separation():
     assert np.allclose(fig.axes[0].lines[2].get_ydata(), j_eV[0, 2, :])
 
 
+def test_resolve_scan_indices_from_physical_distances():
+    cfg = OmegaConf.create({
+        "scan_distance_values_nm": [0.0, 2.0, 20.0],
+        "scan_distance_tolerance_nm": 1e-9,
+    })
+
+    indices, distances_nm = _resolve_scan_indices(cfg, np.array([0.0, 2.0, 20.0]), 3)
+
+    assert indices == [0, 1, 2]
+    assert distances_nm == [0.0, 2.0, 20.0]
+
+
+def test_plot_scan_layout_selects_curves_by_physical_distance():
+    cfg = OmegaConf.create({
+        "plot_settings": {
+            "scan_distance_values_nm": [0.0, 2.0, 20.0],
+            "scan_distance_tolerance_nm": 1e-9,
+            "scan_label_template": "R = {distance_nm:.0f} nm",
+            "figsize": [4, 3],
+        }
+    })
+    energy_eV = np.array([1.0, 2.0])
+    j_eV = np.array([
+        [1.0, 1.1],
+        [2.0, 2.2],
+        [20.0, 22.0],
+    ])
+
+    fig = _plot_scan_layout(j_eV, energy_eV, cfg, np.array([0.0, 2.0, 20.0]))
+
+    assert len(fig.axes[0].lines) == 3
+    assert [line.get_label() for line in fig.axes[0].lines] == [
+        "R = 0 nm",
+        "R = 2 nm",
+        "R = 20 nm",
+    ]
+    assert np.allclose(fig.axes[0].lines[0].get_ydata(), j_eV[0, :])
+    assert np.allclose(fig.axes[0].lines[1].get_ydata(), j_eV[1, :])
+    assert np.allclose(fig.axes[0].lines[2].get_ydata(), j_eV[2, :])
+
+
 def test_iter_input_curves_preserves_single_file_default():
     cfg = OmegaConf.create({"input_file": "single.h5", "curves": []})
 
@@ -305,3 +348,28 @@ def test_multi_file_pair_styles_support_compact_lists():
     assert ax.lines[1].get_marker() == "^"
     plt.close(fig)
 
+
+def test_plot_dataset_on_axes_accepts_scan_layout():
+    cfg = OmegaConf.create({
+        "plot_settings": {
+            "scan_distance_values_nm": [2.0],
+            "scan_label_template": "R = {distance_nm:.0f} nm",
+            "figsize": [4, 3],
+        }
+    })
+    data = {
+        "gf_layout": "scan",
+        "J_eV": np.array([[1.0, 2.0], [3.0, 4.0]]),
+        "energy_eV": np.array([1.0, 2.0]),
+        "observer_distances_nm": np.array([0.0, 2.0]),
+    }
+
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(4, 3))
+    _plot_dataset_on_axes(data, cfg, ax)
+
+    assert len(ax.lines) == 1
+    assert ax.lines[0].get_label() == "R = 2 nm"
+    assert np.allclose(ax.lines[0].get_ydata(), [3.0, 4.0])
+    plt.close(fig)

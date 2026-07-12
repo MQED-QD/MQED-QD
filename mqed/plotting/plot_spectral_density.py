@@ -12,7 +12,7 @@ Usage::
 
     python -m mqed.plotting.plot_spectral_density
 
-Configuration via ``configs/plots/spectral_density.yaml``.
+Configuration via ``configs/plots/plt_spec_dens_direct_sg.yaml``.
 """
 
 from ast import literal_eval
@@ -47,8 +47,8 @@ def _load_spectral_density_h5(filepath: str) -> dict:
     """Load spectral density data from HDF5.
 
     Returns:
-        Dictionary with keys: J_eV, energy_eV, gf_layout, and either
-        Rx_nm (separation layout) or emitter_positions_nm (pair layout).
+        Dictionary with keys: J_eV, energy_eV, gf_layout, and layout-specific
+        position metadata.
     """
     data = {}
     with h5py.File(filepath, "r") as f:
@@ -268,6 +268,49 @@ def _resolve_pair_indices(ps, emitter_positions_nm, n_emitters: int) -> tuple[li
         resolved_values.append(float(distances_nm[beta]))
 
     return pairs, resolved_values
+
+
+def _resolve_scan_indices(ps, observer_distances_nm, n_observers: int) -> tuple[list[int], list[float | None]]:
+    values_nm = _normalize_separation_values_nm(ps.get("scan_distance_values_nm", []))
+    if not values_nm:
+        values_nm = _normalize_separation_values_nm(ps.get("separation_values_nm", []))
+    if not values_nm:
+        indices = _normalize_separation_indices(ps.get("scan_indices", ps.get("separation_indices", [0])))
+        return indices, [None] * len(indices)
+
+    if observer_distances_nm is None:
+        raise ValueError(
+            "plot_settings.scan_distance_values_nm requires observer_distances_nm in the "
+            "spectral-density HDF5 file."
+        )
+
+    distances = np.asarray(observer_distances_nm, dtype=float)
+    if distances.shape != (n_observers,):
+        raise ValueError(
+            f"observer_distances_nm shape {distances.shape} does not match J shape with P={n_observers}."
+        )
+
+    tolerance_nm = float(ps.get("scan_distance_tolerance_nm", ps.get("separation_value_tolerance_nm", 1e-9)))
+    indices: list[int] = []
+    resolved_values: list[float | None] = []
+    for value_nm in values_nm:
+        matches = np.where(np.isclose(distances, value_nm, rtol=0.0, atol=tolerance_nm))[0]
+        if matches.size == 0:
+            nearest_idx = int(np.argmin(np.abs(distances - value_nm)))
+            logger.warning(
+                "Scan distance {:.6g} nm not found within {:.3g} nm; nearest is "
+                "observer {} at {:.6g} nm, skipping.",
+                value_nm,
+                tolerance_nm,
+                nearest_idx,
+                float(distances[nearest_idx]),
+            )
+            continue
+        idx = int(matches[0])
+        indices.append(idx)
+        resolved_values.append(float(distances[idx]))
+
+    return indices, resolved_values
 
 
 def _normalize_curve_scales(raw_scales: Any, count: int, setting_name: str) -> list[float]:
@@ -525,11 +568,9 @@ def _curve_style_for_selection(
 ) -> Any:
     """Resolve style precedence for one selected separation or pair.
 
-    Precedence is:
-    1. per-selected style on the input-file curve (``separation_styles`` /
-       ``pair_styles`` or compact property lists),
-    2. file-level curve default (``color``, ``linestyle``, ``lw``, ``marker``),
-    3. global plot-settings fallback for that selected separation/pair.
+    Precedence is per-selected style on the input-file curve, then file-level
+    curve defaults, then the global plot-settings fallback for that selected
+    separation or pair.
     """
     selected_style = _curve_sequence_style(curve_cfg, prefix, selection_position, style_key)
     if selected_style is not None:
@@ -752,6 +793,107 @@ def _plot_pair_layout(J_eV, energy_eV, cfg, emitter_positions_nm=None, ax=None, 
     return fig
 
 
+def _plot_scan_layout(J_eV, energy_eV, cfg, observer_distances_nm=None, ax=None, curve_cfg=None):
+    """Plot J(ω) for fixed-source scan data."""
+    ps = cfg.plot_settings
+    J_plot, unit_label = _convert_spectral_density_for_plot(
+        J_eV,
+        ps.get("spectral_density_unit", "eV"),
+    )
+
+    scan_indices, scan_distances_nm = _resolve_scan_indices(
+        ps,
+        observer_distances_nm,
+        J_eV.shape[0],
+    )
+    yscale = ps.get("yscale", "linear")
+    scale_factors = _resolve_curve_multipliers(
+        ps,
+        primary_key="scan_multipliers",
+        legacy_key="separation_scale_factors",
+        count=len(scan_indices),
+    )
+    colors, linestyles = _resolve_curve_styles(ps, prefix="scan", count=len(scan_indices))
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=tuple(ps.get("figsize", [8, 5])))
+    else:
+        fig = ax.figure
+
+    for selection_position, (idx, distance_nm, scale_factor, color, linestyle) in enumerate(zip(
+        scan_indices,
+        scan_distances_nm,
+        scale_factors,
+        colors,
+        linestyles,
+    )):
+        if idx >= J_eV.shape[0]:
+            logger.warning(f"Scan index {idx} out of range (max {J_eV.shape[0] - 1}), skipping.")
+            continue
+
+        _validate_curve_multiplier(
+            scale_factor,
+            yscale=yscale,
+            setting_name="plot_settings.scan_multipliers",
+        )
+
+        if distance_nm is None and observer_distances_nm is not None:
+            distance_nm = float(np.asarray(observer_distances_nm, dtype=float)[idx])
+        label_template = ps.get("scan_label_template", ps.get("label_template", "R = {distance_nm:.1f} nm"))
+        try:
+            label = label_template.format(index=idx, distance_nm=distance_nm, Rx=distance_nm)
+        except (KeyError, TypeError, ValueError):
+            label = f"Observer {idx}"
+            if distance_nm is not None:
+                label = f"{label} ({distance_nm:g} nm)"
+        label = _with_curve_label(label, curve_cfg)
+        label = _format_scaled_label(label, scale_factor)
+        ax.plot(
+            energy_eV,
+            scale_factor * J_plot[idx, :],
+            lw=_curve_style_for_selection(curve_cfg, "scan", selection_position, "lw", ps.get("lw", 1.5)),
+            label=label,
+            color=_curve_style_for_selection(curve_cfg, "scan", selection_position, "color", color),
+            linestyle=_curve_style_for_selection(
+                curve_cfg,
+                "scan",
+                selection_position,
+                "linestyle",
+                linestyle,
+            ),
+            marker=_curve_style_for_selection(curve_cfg, "scan", selection_position, "marker", None),
+            alpha=_curve_style_for_selection(curve_cfg, "scan", selection_position, "alpha", None),
+        )
+
+    ax.set_xlabel(ps.get("xlabel", r"Energy (eV)"))
+    ax.set_ylabel(_resolve_ylabel(ps, rf"$J(\omega)$ ({unit_label})"))
+    ax.set_title(ps.get("title", r"Spectral Density $J(\omega)$"))
+
+    if yscale == "log":
+        ax.set_yscale("log")
+    if ps.get("xscale", "linear") == "log":
+        ax.set_xscale("log")
+
+    x_range = ps.get("x_range_eV", None)
+    if x_range is not None:
+        ax.set_xlim(x_range)
+    y_range = ps.get("y_range", None)
+    if y_range is not None:
+        ax.set_ylim(y_range)
+
+    _apply_y_sci_formatting(ax, ps)
+
+    if ps.get("grid", True):
+        ax.grid(True, alpha=0.3)
+
+    if ax.lines:
+        ax.legend()
+    else:
+        logger.warning("No valid scan indices were plotted.")
+    fig.tight_layout()
+    return fig
+
+
 def _resolve_single_input_path(cfg) -> Path:
     input_path = Path(cfg.input_file)
     if not input_path.is_absolute():
@@ -778,6 +920,16 @@ def _plot_dataset_on_axes(data: dict, cfg, ax, curve_cfg=None) -> None:
             curve_cfg=curve_cfg,
         )
         return
+    if gf_layout == "scan":
+        _plot_scan_layout(
+            J_eV,
+            energy_eV,
+            cfg,
+            data.get("observer_distances_nm", None),
+            ax=ax,
+            curve_cfg=curve_cfg,
+        )
+        return
     raise ValueError(f"Unknown GF layout: {gf_layout}")
 
 
@@ -797,14 +949,14 @@ HYDRA_CONFIG_PATH: str = prepare_hydra_config_path("plots", __file__)
 
 @hydra.main(
     config_path=HYDRA_CONFIG_PATH,
-    config_name="plt_spec_dens",
+    config_name="plt_spec_dens_direct_sg",
     version_base=None,
 )
 def plot_spectral_density(cfg=None) -> None:
     """Plot spectral density from pre-computed HDF5 data.
 
     This is the Hydra CLI entry point.  Configuration is loaded from
-    ``configs/plots/plt_spec_dens.yaml``.
+    ``configs/plots/plt_spec_dens_direct_sg.yaml`` by default.
     """
     if cfg is None:
         raise ValueError("Hydra did not provide a plotting configuration.")
