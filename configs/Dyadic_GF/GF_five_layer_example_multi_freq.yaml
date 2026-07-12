@@ -56,10 +56,7 @@ simulation:
   position:
     zD_nm: 300.0
     zA_nm: 300.0
-    Rx_nm:
-      start: 0.0
-      stop: 12
-      points: 13
+    Rx_nm: [0, 12, 120]
   integration:
     # Available N-layer integration methods and practical guidance:
     #   direct
