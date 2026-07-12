@@ -37,6 +37,16 @@ Installing the package registers the following entry points:
    * - ``mqed_GF_Sommerfeld``
      - Compute the dyadic Green's function for a planar layered system
        (Sommerfeld integration).
+   * - ``mqed_GF_NLayer``
+     - Compute the dyadic Green's function for a finite N-layer planar stack.
+   * - ``mqed_GF_Mie``
+     - Compute the dyadic Green's function for sphere, spherical-cavity, and
+       core-shell Mie geometries.
+   * - ``mqed_calc_spec_dens``
+     - Convert Green-function HDF5 files into spectral density
+       :math:`J(\omega)`.
+   * - ``mqed_plot_spec_dens``
+     - Plot spectral density curves from the analysis HDF5 output.
    * - ``mqed_RET``
      - Resonance energy transfer analysis.
    * - ``mqed_FE``
@@ -111,6 +121,8 @@ use this approach to keep them organized and avoid cluttering the default.
 
 See the :ref:`tutorial-gf-sommerfeld` tutorial for a full walkthrough
 including multi-energy runs and downstream usage.
+For finite planar stacks, use :ref:`tutorial-gf-nlayer`; for spherical cavities
+or core-shell particles, use :ref:`tutorial-gf-mie`.
 
 Hydra configuration
 -------------------
@@ -146,6 +158,13 @@ What's next?
 
    * - :ref:`tutorial-gf-sommerfeld`
      - Compute Green's functions for a planar two-layer system.
+   * - :ref:`tutorial-gf-nlayer`
+     - Compute Green's functions for finite planar multilayer stacks.
+   * - :ref:`tutorial-gf-mie`
+     - Compute Mie Green's functions for spherical cavities and core-shell
+       particles.
+   * - :ref:`tutorial-spectral-density`
+     - Convert Green-function HDF5 files into spectral density curves.
    * - :doc:`/tutorials/field_enhancement`
      - Analyse field enhancement from cached Green's functions.
    * - :doc:`/tutorials/quantum_dynamics`
