@@ -36,8 +36,9 @@ Prerequisites
 
 * A working MQED installation (see :doc:`/getting-started`).
 * A dyadic Green's function HDF5 file produced by one of the GF tutorials
-  (e.g. :ref:`tutorial-gf-sommerfeld`).  The file must contain the
-  imaginary part of the GF together with the energy and position grids.
+  (e.g. :ref:`tutorial-gf-sommerfeld`, :ref:`tutorial-gf-nlayer`, or
+  :ref:`tutorial-gf-mie`).  The file must contain the imaginary part of the GF
+  together with the energy and position grids.
 
 Quick start
 ===========
@@ -105,80 +106,95 @@ and save the result in an HDF5 file.
 
 .. code-block:: bash
 
-   python -m mqed.plotting.plot_spectral_density --config-name=plt_spec_dens_example
+   python -m mqed.plotting.plot_spectral_density \
+      --config-name=plt_spec_dens_direct_sg \
+      curves=[] \
+      input_file='${oc.env:MQED_ROOT,./data}/example/spec_dens_data/spec_dens_10D_10D_Emin_0.10_Emax_6.00_359pts_height_1nm.hdf5' \
+      plot_settings.separation_indices='[0,3,33]' \
+      plot_settings.separation_multipliers='[1.0,1.0,100]' \
+      plot_settings.filename=Spec_dens_drude.png
 
 Or 
 
 .. code-block:: bash
 
-   mqed_plot_spec_dens --config-name=plt_spec_dens_example
+   mqed_plot_spec_dens \
+      --config-name=plt_spec_dens_direct_sg \
+      curves=[] \
+      input_file='${oc.env:MQED_ROOT,./data}/example/spec_dens_data/spec_dens_10D_10D_Emin_0.10_Emax_6.00_359pts_height_1nm.hdf5' \
+      plot_settings.separation_indices='[0,3,33]' \
+      plot_settings.separation_multipliers='[1.0,1.0,100]' \
+      plot_settings.filename=Spec_dens_drude.png
 
-This reads the default configuration from
-``configs/plots/plt_spec_dens_example.yaml``, loads the spectral density HDF5
-file produced in Step 1, and saves a publication-ready PNG figure. User 
-can modify the configuration file to adjust the plot settings (e.g., axis labels, title, line styles) 
-or override specific parameters from the command line.
+This reuses the bundled comparison plotting config
+``configs/plots/plt_spec_dens_direct_sg.yaml`` but clears its multi-file
+``curves`` list so the command plots the single HDF5 file produced in Step 1.
+For a direct-vs-singularity-aware comparison, run the same config without the
+``curves=[]`` override.  You can modify the configuration file to adjust the
+plot settings (e.g., axis labels, title, line styles), or override specific
+parameters from the command line.
 
 The configuration looks like this:
 
 .. code-block:: yaml
 
-   # configs/plots/plt_spec_dens_example.yaml
+   # Single-file override of configs/plots/plt_spec_dens_direct_sg.yaml
 
-  # --- Input ---
-  # Path to the spectral density HDF5 file produced by
-  # mqed.analysis.spectral_density.
-  input_file: "${oc.env:MQED_ROOT,./data}/example/spec_dens_data/spec_dens_10D_10D_Emin_0.10_Emax_6.00_359pts_height_1nm.hdf5"
+   # --- Input ---
+   # Path to the spectral density HDF5 file produced by
+   # mqed.analysis.spectral_density.
+   curves: []
+   input_file: "${oc.env:MQED_ROOT,./data}/example/spec_dens_data/spec_dens_10D_10D_Emin_0.10_Emax_6.00_359pts_height_1nm.hdf5"
 
-  # --- Font settings (following plot_pr.py conventions) ---
-  font:
-    family: "Arial"
-    labelsize: 18
-    ticksize: 16
-    legendsize: 14
-    titlesize: 18
-    labelweight: "bold"
-    titleweight: "bold"
+   # --- Font settings (following plot_pr.py conventions) ---
+   font:
+     family: "Arial"
+     labelsize: 18
+     ticksize: 16
+     legendsize: 14
+     titlesize: 18
+     labelweight: "bold"
+     titleweight: "bold"
 
-  # --- Plot settings ---
-  plot_settings:
-    # For separation-indexed layout: which Rx indices to plot (0-based)
-    # Example: [0, 3] overlays the curves for Rx index 0 and Rx index 3.
-    separation_indices: [0,3,33]
-    separation_multipliers: [1.0,1.0,100]
+   # --- Plot settings ---
+   plot_settings:
+     # For separation-indexed layout: which Rx indices to plot (0-based)
+     # Example: [0, 3] overlays the curves for Rx index 0 and Rx index 3.
+     separation_indices: [0,3,33]
+     separation_multipliers: [1.0,1.0,100]
 
-    # For pair-indexed layout: which (α, β) pairs to plot
-    # Each entry is [alpha, beta].  [0, 0] = self-term of emitter 0.
-    # Example: [[0, 0], [0, 3]] overlays both pair-resolved curves.
-    pair_indices:
-      - [0, 0]
-      - [0, 3]
-    pair_multipliers: [1.0,1.0]
+     # For pair-indexed layout: which (α, β) pairs to plot
+     # Each entry is [alpha, beta].  [0, 0] = self-term of emitter 0.
+     # Example: [[0, 0], [0, 3]] overlays both pair-resolved curves.
+     pair_indices:
+       - [0, 0]
+       - [0, 3]
+     pair_multipliers: [1.0,1.0]
 
-    # Labels
-    # For separation layout, {Rx} is replaced by the Rx value in nm
-    label_template: "Rx = {Rx:.1f} nm"
-    xlabel: "Energy (eV)"
-    ylabel: "$J(\\omega)$ (eV)"
-    title: "Spectral Density $J(\\omega)$"
+     # Labels
+     # For separation layout, {Rx} is replaced by the Rx value in nm
+     label_template: "Rx = {Rx:.1f} nm"
+     xlabel: "Energy (eV)"
+     ylabel: "$J(\\omega)$ (eV)"
+     title: "Spectral Density $J(\\omega)$"
 
-    # Axis scales: "linear" or "log"
-    xscale: "linear"
-    yscale: "linear"
+     # Axis scales: "linear" or "log"
+     xscale: "linear"
+     yscale: "linear"
 
-    # Optional axis limits (null = auto)
-    x_range_eV: [0,6]
-    y_range: null
+     # Optional axis limits (null = auto)
+     x_range_eV: [0,6]
+     y_range: null
 
-    # Style
-    figsize: [8, 6]
-    lw: 1.5
-    dpi: 300
-    grid: true
+     # Style
+     figsize: [8, 6]
+     lw: 1.5
+     dpi: 300
+     grid: true
 
-    # Output
-    save_plot: true
-    filename: "Spec_dens_drude.png"
+     # Output
+     save_plot: true
+     filename: "Spec_dens_drude.png"
 
 The output figure will look like this: (identical to the reference [Chuang2022]_ Figure 2C up to axis labels and styling):
 
@@ -187,12 +203,41 @@ The output figure will look like this: (identical to the reference [Chuang2022]_
    :align: center
 
 .. note::
-  Here our tutorial performs simulation on planar system with translation symmetry, so we only 
-  use the `separation_indices` to specify which curves to plot because the 
-  GF data is in separation-indexed layout. 
-  
-  In the future, we will add examples with `pair_indices` for systems without translation symmetry, 
-  where the GF data is in pair-indexed layout and requires specifying emitter pairs to plot.
+  This example uses a planar system with translational symmetry, so the GF data
+  is in ``separation`` layout and the plotted curves are selected by
+  ``separation_indices`` or ``separation_values_nm``.  Mie scan outputs use
+  ``scan_distance_values_nm`` instead, and pair-layout outputs use
+  ``pair_indices``.
+
+Green-function layouts
+======================
+
+The spectral-density command accepts the shared HDF5 layouts written by the
+Green-function drivers:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 35 45
+
+   * - Layout
+     - Input Green tensor shape
+     - How curves are selected for plotting
+   * - ``separation``
+     - ``G[M, K, 3, 3]`` for energy index ``M`` and horizontal separation
+       index ``K``.
+     - ``plot_settings.separation_indices`` or
+       ``plot_settings.separation_values_nm``.
+   * - ``scan``
+     - ``G[M, P, 3, 3]`` for one fixed source and ``P`` explicit observer
+       positions.
+     - ``plot_settings.scan_indices`` or
+       ``plot_settings.scan_distance_values_nm``.
+   * - ``pair``
+     - ``G[M, N, N, 3, 3]`` for all observer/source emitter pairs.
+     - ``plot_settings.pair_indices`` such as ``[[0, 0], [0, 3]]``.
+
+The projection formula is the same in all cases.  The layout only controls how
+position metadata is interpreted and how the curves are indexed.
 
 Configuration reference — analysis
 ===================================
@@ -298,12 +343,13 @@ Or override individual values via the command line:
 Configuration reference — plotting
 ====================================
 
-The plotting step is configured by
-``configs/plots/spectral_density.yaml``.  A minimal version looks like:
+The plotting step is configured by one of the spectral-density plot configs,
+such as ``configs/plots/plt_spec_dens_direct_sg.yaml`` for comparing direct and
+singularity-aware quadrature.  A minimal single-file version looks like:
 
 .. code-block:: yaml
 
-   # configs/plots/spectral_density.yaml
+   # configs/plots/plt_spec_dens_direct_sg.yaml
 
    input_file: '${oc.env:MQED_ROOT,./outputs}/spectral_density/spectral_density.hdf5'
 
@@ -317,20 +363,21 @@ The plotting step is configured by
      titleweight:  bold
 
    plot_settings:
-     separation_indices: [0]
-     pair_indices:       [[0, 0]]
-     label_template:     'Rx = {Rx:.1f} nm'
-     xlabel:             'Energy (eV)'
-     ylabel:             'J (eV)'
-     title:              'Spectral Density'
-     xscale:             linear
-     yscale:             linear
-     figsize:            [8, 5]
-     lw:                 1.5
-     dpi:                300
-     grid:               true
-     save_plot:          true
-     filename:           'spectral_density.png'
+      separation_indices: [0]
+      scan_distance_values_nm: [0, 2, 20]
+      pair_indices: [[0, 0]]
+      label_template:     'Rx = {Rx:.1f} nm'
+      xlabel:             'Energy (eV)'
+      ylabel:             'J (eV)'
+      title:              'Spectral Density'
+      xscale:             linear
+      yscale:             linear
+      figsize:            [8, 5]
+      lw:                 1.5
+      dpi:                300
+      grid:               true
+      save_plot:          true
+      filename:           'spectral_density.png'
 
 .. list-table:: Plotting parameters
    :header-rows: 1
@@ -371,6 +418,10 @@ The plotting step is configured by
      - ``[[0, 0]]``
      - List of emitter-pair index pairs ``[i, j]`` to plot when using
        the pair-indexed GF layout.
+   * - ``plot_settings.scan_distance_values_nm``
+     - ``null``
+     - List of observer-source distances in nanometres to plot when using
+       the scan-indexed GF layout, for example Mie scan output.
    * - ``plot_settings.label_template``
      - ``Rx = {Rx:.1f} nm``
      - Python format string for the legend label.  ``{Rx}`` is replaced
@@ -435,12 +486,18 @@ After running **Step 1** (analysis), the output HDF5 file
 
   - **Separation layout** ``[K, M]``: *K* separation indices, *M* energy
     points.
-  - **Pair layout** ``[N, N, M]``: all emitter pairs for *N* emitters
-    over *M* energy points.
+  - **Scan layout** ``[P, M]``: *P* explicit observer positions for one fixed
+    source, over *M* energy points.
+  - **Pair layout** ``[N, N, M]``: all emitter pairs for *N* emitters over
+    *M* energy points.
 
 * ``energy_eV`` — the energy grid in eV.
 * ``Rx_nm`` (separation layout only) — the donor–acceptor separations in
   nanometres.
+* ``observer_positions_nm`` and ``source_position_nm`` (scan layout only) —
+  explicit Cartesian positions for the fixed-source observer scan.
+* ``observer_distances_nm`` (scan layout only) — observer-source distances used
+  by ``scan_distance_values_nm`` in the plot config.
 
 After running **Step 2** (plotting), you will find a PNG file (default:
 ``spectral_density.png``) showing :math:`J_{\alpha\beta}(\omega)` versus
@@ -469,6 +526,8 @@ can load it in your own scripts:
 
    * :ref:`tutorial-gf-sommerfeld` — computing the dyadic Green's function
      that serves as input.
+   * :ref:`tutorial-gf-nlayer` — finite planar-stack Green-function workflow.
+   * :ref:`tutorial-gf-mie` — spherical-cavity Mie Green-function workflow.
    * :doc:`quantum_dynamics` — using the spectral density in a
      quantum-dynamics simulation.
    * :doc:`plotting` — general plotting utilities in MQED.
