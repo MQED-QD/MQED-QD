@@ -128,3 +128,13 @@ def test_prepare_hydra_config_path_merges_local_configs(tmp_path):
 
     assert cfg.plot_settings.source == "local"
     assert cfg.hydra.job.name == "plot_msd"
+
+
+def test_plot_spectral_density_config_uses_named_hydra_output_dir():
+    cfg_dir = Path(__file__).resolve().parents[1] / "configs" / "plots"
+
+    with initialize_config_dir(config_dir=str(cfg_dir), version_base=None):
+        cfg = compose(config_name="plt_spec_dens_direct_sg", return_hydra_config=True)
+
+    assert cfg.hydra.job.name == "plot_spectral_density"
+    assert cfg.hydra.run.dir.startswith("outputs/plot_spectral_density/")

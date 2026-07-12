@@ -3,8 +3,8 @@
 # See mqed/plotting/plot_spectral_density.py for details.
 
 defaults:
+  - hydra: default
   - _self_
-  - override hydra/job_logging: default
 
 hydra:
   job:
@@ -14,7 +14,7 @@ hydra:
 # Path to the spectral density HDF5 file produced by
 # mqed.analysis.spectral_density. This single-file key is kept for backward
 # compatibility. For comparison plots, use the optional curves list below.
-input_file: "${oc.env:MQED_ROOT,./outputs}/spectral_density/spectral_density.h5"
+# input_file: "${oc.env:MQED_ROOT,./outputs}/spectral_density/spectral_density.h5"
 
 # Optional multi-file comparison mode, matching plot_msd.py and plot_pr.py.
 # When this list is non-empty, each entry loads one spectral-density HDF5 file
@@ -29,25 +29,24 @@ input_file: "${oc.env:MQED_ROOT,./outputs}/spectral_density/spectral_density.h5"
 # This lets you encode two dimensions at once. A common convention is:
 #   - color = input file / numerical method
 #   - linestyle or marker = separation or emitter pair
-curves: []
-# Tutorial example for three separations from two files:
-# curves:
-#   - label: "Direct"
-#     path: "${oc.env:MQED_ROOT,./outputs}/spectral_density/direct.h5"
-#     color: "tab:blue"       # file-level default: all Direct curves are blue
-#     lw: 2.0
-#     separation_styles:       # order follows plot_settings.separation_indices
-#       - {linestyle: "-",  marker: "o"}   # first selected Rx, e.g. index 0
-#       - {linestyle: "--", marker: "s"}   # second selected Rx, e.g. index 3
-#       - {linestyle: ":",  marker: "^"}   # third selected Rx, e.g. index 33
-#   - label: "Pole-aware hybrid DCIM"
-#     path: "${oc.env:MQED_ROOT,./outputs}/spectral_density/pole_aware_hybrid.h5"
-#     color: "tab:orange"     # file-level default: all hybrid curves are orange
-#     lw: 2.0
-#     separation_styles:
-#       - {linestyle: "-",  marker: "o"}
-#       - {linestyle: "--", marker: "s"}
-#       - {linestyle: ":",  marker: "^"}
+# curves: []
+curves:
+  - label: "Singularity-aware"
+    path: "${oc.env:MQED_ROOT,./data}/example/spec_dens_data/spec_dens_1D_1D_Emin_0.10_Emax_6.00_419pts_height_300nm_sg_aware.hdf5"
+    color: "tab:blue"
+    lw: 2.0
+    separation_styles:       # order follows plot_settings.separation_indices
+      - {color: "tab:blue", linestyle: "-"}   # first selected Rx, e.g. index 0
+      - {linestyle: "--"}   # second selected Rx, e.g. index 3
+      - {linestyle: "-."}   # third selected Rx, e.g. index 33
+  - label: "Pole-aware hybrid DCIM"
+    path: "${oc.env:MQED_ROOT,./data}/example/spec_dens_data/spec_dens_1D_1D_Emin_0.10_Emax_6.00_419pts_height_300nm_pole_hybrid.hdf5"
+    color: "tab:orange"     # file-level default: all pole-aware hybrid curves are orange
+    lw: 2.0
+    separation_styles:
+      - {linestyle: "--"}
+      - {linestyle: "-."}
+      - {linestyle: ":"}
 # Compact equivalent if only one property changes per selected Rx:
 #   - label: "Singularity-aware"
 #     path: "${oc.env:MQED_ROOT,./outputs}/spectral_density/sg_aware.h5"
@@ -124,4 +123,4 @@ plot_settings:
 
   # Output
   save_plot: true
-  filename: "spectral_density.png"
+  filename: "Spec_dens_Yiting_pole_hybrid_DCIM.png"
