@@ -93,7 +93,7 @@ This is valid when :math:`J_{\\alpha\\beta}(\\omega)` varies slowly near
 Data layouts
 ^^^^^^^^^^^^
 
-This module supports both Green's function storage layouts:
+This module supports three Green's function storage layouts:
 
 * **Separation-indexed** (``gf_layout='separation'``):
   :math:`G(K, 3, 3)` per energy, indexed by donor–acceptor separation
@@ -103,6 +103,10 @@ This module supports both Green's function storage layouts:
 * **Pair-indexed** (``gf_layout='pair'``):
   :math:`G(N, N, 3, 3)` per energy, for all emitter pairs.
   Output shape: ``(N, N, M)`` where *N* = number of emitters.
+
+* **Scan-indexed** (``gf_layout='scan'``):
+  :math:`G(P, 3, 3)` per energy, for one fixed source and explicit observer
+  positions.  Output shape: ``(P, M)`` where *P* = number of observer points.
 """
 
 from pathlib import Path
@@ -258,6 +262,38 @@ def compute_spectral_density_pair(
     return J_eV
 
 
+def compute_spectral_density_scan(
+    G_imag: np.ndarray,
+    energy_eV: np.ndarray,
+    p_source: np.ndarray,
+    p_observer: np.ndarray,
+    mu_source_debye: float = 1.0,
+    mu_observer_debye: float = 1.0,
+) -> np.ndarray:
+    r"""Compute spectral density for fixed-source scan Green's function data.
+
+    Args:
+        G_imag: Imaginary part of the Green's function, shape ``(M, P, 3, 3)``.
+            *M* = number of energies, *P* = number of observer positions.
+        energy_eV: Energy grid in eV, shape ``(M,)``.
+        p_source: Source/donor dipole orientation unit vector, shape ``(3,)``.
+        p_observer: Observer/acceptor dipole orientation unit vector, shape ``(3,)``.
+        mu_source_debye: Source/donor dipole moment magnitude in Debye.
+        mu_observer_debye: Observer/acceptor dipole moment magnitude in Debye.
+
+    Returns:
+        Spectral density array, shape ``(P, M)``, in units of **eV**.
+    """
+    return compute_spectral_density_separation(
+        G_imag,
+        energy_eV,
+        p_source,
+        p_observer,
+        mu_D_debye=mu_source_debye,
+        mu_A_debye=mu_observer_debye,
+    )
+
+
 # ---------------------------------------------------------------------------
 #  Hydra CLI entry point
 # ---------------------------------------------------------------------------
@@ -408,6 +444,35 @@ def compute_and_save_spectral_density(cfg) -> None:
         }
         if emitter_positions_nm is not None:
             results["emitter_positions_nm"] = emitter_positions_nm
+
+    elif gf_layout == "scan":
+        observer_positions_nm = gf_data["observer_positions_nm"]
+        source_position_nm = gf_data["source_position_nm"]
+        observer_distances_nm = np.linalg.norm(observer_positions_nm - source_position_nm, axis=1)
+        logger.info(
+            f"Observer scan: {observer_positions_nm.shape[0]} positions; "
+            f"distance range {observer_distances_nm[0]:.2f} – {observer_distances_nm[-1]:.2f} nm"
+        )
+
+        J_eV = compute_spectral_density_scan(
+            G_imag, energy_eV, p_donor, p_acceptor,
+            mu_source_debye=mu_D_debye, mu_observer_debye=mu_A_debye,
+        )
+        logger.success(f"Spectral density computed: shape {J_eV.shape} (P, M)")
+
+        output_file = output_dir / output_fname
+        results = {
+            "J_eV": J_eV,
+            "energy_eV": energy_eV,
+            "observer_positions_nm": observer_positions_nm,
+            "source_position_nm": source_position_nm,
+            "observer_distances_nm": observer_distances_nm,
+            "gf_layout": gf_layout,
+            "p_source": p_donor,
+            "p_observer": p_acceptor,
+            "mu_source_debye": mu_D_debye,
+            "mu_observer_debye": mu_A_debye,
+        }
 
     else:
         raise ValueError(f"Unknown GF layout: {gf_layout}")
