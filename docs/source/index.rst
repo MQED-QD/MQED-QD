@@ -7,18 +7,19 @@ near plasmonic interfaces using macroscopic quantum electrodynamics.
 Latest Update
 -------------
 
-**Version 1.3.2** refines the experimental Mie Green's-function workflow for
-core-shell spherical-cavity studies. Mie scan and pair outputs now use the shared
-dyadic-Green HDF5 utilities, scan files store explicit source/observer positions,
-and generated filenames follow the N-layer-style ``.hdf5`` parameter suffixes.
-The default Mie config documents scan vs pair semantics, segmented energy grids,
-and the ``0``, ``2``, and ``20`` nm core-cavity positions used for spectral-density
-literature reproduction. A new SGE launcher, ``gf_mie_single_job.sh``, provides a
-documented MPI run path for many-frequency Mie calculations.
+**Version 1.4.0** turns the N-layer and Mie Green's-function workflows into
+documented spectral-density pipelines. Scan-indexed Mie HDF5 files now work with
+``mqed_calc_spec_dens`` and ``mqed_plot_spec_dens``, preserving explicit
+source/observer positions and selecting scan curves by physical distance. The
+release also adds curated N-layer reference HDF5 files, comparison plot configs,
+and reference figures for direct quadrature, singularity-aware integration, and
+pole-aware hybrid DCIM.
 
-The Mie Green's-function workflow is still experimental and should be treated as
-a development API until benchmark comparisons against literature results are
-completed.
+New tutorials cover N-layer planar stacks and Mie core-shell spherical cavities,
+while new theory pages summarize N-layer Sommerfeld integrals, singularity-aware
+pole extraction, hybrid DCIM acceleration, and Mie Green's functions. The Mie
+workflow remains experimental until benchmark comparisons against literature
+results are completed.
 
 .. image:: _static/workflow_diagram.png
    :width: 600

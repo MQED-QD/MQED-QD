@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.4.0 - 2026-07-12
+
+### Scan-layout spectral-density analysis
+
+- Added scan-layout support to `mqed_calc_spec_dens`, enabling fixed-source Mie scan HDF5 files to produce spectral-density curves for explicit observer positions.
+- Preserved scan metadata in spectral-density outputs, including source positions, observer positions, and observer distances in nanometers.
+- Added scan-layout plotting support to `mqed_plot_spec_dens`, including curve selection by scan distance, scan indices, scan labels, and per-curve scale factors.
+
+### N-layer comparison examples and plotting configs
+
+- Renamed the spectral-density plotting configs into method-comparison workflows for direct-vs-singularity-aware and singularity-aware-vs-pole-aware hybrid DCIM plots.
+- Added bundled N-layer Green-tensor and spectral-density reference HDF5 files for sparse 0, 12, and 120 nm separations.
+- Added reference figures for N-layer spectral-density comparisons and the Mie spherical-cavity scan example.
+
+### Tutorials and theory documentation
+
+- Added focused tutorials for N-layer planar stacks and Mie core-shell spherical cavities, including command-line workflows, HDF5 schema notes, spectral-density handoff, and HPC launcher guidance.
+- Updated the spectral-density tutorial for separation, scan, and pair layouts, including single-file plotting overrides and comparison-plot configs.
+- Added concise theory pages for N-layer Sommerfeld integrals and Mie Green's functions, with notes on singularity-aware pole extraction and hybrid DCIM acceleration.
+- Updated the getting-started and tutorial index pages so users can find the N-layer, Mie, and spectral-density workflows directly.
+
+### Tests and validation
+
+- Added regression tests for scan-layout spectral-density calculation, scan metadata persistence, scan plotting, and Hydra plot-output configuration.
+- Verified changed Python files with `py_compile`, focused pytest coverage, plot CLI smoke tests, and a Sphinx HTML documentation build.
+
 ## 1.3.2 - 2026-07-10
 
 ### Mie Green's-function HDF5 workflow

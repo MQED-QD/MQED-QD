@@ -16,12 +16,12 @@ near plasmonic interfaces using macroscopic quantum electrodynamics (MQED).
 
 ## Latest Update
 
-**Version 1.3.2** consolidates the experimental Mie Green's-function workflow around the shared dyadic-Green HDF5 schema and adds a documented core-shell cavity run path.
+**Version 1.4.0** expands the N-layer and Mie workflows into documented, reproducible spectral-density pipelines with bundled reference data.
 
-- **Shared Mie HDF5 output** now routes scan and pair Mie tensors through `mqed.utils.dgf_data`, including a canonical scan layout with explicit source/observer positions and compatibility aliases for existing analysis tools.
-- **Mie output filenames** follow the N-layer-style `.hdf5` convention with YAML-controlled prefixes and parameterized energy/position suffixes.
-- **Annotated core-shell cavity config** documents scan vs pair semantics, source/observer positions, segmented energy grids, supported core-region scans, and the `[0, 2, 20]` nm literature-reproduction positions.
-- **Mie SGE launcher** adds `mqed/Dyadic_GF/gf_mie_single_job.sh` for many-frequency Mie jobs with MPI/Hydra run-control annotations.
+- **Scan-layout spectral density** now supports fixed-source Mie scan HDF5 files in `mqed_calc_spec_dens` and `mqed_plot_spec_dens`, preserving source/observer positions and selecting scan curves by physical distance.
+- **N-layer comparison examples** add curated Green-tensor and spectral-density HDF5 files for direct quadrature, singularity-aware integration, and pole-aware hybrid DCIM comparisons.
+- **Reference plotting configs and figures** provide ready-to-run direct-vs-singularity-aware and singularity-aware-vs-pole-aware hybrid DCIM spectral-density plots.
+- **New tutorials and theory pages** document N-layer Sommerfeld integrals, singularity-aware pole extraction, hybrid DCIM, and Mie theory for spherical cavities.
 
 See `CHANGELOG.md` for the full release notes.
 
