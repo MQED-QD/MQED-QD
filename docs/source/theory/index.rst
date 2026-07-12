@@ -13,3 +13,5 @@ is evaluated.
 
    MacroscopicQED
    two_layer
+   n_layer
+   mie
