@@ -67,6 +67,24 @@ def build_layers(stack_cfg, materials_cfg, omega: float) -> list[LayerSpec]:
     return layers
 
 
+def _require_finite_green_results(
+    total: np.ndarray,
+    vacuum: np.ndarray,
+    energy_eV: float,
+    rx_values_m: np.ndarray,
+) -> None:
+    for dataset_name, values in (("total", total), ("vacuum", vacuum)):
+        invalid = np.argwhere(~np.isfinite(values))
+        if invalid.size == 0:
+            continue
+        rx_index, row, column = invalid[0]
+        raise FloatingPointError(
+            f"Non-finite {dataset_name} Green tensor at energy {energy_eV:.6f} eV, "
+            f"Rx index {rx_index} ({rx_values_m[rx_index] * 1e9:.6g} nm), "
+            f"component ({row}, {column}). Check stack.source_layer and integration settings."
+        )
+
+
 def _energy_grid(sim_params):
     kind = sim_params.spectral_param
     if kind == "energy_eV":
@@ -171,6 +189,7 @@ def _compute_one_energy(
                 z_observer=z_observer,
                 z_source=z_source,
             )
+        _require_finite_green_results(total, vacuum, energy_eV, rx_values_m)
         return idx, total, vacuum
 
     rx_iter = enumerate(rx_values_m)
@@ -191,6 +210,7 @@ def _compute_one_energy(
             z_source=z_source,
         )
 
+    _require_finite_green_results(total, vacuum, energy_eV, rx_values_m)
     return idx, total, vacuum
 
 

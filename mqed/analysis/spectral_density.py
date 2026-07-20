@@ -130,6 +130,16 @@ from mqed.utils.SI_unit import D2CMM, c, eps0, eV_to_J, hbar
 # ---------------------------------------------------------------------------
 
 
+def _require_finite_green_data(G_imag: np.ndarray) -> None:
+    invalid_count = int(np.size(G_imag) - np.count_nonzero(np.isfinite(G_imag)))
+    if invalid_count:
+        value_label = "value" if invalid_count == 1 else "values"
+        raise ValueError(
+            f"G_imag contains {invalid_count} non-finite {value_label}; "
+            "recompute or repair the Green-function input before spectral-density analysis."
+        )
+
+
 def compute_spectral_density_separation(
     G_imag: np.ndarray,
     energy_eV: np.ndarray,
@@ -172,6 +182,8 @@ def compute_spectral_density_separation(
         J: Spectral density array, shape ``(K, M)``, in units of **eV**.
             ``J[k, m]`` is :math:`J_k(\omega_m)`.
     """
+    _require_finite_green_data(G_imag)
+
     # Convert dipole magnitudes from Debye to SI (C·m)
     mu_D_SI = mu_D_debye * D2CMM
     mu_A_SI = mu_A_debye * D2CMM
@@ -239,6 +251,8 @@ def compute_spectral_density_pair(
         J: Spectral density array, shape ``(N, N, M)``, in units of **eV**.
             ``J[alpha, beta, m]`` is :math:`J_{\alpha\beta}(\omega_m)`.
     """
+    _require_finite_green_data(G_imag)
+
     # Convert dipole magnitude from Debye to SI (C·m)
     mu_SI = mu_debye * D2CMM
     mu2 = mu_SI * mu_SI  # |mu|^2 in (C·m)^2

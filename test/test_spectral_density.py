@@ -1,10 +1,12 @@
 import h5py
 import numpy as np
+import pytest
 
 from mqed.analysis.spectral_density import (
     _save_spectral_density_h5,
     compute_spectral_density_pair,
     compute_spectral_density_scan,
+    compute_spectral_density_separation,
 )
 
 
@@ -45,6 +47,19 @@ def test_scan_spectral_density_preserves_fixed_source_observer_curves():
     assert j_eV.shape == (3, 3)
     assert np.allclose(j_eV[1], j_eV[0], rtol=1.1e-3)
     assert np.allclose(j_eV[2], j_eV[0], rtol=1.1e-3)
+
+
+def test_separation_spectral_density_rejects_nonfinite_green_data():
+    g_imag = np.zeros((2, 1, 3, 3), dtype=float)
+    g_imag[1, 0, 0, 0] = np.nan
+
+    with pytest.raises(ValueError, match="G_imag contains 1 non-finite value"):
+        compute_spectral_density_separation(
+            g_imag,
+            np.array([1.0, 2.0]),
+            np.array([1.0, 0.0, 0.0]),
+            np.array([1.0, 0.0, 0.0]),
+        )
 
 
 def test_save_spectral_density_h5_preserves_scan_position_metadata(tmp_path):

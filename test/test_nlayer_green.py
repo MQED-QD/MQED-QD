@@ -131,6 +131,47 @@ def test_total_green_function_runs_for_small_five_layer_stack():
     assert solver.k0 == omega / c
 
 
+def test_compute_one_energy_rejects_nonfinite_green_tensor(monkeypatch):
+    from mqed.Dyadic_GF import main_nlayer
+
+    class AttrDict(dict):
+        __getattr__ = dict.__getitem__
+
+    class NonfiniteCalculator:
+        def __init__(self, **kwargs):
+            pass
+
+        def calculate_total_Green_function(self, **kwargs):
+            return np.full((3, 3), np.nan + 0.0j)
+
+        def vacuum_component(self, **kwargs):
+            return np.eye(3, dtype=complex)
+
+    monkeypatch.setattr(
+        main_nlayer,
+        "build_layers",
+        lambda stack_cfg, materials_cfg, omega: [
+            LayerSpec(epsilon=1.0 + 0.0j, thickness_m=None),
+            LayerSpec(epsilon=2.25 + 0.0j, thickness_m=20e-9, name="emitter"),
+            LayerSpec(epsilon=1.0 + 0.0j, thickness_m=None),
+        ],
+    )
+    monkeypatch.setattr(main_nlayer, "NLayerGreenFunction", NonfiniteCalculator)
+
+    with pytest.raises(FloatingPointError, match="energy 2.000000 eV.*Rx index 0"):
+        main_nlayer._compute_one_energy(
+            idx=0,
+            energy_eV=2.0,
+            lambda_m=600e-9,
+            rx_values_m=np.array([0.0]),
+            z_observer=10e-9,
+            z_source=10e-9,
+            stack_cfg=AttrDict({"source_layer": 1}),
+            materials_cfg=AttrDict({}),
+            integ_cfg=None,
+        )
+
+
 def test_hybrid_dcim_fallback_runs_and_records_report():
     energy_eV = 2.0
     omega = energy_eV * 1.602176634e-19 / 1.054571817e-34
