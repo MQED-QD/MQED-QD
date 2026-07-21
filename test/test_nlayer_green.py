@@ -60,6 +60,32 @@ def test_nlayer_no_contrast_has_zero_scattering_kernels():
     assert np.allclose(kernels, np.zeros(7, dtype=complex))
 
 
+def test_nlayer_off_center_evanescent_kernels_remain_finite():
+    omega = 2.0 * 1.602176634e-19 / 1.054571817e-34
+    solver = NLayerGreenFunction(
+        layers=[
+            LayerSpec(epsilon=2.25 + 0.0j, thickness_m=None),
+            LayerSpec(epsilon=3.0 + 0.0j, thickness_m=20e-9),
+            LayerSpec(epsilon=4.0 + 0.0j, thickness_m=None),
+        ],
+        source_layer=1,
+        omega=omega,
+        qmax=None,
+    )
+
+    q = 10.0 * solver.k0
+    beta = solver._kz(solver.source_layer, q)
+    original_scaled = np.asarray(solver.amplitude_coefficients(q, 3e-9, 15e-9)) * np.exp(
+        1j * beta * solver.source_thickness_m
+    )
+    stable_scaled = np.asarray(solver._scaled_amplitude_coefficients(q, 3e-9, 15e-9))
+
+    assert np.allclose(stable_scaled, original_scaled, rtol=1e-12, atol=1e-12)
+
+    kernels = solver.bessel_free_kernels(5.0e10, 1e-9, 1e-9)
+    assert np.all(np.isfinite(kernels))
+
+
 def test_dcim_single_exponential_matches_laplace_bessel_transform():
     q_values = np.linspace(0.0, 1.0e8, 80)
     coefficient = 2.0 - 0.25j

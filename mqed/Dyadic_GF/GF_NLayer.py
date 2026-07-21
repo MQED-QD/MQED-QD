@@ -508,6 +508,54 @@ class NLayerGreenFunction:
         ) / denom_p
         return c_s, c_p_plus, c_p_minus, s_p_plus, s_p_minus
 
+    def _scaled_amplitude_coefficients(self, q, z_observer: float, z_source: float):
+        r"""Return amplitude coefficients after multiplication by ``exp(i beta_j d_j)``.
+
+        The Sommerfeld kernels only use this scaled combination.  Evaluating it
+        directly keeps every evanescent propagation factor decaying with a
+        non-negative physical path length.  This avoids overflow from separately
+        evaluating the algebraically cancelling factors in
+        :meth:`amplitude_coefficients` for off-center source positions.
+        """
+        d_j = self._source_layer_thickness()
+        beta_j = self._kz(self.source_layer, q)
+
+        r_minus_s = self.reflection_coefficient(q, "down", "s")
+        r_plus_s = self.reflection_coefficient(q, "up", "s")
+        r_minus_p = self.reflection_coefficient(q, "down", "p")
+        r_plus_p = self.reflection_coefficient(q, "up", "p")
+
+        position_sum = z_observer + z_source
+        position_difference = z_observer - z_source
+        lower_path = np.exp(1j * beta_j * position_sum)
+        upper_path = np.exp(1j * beta_j * (2 * d_j - position_sum))
+        round_path_plus = np.exp(1j * beta_j * (2 * d_j + position_difference))
+        round_path_minus = np.exp(1j * beta_j * (2 * d_j - position_difference))
+        cavity_phase = np.exp(2j * beta_j * d_j)
+
+        denom_s = 1 - r_minus_s * r_plus_s * cavity_phase
+        denom_p = 1 - r_minus_p * r_plus_p * cavity_phase
+
+        base_s = r_minus_s * lower_path + r_plus_s * upper_path
+        round_cos_s = r_plus_s * r_minus_s * (round_path_plus + round_path_minus)
+        scaled_c_s = (base_s + round_cos_s) / denom_s
+
+        base_p = r_minus_p * lower_path + r_plus_p * upper_path
+        difference_p = r_minus_p * lower_path - r_plus_p * upper_path
+        round_cos_p = r_plus_p * r_minus_p * (round_path_plus + round_path_minus)
+        round_sin_p = r_plus_p * r_minus_p * (round_path_plus - round_path_minus)
+        scaled_c_p_plus = (base_p + round_cos_p) / denom_p
+        scaled_c_p_minus = (base_p - round_cos_p) / denom_p
+        scaled_s_p_plus = (difference_p + round_sin_p) / denom_p
+        scaled_s_p_minus = (difference_p - round_sin_p) / denom_p
+        return (
+            scaled_c_s,
+            scaled_c_p_plus,
+            scaled_c_p_minus,
+            scaled_s_p_plus,
+            scaled_s_p_minus,
+        )
+
     def airy_denominator(self, q, polarization: str):
         r"""Source-layer multiple-reflection denominator.
 
@@ -1693,23 +1741,21 @@ class NLayerGreenFunction:
         Sommerfeld integrands.
         """
         layer_k_sq = self.eps[self.source_layer] * self.k0**2
-        d_j = self._source_layer_thickness()
         beta_j = self._kz(self.source_layer, q)
-        c_s, c_p_plus, c_p_minus, s_p_plus, s_p_minus = self.amplitude_coefficients(
+        c_s, c_p_plus, c_p_minus, s_p_plus, s_p_minus = self._scaled_amplitude_coefficients(
             q,
             z_observer,
             z_source,
         )
-        exp_d = np.exp(1j * beta_j * d_j)
         return np.array(
             [
-                c_s * q * exp_d / (2 * beta_j),
-                c_s * q * exp_d / (2 * beta_j),
-                c_p_minus * q * beta_j * exp_d / (2 * layer_k_sq),
-                c_p_minus * q * beta_j * exp_d / (2 * layer_k_sq),
-                1j * s_p_plus * q**2 * exp_d / layer_k_sq,
-                1j * s_p_minus * q**2 * exp_d / layer_k_sq,
-                c_p_plus * q**3 * exp_d / (beta_j * layer_k_sq),
+                c_s * q / (2 * beta_j),
+                c_s * q / (2 * beta_j),
+                c_p_minus * q * beta_j / (2 * layer_k_sq),
+                c_p_minus * q * beta_j / (2 * layer_k_sq),
+                1j * s_p_plus * q**2 / layer_k_sq,
+                1j * s_p_minus * q**2 / layer_k_sq,
+                c_p_plus * q**3 / (beta_j * layer_k_sq),
             ],
             dtype=complex,
         )
