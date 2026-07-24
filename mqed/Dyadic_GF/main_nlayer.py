@@ -122,6 +122,7 @@ def _compute_one_energy(
         source_layer=int(stack_cfg.source_layer),
         omega=omega,
         qmax=None if integ_cfg is None else integ_cfg.qmax,
+        qmax_factor=None if integ_cfg is None else integ_cfg.get("qmax_factor", None),
         epsabs=1e-9 if integ_cfg is None else float(integ_cfg.epsabs),
         epsrel=1e-9 if integ_cfg is None else float(integ_cfg.epsrel),
         limit=400 if integ_cfg is None else int(integ_cfg.limit),
@@ -356,6 +357,7 @@ def run_simulation(cfg: DictConfig) -> None:
         "dcim",
         "hybrid_dcim",
         "fixed_grid",
+        "componentwise",
         "singularity_aware",
         "branch_cut_dcim",
         "pole_subtracted_direct",
@@ -363,7 +365,7 @@ def run_simulation(cfg: DictConfig) -> None:
     }:
         raise ValueError(
             "simulation.integration.method must be 'direct', 'dcim', 'hybrid_dcim', "
-            "'fixed_grid', 'singularity_aware', 'branch_cut_dcim', "
+            "'fixed_grid', 'componentwise', 'singularity_aware', 'branch_cut_dcim', "
             "'pole_subtracted_direct', or 'pole_aware_hybrid_dcim'."
         )
     energy_ev_array, target_lambdas_m = _energy_grid(sim_params)

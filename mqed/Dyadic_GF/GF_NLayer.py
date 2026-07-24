@@ -16,7 +16,7 @@ from typing import Callable, Optional, Sequence, Union
 import numpy as np
 from loguru import logger
 from numpy.linalg import LinAlgError
-from scipy.integrate import quad_vec
+from scipy.integrate import quad, quad_vec
 from scipy.special import hankel1, jv
 
 from mqed.Dyadic_GF.dcim import (
@@ -94,12 +94,16 @@ class NLayerGreenFunction:
             a one-sided limit.
         omega: Angular frequency in rad/s.
         qmax: Optional finite upper limit for the Sommerfeld integral.
+        qmax_factor: Optional upper limit as a multiplier of ``abs(k0)``. When
+            provided, this takes precedence over ``qmax``.
         epsabs: Absolute quadrature tolerance.
         epsrel: Relative quadrature tolerance.
         limit: Maximum number of ``quad_vec`` subintervals.
         split_propagating: If true, split the integration at the source-layer
             light line ``sqrt(eps_j) * k0`` when it is real.
-        integration_method: Numerical integration method. ``singularity_aware``
+        integration_method: Numerical integration method. ``componentwise``
+            integrates final tensor entries with scalar real/imaginary error
+            control. ``singularity_aware``
             uses direct real-axis quadrature split at branch points and near-real
             pole projections; explicit pole/branch terms remain diagnostic.
             ``branch_cut_dcim`` is an experimental pole-plus-branch-cut
@@ -165,6 +169,7 @@ class NLayerGreenFunction:
         source_layer: int,
         omega: float,
         qmax: Optional[float] = None,
+        qmax_factor: Optional[float] = None,
         epsabs: float = 1e-9,
         epsrel: float = 1e-9,
         limit: int = 400,
@@ -226,7 +231,12 @@ class NLayerGreenFunction:
         self.omega = float(omega)
         self.c = c
         self.k0 = self.omega / self.c
-        self.qmax = qmax
+        if qmax_factor is not None:
+            qmax_factor_value = float(qmax_factor)
+            if not np.isfinite(qmax_factor_value) or qmax_factor_value <= 0:
+                raise ValueError("qmax_factor must be a finite positive multiplier.")
+        self.qmax_factor = qmax_factor
+        self.qmax = self._resolve_q_value(qmax, qmax_factor)
         self.epsabs = epsabs
         self.epsrel = epsrel
         self.limit = int(limit)
@@ -237,6 +247,7 @@ class NLayerGreenFunction:
             "dcim",
             "hybrid_dcim",
             "fixed_grid",
+            "componentwise",
             "singularity_aware",
             "branch_cut_dcim",
             "pole_subtracted_direct",
@@ -245,7 +256,7 @@ class NLayerGreenFunction:
         if self.integration_method not in valid_methods:
             raise ValueError(
                 "integration_method must be 'direct', 'dcim', 'hybrid_dcim', "
-                "'fixed_grid', 'singularity_aware', 'branch_cut_dcim', "
+                "'fixed_grid', 'componentwise', 'singularity_aware', 'branch_cut_dcim', "
                 "'pole_subtracted_direct', or 'pole_aware_hybrid_dcim'."
             )
         self.dcim_q_start = float(dcim_q_start)
@@ -305,6 +316,7 @@ class NLayerGreenFunction:
             raise ValueError("pole_subtraction_residue_method must be 'contour' or 'limit'.")
         self.pole_subtraction_residue_method = residue_method
         self.last_hybrid_dcim_report: dict[str, object] | None = None
+        self.last_componentwise_report: dict[str, object] | None = None
         self.last_singularity_report: dict[str, object] | None = None
         self.last_branch_cut_dcim_report: dict[str, object] | None = None
         self.last_pole_subtraction_report: dict[str, object] | None = None
@@ -897,6 +909,81 @@ class NLayerGreenFunction:
                 "Explicit pole/branch-cut contour terms are diagnostic and must be validated "
                 "before being added to production Green tensors."
             ),
+        }
+        return values
+
+    def compute_scattering_tensor_componentwise(
+        self,
+        x: float,
+        y: float,
+        z_observer: float,
+        z_source: float,
+    ) -> np.ndarray:
+        r"""Integrate final tensor entries with independent scalar error control.
+
+        The seven intermediate Sommerfeld kernels can differ greatly in scale
+        and cancel during tensor assembly. This validation path assembles the
+        physical scattering-tensor integrand at each q, splits at the same light
+        lines and near-real poles as ``singularity_aware``, then integrates each
+        tensor entry's real and imaginary parts separately with ``quad``.
+        """
+        rho = float(np.hypot(x, y))
+        q_stop = np.inf if self.qmax is None else float(self.qmax)
+        breakpoints = self.singularity_breakpoints()
+        finite_breaks = [point for point in breakpoints if 0.0 < point < q_stop]
+        edges = [0.0, *finite_breaks, q_stop]
+        orders = self._bessel_orders()
+
+        def tensor_integrand(q: float) -> np.ndarray:
+            kernels = self.bessel_free_kernels(q, z_observer, z_source)
+            bessel_factors = np.array(
+                [jv(order, q * rho) for order in orders],
+                dtype=complex,
+            )
+            return self.scatter_component_from_integrals(x, y, kernels * bessel_factors)
+
+        values = np.zeros((3, 3), dtype=complex)
+        real_errors = np.zeros((3, 3), dtype=float)
+        imag_errors = np.zeros((3, 3), dtype=float)
+        for row in range(3):
+            for column in range(3):
+                for lower, upper in zip(edges[:-1], edges[1:]):
+                    if upper <= lower:
+                        continue
+                    real_value, real_error = quad(
+                        lambda q, r=row, c=column: float(
+                            np.real(tensor_integrand(q)[r, c])
+                        ),
+                        lower,
+                        upper,
+                        epsabs=self.epsabs,
+                        epsrel=self.epsrel,
+                        limit=self.limit,
+                    )
+                    imag_value, imag_error = quad(
+                        lambda q, r=row, c=column: float(
+                            np.imag(tensor_integrand(q)[r, c])
+                        ),
+                        lower,
+                        upper,
+                        epsabs=self.epsabs,
+                        epsrel=self.epsrel,
+                        limit=self.limit,
+                    )
+                    values[row, column] += real_value + 1j * imag_value
+                    real_errors[row, column] += real_error
+                    imag_errors[row, column] += imag_error
+
+        poles = self.find_poles()
+        self.last_componentwise_report = {
+            "method": "componentwise",
+            "branch_points": self.branch_points(),
+            "breakpoints": finite_breaks,
+            "pole_count": len(poles),
+            "poles": poles,
+            "qmax": q_stop,
+            "real_error_estimates": real_errors,
+            "imag_error_estimates": imag_errors,
         }
         return values
 
@@ -1814,6 +1901,12 @@ class NLayerGreenFunction:
             return self.compute_integrals_hybrid_dcim(rho, z_observer, z_source)
         if self.integration_method == "fixed_grid":
             return self.compute_integrals_fixed_grid(rho, z_observer, z_source)
+        if self.integration_method == "componentwise":
+            raise ValueError(
+                "componentwise integration assembles and returns a scattering tensor through "
+                "scatter_component/calculate_total_Green_function; compute_integrals returns only "
+                "the seven scalar Sommerfeld integrals and cannot represent componentwise results."
+            )
         if self.integration_method == "singularity_aware":
             return self.compute_integrals_singularity_aware(rho, z_observer, z_source)
         if self.integration_method == "branch_cut_dcim":
@@ -2127,6 +2220,13 @@ class NLayerGreenFunction:
            \mathbf G_{sc}^{(j)}=\frac{i}{4\pi}
            \left[\mathbf M_s(I_1,I_2)+\mathbf M_p(I_3,\ldots,I_6)\right].
         """
+        if self.integration_method == "componentwise":
+            return self.compute_scattering_tensor_componentwise(
+                x,
+                y,
+                z_observer,
+                z_source,
+            )
         rho = np.sqrt(x**2 + y**2)
         integrals = self.compute_integrals(rho, z_observer, z_source)
         return self.scatter_component_from_integrals(x, y, integrals)

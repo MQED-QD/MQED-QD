@@ -307,6 +307,138 @@ def test_singularity_aware_direct_quadrature_records_report_for_no_contrast_stac
     assert solver.singularity_breakpoints(include_poles=False)
 
 
+def test_componentwise_quadrature_has_zero_scattering_for_no_contrast_stack():
+    solver = NLayerGreenFunction(
+        layers=[
+            LayerSpec(epsilon=2.25 + 0.0j, thickness_m=None),
+            LayerSpec(epsilon=2.25 + 0.0j, thickness_m=80e-9),
+            LayerSpec(epsilon=2.25 + 0.0j, thickness_m=None),
+        ],
+        source_layer=1,
+        omega=2.0e15,
+        qmax_factor=20.0,
+        epsabs=1e-8,
+        epsrel=1e-8,
+        limit=40,
+        integration_method="componentwise",
+        pole_search_max_depth=2,
+    )
+
+    tensor = solver.scatter_component(20e-9, 0.0, 40e-9, 40e-9)
+
+    assert tensor.shape == (3, 3)
+    assert np.allclose(tensor, np.zeros((3, 3), dtype=complex), atol=1e-18)
+    assert solver.last_componentwise_report is not None
+    assert solver.last_componentwise_report["method"] == "componentwise"
+
+
+def test_compute_integrals_rejects_componentwise_api_ambiguity():
+    solver = NLayerGreenFunction(
+        layers=[
+            LayerSpec(epsilon=2.25 + 0.0j, thickness_m=None),
+            LayerSpec(epsilon=2.25 + 0.0j, thickness_m=80e-9),
+            LayerSpec(epsilon=2.25 + 0.0j, thickness_m=None),
+        ],
+        source_layer=1,
+        omega=2.0e15,
+        qmax_factor=20.0,
+        integration_method="componentwise",
+    )
+
+    with pytest.raises(ValueError, match="componentwise.*scattering tensor.*seven scalar"):
+        solver.compute_integrals(20e-9, 40e-9, 40e-9)
+
+
+def test_componentwise_rho_zero_smoke_for_no_contrast_stack():
+    solver = NLayerGreenFunction(
+        layers=[
+            LayerSpec(epsilon=2.25 + 0.0j, thickness_m=None),
+            LayerSpec(epsilon=2.25 + 0.0j, thickness_m=80e-9),
+            LayerSpec(epsilon=2.25 + 0.0j, thickness_m=None),
+        ],
+        source_layer=1,
+        omega=2.0e15,
+        qmax_factor=20.0,
+        epsabs=1e-8,
+        epsrel=1e-8,
+        limit=40,
+        integration_method="componentwise",
+        pole_search_max_depth=2,
+    )
+
+    tensor = solver.scatter_component(0.0, 0.0, 40e-9, 40e-9)
+
+    assert tensor.shape == (3, 3)
+    assert np.all(np.isfinite(tensor))
+    assert np.allclose(tensor, np.zeros((3, 3), dtype=complex), atol=1e-18)
+    assert solver.last_componentwise_report is not None
+
+
+@pytest.mark.parametrize("qmax_factor", [0.0, -1.0, np.inf, -np.inf, np.nan])
+def test_qmax_factor_rejects_nonpositive_and_nonfinite_values(qmax_factor):
+    with pytest.raises(ValueError, match="finite positive multiplier"):
+        NLayerGreenFunction(
+            layers=[
+                LayerSpec(epsilon=1.0 + 0.0j, thickness_m=None),
+                LayerSpec(epsilon=2.25 + 0.0j, thickness_m=80e-9),
+                LayerSpec(epsilon=1.0 + 0.0j, thickness_m=None),
+            ],
+            source_layer=1,
+            omega=2.0e15,
+            qmax=1.0,
+            qmax_factor=qmax_factor,
+        )
+
+
+def test_qmax_factor_scales_with_frequency_and_takes_precedence():
+    layers = [
+        LayerSpec(epsilon=1.0 + 0.0j, thickness_m=None),
+        LayerSpec(epsilon=2.25 + 0.0j, thickness_m=80e-9),
+        LayerSpec(epsilon=1.0 + 0.0j, thickness_m=None),
+    ]
+    solver = NLayerGreenFunction(
+        layers=layers,
+        source_layer=1,
+        omega=2.0e15,
+        qmax=1.0,
+        qmax_factor=25.0,
+    )
+    qmax_only_solver = NLayerGreenFunction(
+        layers=layers,
+        source_layer=1,
+        omega=2.0e15,
+        qmax=1.0,
+        qmax_factor=None,
+    )
+
+    assert np.isclose(solver.qmax, 25.0 * abs(solver.k0))
+    assert qmax_only_solver.qmax == 1.0
+
+
+def test_componentwise_matches_singularity_aware_for_finite_stack():
+    common = {
+        "layers": [
+            LayerSpec(epsilon=1.0 + 0.0j, thickness_m=None),
+            LayerSpec(epsilon=2.25 + 0.0j, thickness_m=80e-9),
+            LayerSpec(epsilon=4.0 + 0.1j, thickness_m=None),
+        ],
+        "source_layer": 1,
+        "omega": 2.0e15,
+        "qmax_factor": 8.0,
+        "epsabs": 1e-7,
+        "epsrel": 1e-7,
+        "limit": 80,
+        "pole_search_max_depth": 2,
+    }
+    componentwise = NLayerGreenFunction(**common, integration_method="componentwise")
+    singularity_aware = NLayerGreenFunction(**common, integration_method="singularity_aware")
+
+    componentwise_tensor = componentwise.scatter_component(20e-9, 0.0, 40e-9, 40e-9)
+    reference_tensor = singularity_aware.scatter_component(20e-9, 0.0, 40e-9, 40e-9)
+
+    assert np.allclose(componentwise_tensor, reference_tensor, rtol=1e-5, atol=1e-2)
+
+
 def test_branch_cut_samples_are_finite_for_no_contrast_stack():
     omega = 2.0e15
     solver = NLayerGreenFunction(
@@ -401,6 +533,7 @@ def test_main_nlayer_passes_singularity_aware_options(monkeypatch):
         {
             "method": "singularity_aware",
             "qmax": 2.0e7,
+            "qmax_factor": 30.0,
             "epsabs": 1e-6,
             "epsrel": 1e-6,
             "limit": 50,
@@ -455,6 +588,7 @@ def test_main_nlayer_passes_singularity_aware_options(monkeypatch):
     assert total.shape == (1, 3, 3)
     assert vacuum.shape == (1, 3, 3)
     assert captured["integration_method"] == "singularity_aware"
+    assert captured["qmax_factor"] == 30.0
     assert captured["dcim_q_start_factor"] == 0.25
     assert captured["dcim_q_stop_factor"] == 12.0
     assert captured["hybrid_direct_q_stop_factor"] == 6.0
@@ -487,6 +621,68 @@ def test_main_nlayer_passes_singularity_aware_options(monkeypatch):
     assert captured["pole_subtraction_fallback_to_singularity_aware"] is False
     assert captured["pole_subtraction_include_poles"] is True
     assert captured["pole_subtraction_residue_method"] == "limit"
+
+
+def test_compute_one_energy_passes_componentwise_method(monkeypatch):
+    main_nlayer = pytest.importorskip("mqed.Dyadic_GF.main_nlayer")
+    captured = {}
+
+    class AttrDict(dict):
+        def __getattr__(self, name):
+            try:
+                return self[name]
+            except KeyError as exc:
+                raise AttributeError(name) from exc
+
+    class FakeCalculator:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+        def calculate_total_Green_function(self, x, y, z_observer, z_source):
+            assert captured["integration_method"] == "componentwise"
+            return np.eye(3, dtype=complex) * (1.0 + x + y + z_observer + z_source)
+
+        def vacuum_component(self, x, y, z_observer, z_source):
+            return np.eye(3, dtype=complex)
+
+    monkeypatch.setattr(
+        main_nlayer,
+        "build_layers",
+        lambda stack_cfg, materials_cfg, omega: [
+            LayerSpec(epsilon=1.0 + 0.0j, thickness_m=None),
+            LayerSpec(epsilon=2.25 + 0.0j, thickness_m=80e-9),
+            LayerSpec(epsilon=1.0 + 0.0j, thickness_m=None),
+        ],
+    )
+    monkeypatch.setattr(main_nlayer, "NLayerGreenFunction", FakeCalculator)
+    integ_cfg = AttrDict(
+        {
+            "method": "componentwise",
+            "qmax": 2.0e7,
+            "qmax_factor": 30.0,
+            "epsabs": 1e-6,
+            "epsrel": 1e-6,
+            "limit": 50,
+            "split_propagating": False,
+        }
+    )
+
+    _, total, vacuum = main_nlayer._compute_one_energy(
+        idx=0,
+        energy_eV=2.0,
+        lambda_m=600e-9,
+        rx_values_m=np.array([0.0, 10e-9]),
+        z_observer=40e-9,
+        z_source=40e-9,
+        stack_cfg=AttrDict({"source_layer": 1}),
+        materials_cfg=AttrDict({}),
+        integ_cfg=integ_cfg,
+    )
+
+    assert total.shape == (2, 3, 3)
+    assert vacuum.shape == (2, 3, 3)
+    assert captured["integration_method"] == "componentwise"
+    assert captured["qmax_factor"] == 30.0
 
 
 def test_dcim_family_routes_rho_zero_to_singularity_aware(monkeypatch):
