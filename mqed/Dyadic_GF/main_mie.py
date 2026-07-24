@@ -66,6 +66,10 @@ except Exception:  # pragma: no cover
     from mqed.Dyadic_GF.GF_Mie import MieGreenFunction, c, eV_to_J, hbar  # type: ignore
 
 from mqed.utils.dgf_data import save_gf_pair_h5, save_gf_scan_h5
+from mqed.utils.emitter_geometry import (
+    generate_equatorial_ring_from_config,
+    normalize_orientation_vectors,
+)
 from mqed.utils.hydra_local import prepare_hydra_config_path
 from mqed.utils.logging_utils import setup_loggers_hydra_aware
 
@@ -287,22 +291,79 @@ def horizontal_observer_scan_m(simulation: Mapping[str, Any], scan_cfg: Mapping[
 
 
 def emitter_positions_m(simulation: Mapping[str, Any]) -> np.ndarray:
+    positions, _ = resolve_emitter_geometry_m(simulation)
+    return positions
+
+
+def resolve_emitter_geometry_m(simulation: Mapping[str, Any]) -> tuple[np.ndarray, np.ndarray | None]:
+    """Resolve pair-layout emitter positions and optional orientations.
+
+    Generated ring geometry and explicit lists are mutually exclusive. Position
+    ordering is preserved so orientation row ``i`` always corresponds to emitter
+    ``i`` in the pair Green tensor.
+    """
+
+    has_ring = "emitter_ring" in simulation
+    explicit_position_sources = [
+        key for key in ("emitter_positions_m", "emitter_positions_nm") if key in simulation
+    ]
+    if "emitters" in simulation:
+        emitters_cfg = simulation["emitters"]
+        explicit_position_sources.extend(
+            f"emitters.{key}" for key in ("positions_m", "positions_nm") if key in emitters_cfg
+        )
+    explicit_orientation = _explicit_emitter_orientations(simulation)
+    if has_ring and (explicit_position_sources or explicit_orientation is not None):
+        raise ValueError(
+            "Define either simulation.emitter_ring or explicit emitter positions/orientations, not both."
+        )
+    if has_ring:
+        positions_nm, orientations = generate_equatorial_ring_from_config(simulation["emitter_ring"])
+        return positions_nm * 1e-9, orientations
+
     if "emitter_positions_m" in simulation:
         arr = np.asarray(simulation["emitter_positions_m"], dtype=float)
-        return arr.reshape(-1, 3)
-    if "emitter_positions_nm" in simulation:
+        positions = arr.reshape(-1, 3)
+    elif "emitter_positions_nm" in simulation:
         arr = np.asarray(simulation["emitter_positions_nm"], dtype=float)
-        return arr.reshape(-1, 3) * 1e-9
-    if "emitters" in simulation:
+        positions = arr.reshape(-1, 3) * 1e-9
+    elif "emitters" in simulation:
         emitters = simulation["emitters"]
         if "positions_m" in emitters:
-            return np.asarray(emitters["positions_m"], dtype=float).reshape(-1, 3)
-        if "positions_nm" in emitters:
-            return np.asarray(emitters["positions_nm"], dtype=float).reshape(-1, 3) * 1e-9
-    raise ValueError(
-        "Pair-layout output requires simulation.emitter_positions_nm/m "
-        "or simulation.emitters.positions_nm/m."
-    )
+            positions = np.asarray(emitters["positions_m"], dtype=float).reshape(-1, 3)
+        elif "positions_nm" in emitters:
+            positions = np.asarray(emitters["positions_nm"], dtype=float).reshape(-1, 3) * 1e-9
+        else:
+            positions = None
+    else:
+        positions = None
+    if positions is None:
+        raise ValueError(
+            "Pair-layout output requires simulation.emitter_ring, simulation.emitter_positions_nm/m, "
+            "or simulation.emitters.positions_nm/m."
+        )
+    if positions.shape[0] == 0:
+        raise ValueError("Emitter positions must contain at least one 3D position.")
+    if not np.all(np.isfinite(positions)):
+        raise ValueError("Emitter positions must be finite.")
+    orientations = None
+    if explicit_orientation is not None:
+        orientations = _normalize_emitter_orientations(explicit_orientation, positions.shape[0])
+    return positions, orientations
+
+
+def _explicit_emitter_orientations(simulation: Mapping[str, Any]) -> Any:
+    if "emitter_orientations" in simulation:
+        return simulation["emitter_orientations"]
+    if "emitters" in simulation:
+        emitters = simulation["emitters"]
+        if "orientations" in emitters:
+            return emitters["orientations"]
+    return None
+
+
+def _normalize_emitter_orientations(value: Any, expected_count: int) -> np.ndarray:
+    return normalize_orientation_vectors(np.asarray(value, dtype=float), expected_count)
 
 
 def output_layout_from_config(config: Mapping[str, Any]) -> str:
@@ -1038,7 +1099,7 @@ def output_path_from_config(config: Mapping[str, Any], config_path: Path) -> Pat
     energy, _, _ = spectral_grid(simulation)
     layout = output_layout_from_config(config)
     if layout == "pair":
-        position_suffix = f"_emitters_{emitter_positions_m(simulation).shape[0]}pts"
+        position_suffix = f"_emitters_{resolve_emitter_geometry_m(simulation)[0].shape[0]}pts"
     else:
         observers = observer_positions_m(simulation)
         rx_span_nm = np.linalg.norm(observers[-1] - observers[0]) * 1e9 if observers.shape[0] > 1 else 0.0
@@ -1051,10 +1112,11 @@ def output_path_from_config(config: Mapping[str, Any], config_path: Path) -> Pat
 
 
 def load_config(path: Path) -> dict[str, Any]:
-    with open(path, "r", encoding="utf-8") as f:
-        if path.suffix.lower() == ".json":
+    if path.suffix.lower() == ".json":
+        with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
-        return yaml.safe_load(f)
+    loaded = OmegaConf.load(path)
+    return OmegaConf.to_container(loaded, resolve=True)
 
 
 def run_config(config: Mapping[str, Any], config_base_dir: Path, output_override: Path | None = None) -> Path:
@@ -1073,7 +1135,7 @@ def run_config(config: Mapping[str, Any], config_base_dir: Path, output_override
         _maybe_auto_launch_mpi(parallel)
 
     if layout == "pair":
-        emitters = emitter_positions_m(simulation)
+        emitters, emitter_orientations = resolve_emitter_geometry_m(simulation)
         logger.info(
             "Grid: {} energies x {}x{} emitter pairs | geometry={} | nmax={}",
             energy_eV.size,
@@ -1132,6 +1194,7 @@ def run_config(config: Mapping[str, Any], config_base_dir: Path, output_override
             Gstructure=structure,
             wavelength_m=wavelength_m,
             observer_region=regions,
+            emitter_orientations=emitter_orientations,
             attrs=_hdf5_attrs(config, "Generalized Mie pair-indexed dyadic Green tensor."),
         )
         logger.success("Mie pair Green-function simulation complete: {}", out)

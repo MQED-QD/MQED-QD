@@ -3,10 +3,19 @@ import numpy as np
 import pytest
 import yaml
 from pathlib import Path
+from omegaconf import OmegaConf
 
 from mqed.Dyadic_GF.GF_Mie import c, MieGreenFunction
-from mqed.Dyadic_GF.main_mie import MaterialResolver, observer_positions_m, run_from_config, spectral_grid
-from mqed.utils.dgf_data import load_gf_h5
+from mqed.Dyadic_GF.main_mie import (
+    MaterialResolver,
+    observer_positions_m,
+    output_path_from_config,
+    resolve_emitter_geometry_m,
+    run_from_config,
+    spectral_grid,
+)
+from mqed.utils.dgf_data import load_gf_h5, save_gf_pair_h5
+from mqed.utils.emitter_geometry import equatorial_ring_nearest_neighbor_chord_nm
 
 
 def _projected_pair(G_pair, orientations, observer_index, source_index):
@@ -75,6 +84,207 @@ def test_mie_pair_output_loads_with_shared_gf_loader(tmp_path):
     assert data["G_total"].shape == (1, 2, 2, 3, 3)
     assert data["G_vac"].shape == (1, 2, 2, 3, 3)
     assert data["emitter_positions_nm"].shape == (2, 3)
+
+
+def test_mie_pair_output_saves_generated_ring_orientations(tmp_path):
+    config = {
+        "simulation": {
+            "spectral_param": "wavelength_nm",
+            "wavelength_nm": 600.0,
+            "nmax": 1,
+            "geometry": {"boundary": "sphere", "radius_nm": 1.0},
+            "emitter_ring": {
+                "emitter_count": 2,
+                "sphere_radius_nm": 1.0,
+                "emitter_surface_gap_nm": 4.0,
+                "orientation": "orthoradial",
+            },
+            "strict_regions": True,
+        },
+        "materials": {"regions": [{"n": 1.0}, {"n": 1.0}]},
+        "parallel": {"backend": "sequential"},
+        "output": {"layout": "pair", "directory": str(tmp_path), "prefix": "mie_ring_test"},
+    }
+    config_path = tmp_path / "mie_ring.yaml"
+    output_path = tmp_path / "mie_ring.h5"
+    config_path.write_text(yaml.safe_dump(config), encoding="utf-8")
+
+    run_from_config(config_path, output_path)
+    data = load_gf_h5(str(output_path))
+
+    assert data["G_total"].shape == (1, 2, 2, 3, 3)
+    assert np.allclose(data["emitter_positions_nm"], [[5.0, 0.0, 0.0], [-5.0, 0.0, 0.0]])
+    assert np.allclose(data["emitter_orientations"], [[0.0, 1.0, 0.0], [0.0, -1.0, 0.0]], atol=1e-12)
+
+
+def test_mie_pair_hdf5_orientations_are_optional_and_backward_compatible(tmp_path):
+    h5_path = tmp_path / "pair_with_orientations.h5"
+    old_h5_path = tmp_path / "pair_without_orientations.h5"
+    G = np.zeros((1, 2, 2, 3, 3), dtype=complex)
+    positions_nm = np.array([[0.0, 0.0, 5.0], [1.0, 0.0, 5.0]])
+    orientations = np.array([[0.0, 0.0, 1.0], [0.0, 1.0, 0.0]])
+
+    save_gf_pair_h5(str(h5_path), G, G, np.array([1.0]), positions_nm, 5e-9, 5e-9, emitter_orientations=orientations)
+    save_gf_pair_h5(str(old_h5_path), G, G, np.array([1.0]), positions_nm, 5e-9, 5e-9)
+
+    assert np.allclose(load_gf_h5(str(h5_path))["emitter_orientations"], orientations)
+    assert "emitter_orientations" not in load_gf_h5(str(old_h5_path))
+
+
+def test_mie_pair_hdf5_validates_and_normalizes_geometry_before_writing(tmp_path):
+    h5_path = tmp_path / "invalid_pair.h5"
+    G = np.zeros((1, 1, 1, 3, 3), dtype=complex)
+
+    with pytest.raises(ValueError, match="positions_nm must be finite"):
+        save_gf_pair_h5(
+            str(h5_path), G, G, np.array([1.0]), np.array([[np.nan, 0.0, 0.0]]), 0.0, 0.0
+        )
+    assert not h5_path.exists()
+
+    with pytest.raises(ValueError, match="orientations must be finite"):
+        save_gf_pair_h5(
+            str(h5_path),
+            G,
+            G,
+            np.array([1.0]),
+            np.array([[0.0, 0.0, 0.0]]),
+            0.0,
+            0.0,
+            emitter_orientations=np.array([[np.inf, 0.0, 0.0]]),
+        )
+    assert not h5_path.exists()
+
+    save_gf_pair_h5(
+        str(h5_path),
+        G,
+        G,
+        np.array([1.0]),
+        np.array([[0.0, 0.0, 0.0]]),
+        0.0,
+        0.0,
+        emitter_orientations=np.array([[0.0, 3.0, 0.0]]),
+    )
+    assert np.allclose(load_gf_h5(str(h5_path))["emitter_orientations"], [[0.0, 1.0, 0.0]])
+
+
+def test_mie_pair_hdf5_rejects_inconsistent_pair_shapes_before_writing(tmp_path):
+    h5_path = tmp_path / "inconsistent_pair.h5"
+    positions_nm = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]])
+    valid_G = np.zeros((1, 2, 2, 3, 3), dtype=complex)
+
+    with pytest.raises(ValueError, match="Gtot must have shape"):
+        save_gf_pair_h5(
+            str(h5_path),
+            np.zeros((1, 1, 1, 3, 3), dtype=complex),
+            valid_G,
+            np.array([1.0]),
+            positions_nm,
+            0.0,
+            0.0,
+        )
+    assert not h5_path.exists()
+
+    with pytest.raises(ValueError, match="Gstructure must have shape"):
+        save_gf_pair_h5(
+            str(h5_path),
+            valid_G,
+            valid_G,
+            np.array([1.0]),
+            positions_nm,
+            0.0,
+            0.0,
+            Gstructure=np.zeros((1, 1, 1, 3, 3), dtype=complex),
+        )
+    assert not h5_path.exists()
+
+    with pytest.raises(ValueError, match="wavelength_m must have shape"):
+        save_gf_pair_h5(
+            str(h5_path),
+            valid_G,
+            valid_G,
+            np.array([1.0]),
+            positions_nm,
+            0.0,
+            0.0,
+            wavelength_m=np.array([1.0, 2.0]),
+        )
+    assert not h5_path.exists()
+
+    with pytest.raises(ValueError, match="observer_region must have shape"):
+        save_gf_pair_h5(
+            str(h5_path),
+            valid_G,
+            valid_G,
+            np.array([1.0]),
+            positions_nm,
+            0.0,
+            0.0,
+            observer_region=np.zeros((1, 2), dtype=int),
+        )
+    assert not h5_path.exists()
+
+
+def test_mie_pair_hdf5_preserves_legacy_positional_attrs_argument(tmp_path):
+    h5_path = tmp_path / "legacy_attrs.h5"
+    G = np.zeros((1, 1, 1, 3, 3), dtype=complex)
+    positions_nm = np.array([[0.0, 0.0, 0.0]])
+
+    save_gf_pair_h5(
+        str(h5_path),
+        G,
+        G,
+        np.array([1.0]),
+        positions_nm,
+        0.0,
+        0.0,
+        None,
+        None,
+        None,
+        {"legacy_attribute": "preserved"},
+    )
+
+    with h5py.File(h5_path, "r") as h5:
+        assert h5.attrs["legacy_attribute"] == "preserved"
+
+
+def test_mie_resolver_preserves_explicit_lists_and_normalizes_orientations():
+    positions_m, orientations = resolve_emitter_geometry_m({
+        "emitter_positions_nm": [[0.0, 0.0, 1.0], [2.0, 0.0, 1.0]],
+        "emitter_orientations": [[0.0, 0.0, 2.0], [0.0, 3.0, 0.0]],
+    })
+
+    assert np.allclose(positions_m * 1e9, [[0.0, 0.0, 1.0], [2.0, 0.0, 1.0]])
+    assert np.allclose(orientations, [[0.0, 0.0, 1.0], [0.0, 1.0, 0.0]])
+
+    _, large_orientations = resolve_emitter_geometry_m({
+        "emitter_positions_nm": [[0.0, 0.0, 1.0]],
+        "emitter_orientations": [[1.0e308, 1.0e308, 0.0]],
+    })
+    assert np.allclose(large_orientations, [[np.sqrt(0.5), np.sqrt(0.5), 0.0]])
+
+
+def test_mie_resolver_rejects_empty_and_nonfinite_explicit_positions():
+    with pytest.raises(ValueError, match="at least one"):
+        resolve_emitter_geometry_m({"emitter_positions_nm": []})
+
+    with pytest.raises(ValueError, match="positions must be finite"):
+        resolve_emitter_geometry_m({"emitter_positions_nm": [[np.nan, 0.0, 0.0]]})
+
+
+def test_mie_resolver_rejects_ring_with_explicit_positions_orientations():
+    simulation = {
+        "emitter_ring": {"emitter_count": 2, "emitter_radius_nm": 10.0},
+        "emitter_positions_nm": [[0.0, 0.0, 0.0]],
+    }
+
+    with pytest.raises(ValueError, match="either simulation.emitter_ring"):
+        resolve_emitter_geometry_m(simulation)
+
+    with pytest.raises(ValueError, match="either simulation.emitter_ring"):
+        resolve_emitter_geometry_m({
+            "emitter_ring": {"emitter_count": 2, "emitter_radius_nm": 10.0},
+            "emitter_orientations": [[0.0, 0.0, 1.0], [0.0, 1.0, 0.0]],
+        })
 
 
 def test_coreshell_core_pair_has_vacuum_and_structure_terms():
@@ -243,27 +453,36 @@ def test_mie_scan_mpi_backend_runs_single_rank_when_mpi4py_available(tmp_path):
 
 def test_gf_sphere_example_config_defines_equatorial_orthoradial_ring():
     config_path = Path("configs/Dyadic_GF/GF_sphere_example.yaml")
-    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    config = OmegaConf.to_container(OmegaConf.load(config_path), resolve=True)
     simulation = config["simulation"]
 
-    positions_nm = np.asarray(simulation["emitter_positions_nm"], dtype=float)
-    orientations = np.asarray(simulation["emitter_orientations"], dtype=float)
+    positions_m, orientations = resolve_emitter_geometry_m(simulation)
+    positions_nm = positions_m * 1e9
     radii_nm = np.linalg.norm(positions_nm, axis=1)
 
     assert simulation["geometry"] == {"boundary": "sphere", "radius_nm": 8.0}
     assert config["output"]["layout"] == "pair"
-    assert positions_nm.shape == (8, 3)
-    assert orientations.shape == (8, 3)
+    assert simulation["emitter_ring"]["emitter_count"] == 15
+    assert simulation["emitter_ring"]["emitter_surface_gap_nm"] == 2.0
+    assert positions_nm.shape == (15, 3)
+    assert orientations.shape == (15, 3)
     assert np.allclose(radii_nm, 10.0)
     assert np.allclose(positions_nm[:, 2], 0.0)
     assert np.allclose(np.linalg.norm(orientations, axis=1), 1.0)
     assert np.allclose(np.einsum("ij,ij->i", positions_nm, orientations), 0.0, atol=1e-12)
-    assert np.isclose(
-        simulation["sphere_example"]["emitter_radius_nm"]
-        - simulation["sphere_example"]["sphere_radius_nm"],
-        2.0,
-    )
+    assert np.isclose(equatorial_ring_nearest_neighbor_chord_nm(15, 10.0), 4.158, atol=5e-4)
     assert simulation["sphere_example"]["dipole_moment_debye"] == 24.0
+
+
+def test_gf_sphere_example_direct_output_matches_emission_input_default():
+    config_path = Path("configs/Dyadic_GF/GF_sphere_example.yaml").resolve()
+    config = OmegaConf.to_container(OmegaConf.load(config_path), resolve=True)
+    output_path = output_path_from_config(config, config_path)
+
+    emission_config = OmegaConf.load("configs/analysis/emission_spectrum_example.yaml")
+    expected_input = Path(str(emission_config.input_file).replace("${oc.env:MQED_ROOT,./outputs}", "outputs"))
+
+    assert output_path.resolve() == (Path.cwd() / expected_input).resolve()
 
 
 def test_gf_sphere_example_drude_silver_is_absorbing_near_lsp_band():
@@ -277,9 +496,11 @@ def test_gf_sphere_example_drude_silver_is_absorbing_near_lsp_band():
 
 
 def test_gf_sphere_example_pair_couplings_are_circulant_by_rotation_symmetry():
-    config = yaml.safe_load(Path("configs/Dyadic_GF/GF_sphere_example.yaml").read_text(encoding="utf-8"))
-    positions_m = np.asarray(config["simulation"]["emitter_positions_nm"], dtype=float) * 1e-9
-    orientations = np.asarray(config["simulation"]["emitter_orientations"], dtype=float)
+    config = OmegaConf.to_container(
+        OmegaConf.load(Path("configs/Dyadic_GF/GF_sphere_example.yaml")),
+        resolve=True,
+    )
+    positions_m, orientations = resolve_emitter_geometry_m(config["simulation"])
     energy_eV = 2.95
     omega = energy_eV * 1.602176634e-19 / 1.054571817e-34
     calculator = MieGreenFunction(

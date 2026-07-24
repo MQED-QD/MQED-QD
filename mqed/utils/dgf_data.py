@@ -35,6 +35,7 @@ Pair-indexed (``gf_layout = "pair"``)
         green_function_vacuum  (M, N, N, 3, 3)   complex128
         energy_eV              (M,)              float64
         emitter_positions_nm   (N, 3)            float64
+        emitter_orientations   (N, 3)            float64, optional
         position_fixed         group  {zD_meters, zA_meters}
 
 Scan-indexed (``gf_layout = "scan"``)
@@ -62,6 +63,8 @@ import h5py
 import numpy as np
 from typing import Any, Dict
 from loguru import logger
+
+from mqed.utils.emitter_geometry import normalize_orientation_vectors
 
 
 # ── Separation-indexed (legacy) ──────────────────────────────────────
@@ -111,6 +114,7 @@ def save_gf_pair_h5(
     wavelength_m: np.ndarray | None = None,
     observer_region: np.ndarray | None = None,
     attrs: Dict[str, Any] | None = None,
+    emitter_orientations: np.ndarray | None = None,
 ) -> None:
     """Save pair-indexed Green's function arrays to HDF5.
 
@@ -123,21 +127,68 @@ def save_gf_pair_h5(
                               shape ``(N, 3)``.
         zD:                   Source z-position in meters (reference height).
         zA:                   Observer z-position in meters (reference height).
+        emitter_orientations: Optional normalized emitter dipole orientations,
+                              shape ``(N, 3)``.
     """
+    positions = np.asarray(emitter_positions_nm, dtype=float)
+    if positions.ndim != 2 or positions.shape[1:] != (3,) or positions.shape[0] == 0:
+        raise ValueError("emitter_positions_nm must have shape (N, 3) with N > 0.")
+    if not np.all(np.isfinite(positions)):
+        raise ValueError("emitter_positions_nm must be finite.")
+
+    orientations = None
+    if emitter_orientations is not None:
+        orientations = normalize_orientation_vectors(emitter_orientations, positions.shape[0])
+
+    total = np.asarray(Gtot)
+    vacuum = np.asarray(Gvac)
+    energy = np.asarray(E, dtype=float)
+    emitter_count = positions.shape[0]
+    expected_green_shape = (energy.size, emitter_count, emitter_count, 3, 3)
+    if total.shape != expected_green_shape:
+        raise ValueError(
+            f"Gtot must have shape {expected_green_shape}; got {total.shape}."
+        )
+    if vacuum.shape != expected_green_shape:
+        raise ValueError(
+            f"Gvac must have shape {expected_green_shape}; got {vacuum.shape}."
+        )
+    if energy.ndim != 1 or energy.size == 0 or not np.all(np.isfinite(energy)):
+        raise ValueError("E must be a non-empty finite one-dimensional energy grid.")
+
+    structure = None if Gstructure is None else np.asarray(Gstructure)
+    if structure is not None and structure.shape != expected_green_shape:
+        raise ValueError(
+            f"Gstructure must have shape {expected_green_shape}; got {structure.shape}."
+        )
+    wavelengths = None if wavelength_m is None else np.asarray(wavelength_m, dtype=float)
+    if wavelengths is not None and wavelengths.shape != (energy.size,):
+        raise ValueError(
+            f"wavelength_m must have shape ({energy.size},); got {wavelengths.shape}."
+        )
+    regions = None if observer_region is None else np.asarray(observer_region)
+    expected_region_shape = (energy.size, emitter_count, emitter_count)
+    if regions is not None and regions.shape != expected_region_shape:
+        raise ValueError(
+            f"observer_region must have shape {expected_region_shape}; got {regions.shape}."
+        )
+
     with h5py.File(h5_path, "w") as f:
         f.attrs["gf_layout"] = "pair"
-        f.create_dataset("green_function_total", data=Gtot)
-        f.create_dataset("green_function_vacuum", data=Gvac)
-        f.create_dataset("energy_eV", data=E)
-        f.create_dataset("emitter_positions_nm", data=emitter_positions_nm)
+        f.create_dataset("green_function_total", data=total)
+        f.create_dataset("green_function_vacuum", data=vacuum)
+        f.create_dataset("energy_eV", data=energy)
+        f.create_dataset("emitter_positions_nm", data=positions)
+        if orientations is not None:
+            f.create_dataset("emitter_orientations", data=orientations)
         pos = f.create_group("position_fixed")
         pos.attrs["zD_meters"] = zD
         pos.attrs["zA_meters"] = zA
         _write_optional_common_metadata(
             f,
-            Gstructure=Gstructure,
-            wavelength_m=wavelength_m,
-            observer_region=observer_region,
+            Gstructure=structure,
+            wavelength_m=wavelengths,
+            observer_region=regions,
             attrs=attrs,
         )
 
@@ -235,6 +286,7 @@ def load_gf_h5(h5_path: str) -> Dict[str, np.ndarray]:
 
         **Pair-indexed** adds:
             - ``emitter_positions_nm``: Emitter coordinates, shape ``(N, 3)``.
+            - ``emitter_orientations``: Optional emitter orientations, shape ``(N, 3)``.
     """
     try:
         with h5py.File(h5_path, "r") as f:
@@ -277,6 +329,8 @@ def load_gf_h5(h5_path: str) -> Dict[str, np.ndarray]:
 
             if layout == "pair":
                 result["emitter_positions_nm"] = f["emitter_positions_nm"][:].astype(float)
+                if "emitter_orientations" in f:
+                    result["emitter_orientations"] = f["emitter_orientations"][:].astype(float)
                 logger.success(
                     f"Loaded pair-indexed GF from {h5_path}: "
                     f"{Gtot.shape[1]} emitters, {len(E)} energies"
