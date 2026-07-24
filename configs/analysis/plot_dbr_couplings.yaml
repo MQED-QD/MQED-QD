@@ -1,0 +1,84 @@
+# Separation-layout DBR coupling analysis from projected Green tensors.
+
+defaults:
+  - _self_
+  - override hydra/job_logging: default
+
+hydra:
+  job:
+    name: plot_dbr_couplings
+
+# HDF5 file written by the dyadic Green-function workflow.
+input_file: "${oc.env:MQED_ROOT,./data}/gf_data.h5"
+output_prefix: "dbr_couplings"
+
+# Green tensor component: total, vacuum, structure, or scattered.
+# structure/scattered use green_function_structure when present, otherwise total-vacuum.
+green_component: total
+
+# Select one Green tensor energy slice by index or value_eV. Use exactly one.
+energy_selection:
+  index: 0
+  value_eV: null
+  nearest: true
+  tolerance_eV: 1.0e-12
+
+# Select arbitrary Rx rows by source indices or physical values; use only one.
+# Leave both null/empty to plot the complete Rx_nm grid in its stored order.
+# Requested order and duplicates are preserved in the HDF5, CSV, and plot.
+rx_selection:
+  indices: null
+  values_nm: null
+  # Exact matching is safer for scientific data. When false, every requested
+  # value must occur on the stored Rx_nm grid within tolerance_nm.
+  nearest: false
+  tolerance_nm: 1.0e-9
+
+# Near-/far-field example for a file containing these exact Rx_nm values:
+# rx_selection:
+#   indices: null
+#   values_nm: [1, 2, 5, 10, 20, 30, 40, 50, 500, 600, 700, 1000]
+#   nearest: false
+#   tolerance_nm: 1.0e-9
+# Hydra CLI override (quote the list so the shell does not expand brackets):
+# mqed_plot_dbr_couplings 'rx_selection.values_nm=[1,2,5,10,20,50,500,600,700,1000]'
+# If requested values are approximate rather than stored exactly, also pass:
+# rx_selection.nearest=true
+
+# Dipole magnitudes in Debye.
+mu_D_debye: 3.8
+mu_A_debye: 3.8
+
+# Donor and acceptor orientations are resolved independently.
+orientations:
+  donor:
+    theta_deg: 90.0
+    phi_deg: 0.0
+  acceptor:
+    theta_deg: 90.0
+    phi_deg: 0.0
+
+plot:
+  # false plots signed V and hbarGamma; true plots their absolute values.
+  absolute: true
+  filename: dbr_couplings.png
+  figsize: [6.5, 6.0]
+  dpi: 150
+  xscale: linear
+  yscale: linear
+  xlim: null
+  V_ylim: null
+  gamma_ylim: null
+  xlabel: '$R_x$ (nm)'
+  V_ylabel: '$V_{ij}$ (eV)'
+  gamma_ylabel: '$\hbar\Gamma_{ij}$ (eV)'
+  V_label: '$V_{ij}$'
+  gamma_label: '$\hbar\Gamma_{ij}$'
+  title: null
+  grid: true
+  style:
+    V_color: tab:blue
+    gamma_color: tab:orange
+    linestyle: "-"
+    marker: null
+    linewidth: 1.8
