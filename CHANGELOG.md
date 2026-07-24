@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.4.1 - 2026-07-24
+
+### DBP-in-DBR Green tensors
+
+- Corrected DBP source-layer selection for the N-layer DBR workflow so the emitter remains in the intended zero-based layer index.
+- Added validation that rejects non-finite Green tensors before invalid values can be stored or passed to downstream analysis.
+- Stabilized off-center N-layer Sommerfeld kernels against algebraic high-q overflow while retaining the established on-axis behavior.
+
+### Physical DBR coupling analysis
+
+- Added `mqed_plot_dbr_couplings` to project separation-indexed Green tensors onto independent donor and acceptor orientations and plot the physical coherent coupling $V_{ij}$ and dissipative energy $\hbar\Gamma_{ij}$.
+- Added total, vacuum, structure, and scattered Green-component selection, with stored structure tensors preferred and a total-minus-vacuum fallback.
+- Added ordered `Rx_nm` selection by source indices or physical values so one output can combine near-field samples with sparse far-field DBR separations.
+- Added strict tolerance-based matching by default, optional nearest-grid matching, and provenance for requested values, selected values, source indices, and matching deltas.
+- Added signed and absolute coupling arrays, decay rates in inverse seconds, and HDF5, CSV, and PNG outputs without vacuum-normalized enhancement ratios.
+
+### Documentation and validation
+
+- Documented the DBR coupling command, Hydra configuration, physical formulas, separation selection, and output artifacts in the README and Sphinx documentation.
+- Added regression coverage for coupling signs and units, Green-component selection, separation-only layout validation, non-finite input rejection, output provenance, nested output paths, and disjoint near-/far-field selection.
+- Verified the complete test suite, installed Hydra command, and synthetic near-/far-field CLI workflow.
+
 ## 1.4.0 - 2026-07-12
 
 ### Scan-layout spectral-density analysis
