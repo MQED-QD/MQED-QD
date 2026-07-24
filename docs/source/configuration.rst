@@ -13,7 +13,7 @@ stage of the workflow.
    configs/
    ├── Dyadic_GF/      # Green's function computation
    ├── Lindblad/        # Quantum dynamics solver
-   ├── analysis/        # Post-processing (FE & RET)
+├── analysis/        # Green-tensor post-processing and coupling analysis
    ├── BEM/             # Boundary-element-method utilities
    └── plots/           # Observable plotting
 
@@ -325,7 +325,7 @@ coupling) for studying the non-Hermitian skin effect.
 ``analysis/`` — Post-Processing
 ----------------------------------
 
-**Files:** ``FE.yaml``, ``RET.yaml``
+**Files:** ``FE.yaml``, ``RET.yaml``, ``plot_dbr_couplings.yaml``
 
 Used by ``mqed_FE`` and ``mqed_RET``
 (:doc:`/tutorials/field_enhancement`).
@@ -335,6 +335,17 @@ plots the real and imaginary components
 (:math:`V_{\alpha\beta}/V_{0,\alpha\beta}` and
 :math:`\Gamma_{\alpha\beta}/\Gamma_{0,\alpha\beta}`) separately, while
 ``RET.yaml`` plots the single enhancement factor :math:`\gamma`.
+
+``plot_dbr_couplings.yaml`` is the separation-layout alternative for cases
+where vacuum enhancement ratios become ill-conditioned at long range. It
+projects the selected Green tensor onto independent donor and acceptor
+orientations and writes signed and absolute :math:`V_{ij}`, energy-valued
+:math:`\hbar\Gamma_{ij}`, and rate-valued :math:`\Gamma_{ij}` versus
+``Rx_nm``. Set ``green_component`` to ``total``, ``vacuum``, ``structure``,
+or ``scattered``; select one energy with ``energy_selection.index`` or
+``energy_selection.value_eV``; and use ``plot.absolute`` to control only the
+displayed curves. The saved data always retain both signed and absolute
+values. Pair-layout files are intentionally rejected.
 
 ``input_file``
 ^^^^^^^^^^^^^^

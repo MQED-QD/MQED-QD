@@ -51,6 +51,9 @@ Installing the package registers the following entry points:
      - Resonance energy transfer analysis.
    * - ``mqed_FE``
      - Field-enhancement analysis.
+   * - ``mqed_plot_dbr_couplings``
+     - Plot signed or absolute physical :math:`V_{ij}` and
+       :math:`\hbar\Gamma_{ij}` versus separation from Green-tensor HDF5 data.
    * - ``mqed_lindblad``
      - Time evolution with Lindblad master equation.
    * - ``mqed_nhse``

@@ -10,6 +10,7 @@ API Reference
    mqed.utils
    mqed.BEM
    mqed.Lindblad
+   mqed.analysis
    mqed.plotting
 
 .. toctree::

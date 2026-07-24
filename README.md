@@ -16,12 +16,12 @@ near plasmonic interfaces using macroscopic quantum electrodynamics (MQED).
 
 ## Latest Update
 
-**Version 1.4.0** expands the N-layer and Mie workflows into documented, reproducible spectral-density pipelines with bundled reference data.
+**Version 1.4.1** stabilizes DBP-in-DBR Green-tensor calculations and adds direct physical-coupling analysis across selected near- and far-field separations.
 
-- **Scan-layout spectral density** now supports fixed-source Mie scan HDF5 files in `mqed_calc_spec_dens` and `mqed_plot_spec_dens`, preserving source/observer positions and selecting scan curves by physical distance.
-- **N-layer comparison examples** add curated Green-tensor and spectral-density HDF5 files for direct quadrature, singularity-aware integration, and pole-aware hybrid DCIM comparisons.
-- **Reference plotting configs and figures** provide ready-to-run direct-vs-singularity-aware and singularity-aware-vs-pole-aware hybrid DCIM spectral-density plots.
-- **New tutorials and theory pages** document N-layer Sommerfeld integrals, singularity-aware pole extraction, hybrid DCIM, and Mie theory for spherical cavities.
+- **Correct DBP source-layer handling** keeps the emitter in the intended zero-based N-layer index and rejects invalid Green tensors before they enter cached analysis workflows.
+- **Stable off-center N-layer kernels** avoid high-q overflow for finite source offsets while preserving the established on-axis calculation path.
+- **Physical DBR coupling plots** add `mqed_plot_dbr_couplings` for signed or absolute $V_{ij}$ and $\hbar\Gamma_{ij}$ curves without unstable vacuum-normalized enhancement ratios.
+- **Near-/far-field separation selection** accepts ordered `Rx_nm` values or source indices, with strict or nearest-grid matching and complete HDF5, CSV, and PNG provenance.
 
 See `CHANGELOG.md` for the full release notes.
 
@@ -103,6 +103,7 @@ For step-by-step walkthroughs, see the
 | `mqed_plot_spec_dens` | Plot spectral density |
 | `mqed_calc_emission_spectrum` | Experimental emission-spectrum calculation; not literature-validated yet |
 | `mqed_plot_emission_spectrum` | Plot experimental emission-spectrum output |
+| `mqed_plot_dbr_couplings` | Plot physical DBR couplings versus separation from Green tensors |
 | `mqed_lindblad` | Lindblad master-equation dynamics |
 | `mqed_nhse` | Non-Hermitian dynamics (recommended for large systems) |
 | `mqed_plot_msd` | Plot mean-squared displacement |
@@ -144,7 +145,7 @@ All commands use [Hydra](https://hydra.cc/) YAML configs under `configs/`.
 |------------------|---------|
 | `configs/Dyadic_GF/` | Geometry, materials, frequency grids |
 | `configs/Lindblad/` | Quantum dynamics solver parameters |
-| `configs/analysis/` | RET and FE analysis settings |
+| `configs/analysis/` | RET, FE, spectral, emission, and DBR coupling analysis settings |
 | `configs/BEM/` | BEM geometry and comparison settings |
 | `configs/plots/` | MSD, RMSD, PR, IPR plot settings |
 
@@ -178,7 +179,7 @@ Macroscopic-Quantum-Electrodynamics/
 ├── mqed/              # Package source
 │   ├── Dyadic_GF/     # Fresnel / Sommerfeld integrals
 │   ├── Lindblad/      # Lindblad & NHSE solvers
-│   ├── analysis/      # RET, FE calculations
+│   ├── analysis/      # Green-tensor post-processing and coupling calculations
 │   ├── plotting/      # MSD, IPR, RMSD, PR plots
 │   ├── BEM/           # Boundary element method
 │   └── utils/         # Shared helpers (units, HDF5 I/O, logging)
