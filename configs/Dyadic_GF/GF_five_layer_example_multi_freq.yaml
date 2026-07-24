@@ -68,6 +68,11 @@ simulation:
     #       still direct Bessel-form quadrature, but split at branch points and
     #       near-real pole projections. Best first choice for Rx=0 Purcell/LDOS.
     #     Cons: slower than DCIM; explicit pole/branch terms are diagnostic only.
+    #   componentwise
+    #     Pros: validation-grade reference for cancellation-sensitive components;
+    #       assembles the physical tensor integrand before scalar real/imaginary
+    #       quadrature and splits at light lines and near-real poles.
+    #     Cons: much slower because every tensor entry is integrated separately.
     #   hybrid_dcim
     #     Pros: useful near-field accelerator; direct low-q part plus fitted
     #       high-q evanescent tail. Often more relevant than branch-cut DCIM for
@@ -112,6 +117,7 @@ simulation:
     #   simulation.integration.method=branch_cut_dcim
     method: direct
     qmax: null
+    qmax_factor: null
     epsabs: 1.0e-10
     epsrel: 1.0e-10
     limit: 400
