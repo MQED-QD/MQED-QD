@@ -3,13 +3,14 @@
 #
 # Geometry:
 #   - silver sphere radius R = 8 nm in air/vacuum
-#   - N_e orthoradial emitters in the equatorial plane
+#   - N_e orthoradial emitters in the equatorial xy plane
 #   - emitter-surface gap h = 2 nm, so emitter radius is R + h = 10 nm
 #   - dipole moment magnitude d = 24 D
 #
-# The pair layout stores G(r_i, r_j, omega) for every emitter pair.  The
-# emitter_orientations below are the local azimuthal unit vectors e_phi and are
-# intended for downstream projection/DDI calculations.
+# The generated ring uses angles phi_j = phase_offset_deg + 360*j/N_e and local
+# azimuthal unit vectors e_phi = [-sin(phi_j), cos(phi_j), 0]. Nearest-neighbor
+# chord distances at 10 nm radius: N=1 -> 0 nm, N=15 -> 4.158 nm,
+# N=50 -> 1.256 nm. Example override: simulation.emitter_ring.emitter_count=50
 
 defaults:
   - hydra: default
@@ -24,7 +25,7 @@ simulation:
   energy_eV:
     min: 2.6
     max: 3.2
-    points: 7
+    points: 121
   nmax: 20
   strict_regions: true
 
@@ -34,32 +35,16 @@ simulation:
 
   sphere_example:
     reference: "Varguet et al., J. Chem. Phys. 154, 084303 (2021), Fig. 1"
-    emitter_count: 8
-    sphere_radius_nm: 8.0
-    emitter_surface_gap_nm: 2.0
-    emitter_radius_nm: 10.0
     dipole_moment_debye: 24.0
+
+  emitter_ring:
+    emitter_count: 15
+    sphere_radius_nm: ${simulation.geometry.radius_nm}
+    emitter_surface_gap_nm: 2.0
+    # emitter_radius_nm: 10.0  # Optional alternative; must match radius + gap if both are set.
+    z_nm: 0.0
+    phase_offset_deg: 0.0
     orientation: orthoradial
-
-  emitter_positions_nm:
-    - [10.0, 0.0, 0.0]
-    - [7.0710678118654755, 7.0710678118654755, 0.0]
-    - [0.0, 10.0, 0.0]
-    - [-7.0710678118654755, 7.0710678118654755, 0.0]
-    - [-10.0, 0.0, 0.0]
-    - [-7.0710678118654755, -7.0710678118654755, 0.0]
-    - [0.0, -10.0, 0.0]
-    - [7.0710678118654755, -7.0710678118654755, 0.0]
-
-  emitter_orientations:
-    - [-0.0, 1.0, 0.0]
-    - [-0.7071067811865475, 0.7071067811865475, 0.0]
-    - [-1.0, 0.0, 0.0]
-    - [-0.7071067811865475, -0.7071067811865475, 0.0]
-    - [-0.0, -1.0, 0.0]
-    - [0.7071067811865475, -0.7071067811865475, 0.0]
-    - [1.0, 0.0, 0.0]
-    - [0.7071067811865475, 0.7071067811865475, 0.0]
 
 materials:
   regions:
@@ -81,6 +66,8 @@ parallel:
   mpi_exec: mpiexec
 
 output:
-  directory: outputs
+  # Relative to this config file for direct --config runs; Hydra replaces this
+  # with its runtime output directory. This keeps direct output under repo/outputs.
+  directory: ../../outputs
   prefix: mie_silver_sphere_ring
   layout: pair

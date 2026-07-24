@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 from hydra import initialize_config_dir, compose
 from mqed.Lindblad.run_quantum_dynamics import app_run, build_initial_ket
+from mqed.Dyadic_GF.main_mie import resolve_emitter_geometry_m
 from mqed.utils.hydra_local import prepare_hydra_config_path
 
 def _compose(cfg_dir: Path, config_name: str, overrides=None):
@@ -138,3 +139,27 @@ def test_plot_spectral_density_config_uses_named_hydra_output_dir():
 
     assert cfg.hydra.job.name == "plot_spectral_density"
     assert cfg.hydra.run.dir.startswith("outputs/plot_spectral_density/")
+
+
+def test_gf_sphere_example_hydra_generates_ring_and_accepts_count_override():
+    cfg_dir = Path(__file__).resolve().parents[1] / "configs" / "Dyadic_GF"
+
+    cfg = _compose(cfg_dir, "GF_sphere_example")
+    positions_m, orientations = resolve_emitter_geometry_m(cfg.simulation)
+
+    assert positions_m.shape == (15, 3)
+    assert orientations.shape == (15, 3)
+    assert np.allclose(np.linalg.norm(positions_m[:, :2], axis=1) * 1e9, 10.0)
+    assert np.allclose(np.linalg.norm(orientations, axis=1), 1.0)
+    nearest_spacing_nm = np.linalg.norm(positions_m[1] - positions_m[0]) * 1e9
+    assert np.isclose(nearest_spacing_nm, 4.158, atol=5e-4)
+
+    override_cfg = _compose(
+        cfg_dir,
+        "GF_sphere_example",
+        overrides=["simulation.emitter_ring.emitter_count=50"],
+    )
+    override_positions_m, override_orientations = resolve_emitter_geometry_m(override_cfg.simulation)
+
+    assert override_positions_m.shape == (50, 3)
+    assert override_orientations.shape == (50, 3)
