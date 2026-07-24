@@ -1,12 +1,14 @@
 defaults:
+  - hydra: default
   - _self_
-  - override hydra/job_logging: default
 
 hydra:
   job:
     name: emission_spectrum
 
-input_file: "${oc.env:MQED_ROOT,./outputs}/mie_silver_sphere_ring.h5"
+# Default output name from GF_sphere_example.yaml with N=15. Override input_file
+# when using another count, for example the corresponding ..._emitters_50pts.hdf5.
+input_file: "${oc.env:MQED_ROOT,./outputs}/mie_silver_sphere_ring_Emin_2.60_Emax_3.20_121pts_emitters_15pts.hdf5"
 output_prefix: "emission_spectrum"
 
 green_component: structure
@@ -22,15 +24,8 @@ transition_energy_grid_eV:
   max: 3.2
   points: 61
 
-orientations:
-  theta_deg: 90.0
-  phi_deg: 0.0
-  emitter_orientations:
-    - [-0.0, 1.0, 0.0]
-    - [-0.7071067811865475, 0.7071067811865475, 0.0]
-    - [-1.0, 0.0, 0.0]
-    - [-0.7071067811865475, -0.7071067811865475, 0.0]
-    - [-0.0, -1.0, 0.0]
-    - [0.7071067811865475, -0.7071067811865475, 0.0]
-    - [1.0, 0.0, 0.0]
-    - [0.7071067811865475, 0.7071067811865475, 0.0]
+# Pair-layout Mie files generated from simulation.emitter_ring store the matching
+# per-emitter orientations. They are used automatically when this section is
+# omitted, so the same analysis config works for arbitrary N (for example 15 or
+# 50). Add orientations.emitter_orientations or theta_deg/phi_deg only to
+# intentionally override the stored geometry.

@@ -1,12 +1,14 @@
 defaults:
+  - hydra: default
   - _self_
-  - override hydra/job_logging: default
 
 hydra:
   job:
     name: emission_spectrum_example
 
-input_file: "${oc.env:MQED_ROOT,./outputs}/mie_silver_sphere_ring.h5"
+# Default output name from GF_sphere_example.yaml with N=15. For N=50, override
+# input_file with the generated ..._emitters_50pts.hdf5 path.
+input_file: "${oc.env:MQED_ROOT,./outputs}/mie_silver_sphere_ring_Emin_2.60_Emax_3.20_121pts_emitters_15pts.hdf5"
 output_prefix: "sphere_emission_example"
 
 green_component: structure
@@ -22,15 +24,6 @@ transition_energy_grid_eV:
   max: 3.2
   points: 61
 
-orientations:
-  theta_deg: 90.0
-  phi_deg: 0.0
-  emitter_orientations:
-    - [-0.0, 1.0, 0.0]
-    - [-0.7071067811865475, 0.7071067811865475, 0.0]
-    - [-1.0, 0.0, 0.0]
-    - [-0.7071067811865475, -0.7071067811865475, 0.0]
-    - [-0.0, -1.0, 0.0]
-    - [0.7071067811865475, -0.7071067811865475, 0.0]
-    - [1.0, 0.0, 0.0]
-    - [0.7071067811865475, 0.7071067811865475, 0.0]
+# The sphere pair file stores the generated orthoradial orientations. Omitting
+# an orientation override here lets this example follow any emitter count from
+# GF_sphere_example.yaml, including N=15 and the N=50 Hydra override.
