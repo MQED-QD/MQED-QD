@@ -2,6 +2,7 @@ from pathlib import Path
 
 import h5py
 import numpy as np
+import pytest
 import yaml
 from omegaconf import OmegaConf
 
@@ -19,7 +20,7 @@ from mqed.plotting.plot_emission_spectrum import (
 )
 
 
-def _write_pair_gf(path: Path) -> None:
+def _write_pair_gf(path: Path, emitter_orientations=None) -> None:
     energy_eV = np.array([1.0, 1.1, 1.2])
     G_total = np.zeros((3, 2, 2, 3, 3), dtype=complex)
     G_vac = np.zeros_like(G_total)
@@ -37,6 +38,8 @@ def _write_pair_gf(path: Path) -> None:
         h5.create_dataset("green_function_structure", data=G_structure)
         h5.create_dataset("energy_eV", data=energy_eV)
         h5.create_dataset("emitter_positions_nm", data=np.array([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]]))
+        if emitter_orientations is not None:
+            h5.create_dataset("emitter_orientations", data=np.asarray(emitter_orientations, dtype=float))
         position_fixed = h5.create_group("position_fixed")
         position_fixed.attrs["zD_meters"] = 0.0
         position_fixed.attrs["zA_meters"] = 0.0
@@ -48,6 +51,50 @@ def test_resolve_emitter_orientations_accepts_explicit_vectors():
     orientations = resolve_emitter_orientations(cfg, 2)
 
     assert np.allclose(orientations, [[0, 0, 1], [0, 1, 0]])
+
+
+def test_resolve_emitter_orientations_uses_stored_when_config_omits_orientation():
+    stored = np.array([[0.0, 2.0, 0.0], [3.0, 0.0, 0.0]])
+
+    orientations = resolve_emitter_orientations({}, 2, stored_orientations=stored)
+
+    assert np.allclose(orientations, [[0.0, 1.0, 0.0], [1.0, 0.0, 0.0]])
+
+
+def test_resolve_emitter_orientations_explicit_config_overrides_stored():
+    stored = np.array([[0.0, 1.0, 0.0], [1.0, 0.0, 0.0]])
+    cfg = {"emitter_orientations": [[0.0, 0.0, 2.0], [0.0, 3.0, 0.0]]}
+
+    orientations = resolve_emitter_orientations(cfg, 2, stored_orientations=stored)
+
+    assert np.allclose(orientations, [[0.0, 0.0, 1.0], [0.0, 1.0, 0.0]])
+
+
+def test_resolve_emitter_orientations_angle_config_overrides_stored():
+    stored = np.array([[0.0, 1.0, 0.0], [1.0, 0.0, 0.0]])
+
+    orientations = resolve_emitter_orientations({"orientations": {"theta_deg": 0.0}}, 2, stored_orientations=stored)
+
+    assert np.allclose(orientations, [[0.0, 0.0, 1.0], [0.0, 0.0, 1.0]])
+
+
+def test_resolve_emitter_orientations_rejects_nonfinite_stored_vectors():
+    with pytest.raises(ValueError, match="orientations must be finite"):
+        resolve_emitter_orientations(
+            {},
+            2,
+            stored_orientations=np.array([[0.0, 1.0, 0.0], [np.nan, 0.0, 0.0]]),
+        )
+
+
+def test_resolve_emitter_orientations_normalizes_large_finite_vectors():
+    orientations = resolve_emitter_orientations(
+        {"emitter_orientations": [[1.0e308, 1.0e308, 0.0]]},
+        1,
+    )
+
+    assert np.all(np.isfinite(orientations))
+    assert np.allclose(orientations, [[np.sqrt(0.5), np.sqrt(0.5), 0.0]])
 
 
 def test_project_pair_green_uses_left_observer_and_right_source_orientations():
@@ -126,6 +173,41 @@ def test_run_from_config_writes_emission_hdf5(tmp_path):
         assert np.isclose(np.max(h5["emission_spectrum"][:]), 1.0)
 
 
+def test_run_from_config_uses_stored_hdf5_orientations_when_config_omits_them(tmp_path):
+    gf_path = tmp_path / "gf_pair_stored_orientations.h5"
+    _write_pair_gf(gf_path, emitter_orientations=[[0.0, 0.0, 1.0], [0.0, 1.0, 0.0]])
+    cfg = OmegaConf.create({
+        "input_file": str(gf_path),
+        "output_prefix": "emission_stored",
+        "green_component": "structure",
+        "transition_energy_eV": [1.1],
+    })
+
+    output_path = run_from_config(cfg, tmp_path, tmp_path)
+
+    with h5py.File(output_path, "r") as h5:
+        assert np.allclose(h5["emitter_orientations"][:], [[0.0, 0.0, 1.0], [0.0, 1.0, 0.0]])
+        assert np.linalg.norm(h5["projected_G"][:]) > 0.0
+
+
+def test_run_from_config_explicit_orientations_override_stored_hdf5(tmp_path):
+    gf_path = tmp_path / "gf_pair_stored_overridden.h5"
+    _write_pair_gf(gf_path, emitter_orientations=[[0.0, 1.0, 0.0], [1.0, 0.0, 0.0]])
+    cfg = OmegaConf.create({
+        "input_file": str(gf_path),
+        "output_prefix": "emission_override",
+        "green_component": "structure",
+        "transition_energy_eV": [1.1],
+        "emitter_orientations": [[0.0, 0.0, 2.0], [0.0, 0.0, 3.0]],
+    })
+
+    output_path = run_from_config(cfg, tmp_path, tmp_path)
+
+    with h5py.File(output_path, "r") as h5:
+        assert np.allclose(h5["emitter_orientations"][:], [[0.0, 0.0, 1.0], [0.0, 0.0, 1.0]])
+        assert np.linalg.norm(h5["projected_G"][:]) > 0.0
+
+
 def test_plot_emission_map_and_curves_create_figures():
     spectrum = np.array([[1.0, 2.0, 1.5], [0.5, 1.0, 0.7]])
     emission_energy = np.array([1.0, 1.1, 1.2])
@@ -175,3 +257,22 @@ def test_emission_spectrum_configs_parse():
         with open(relpath, "r", encoding="utf-8") as handle:
             loaded = yaml.safe_load(handle)
         assert loaded is not None
+
+
+def test_emission_spectrum_configs_follow_stored_arbitrary_count_orientations():
+    stored = np.column_stack([
+        -np.sin(2.0 * np.pi * np.arange(15) / 15),
+        np.cos(2.0 * np.pi * np.arange(15) / 15),
+        np.zeros(15),
+    ])
+
+    for relpath in [
+        "configs/analysis/emission_spectrum.yaml",
+        "configs/analysis/emission_spectrum_example.yaml",
+    ]:
+        config = OmegaConf.load(relpath)
+        assert "orientations" not in config
+        assert str(config.input_file).endswith(
+            "mie_silver_sphere_ring_Emin_2.60_Emax_3.20_121pts_emitters_15pts.hdf5"
+        )
+        assert np.allclose(resolve_emitter_orientations(config, 15, stored), stored)

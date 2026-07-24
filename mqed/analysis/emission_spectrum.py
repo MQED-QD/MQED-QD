@@ -9,6 +9,7 @@ from loguru import logger
 from omegaconf import OmegaConf
 
 from mqed.utils.SI_unit import D2CMM, c, eps0, eV_to_J, hbar
+from mqed.utils.emitter_geometry import normalize_orientation_vectors
 from mqed.utils.hydra_local import prepare_hydra_config_path
 from mqed.utils.logging_utils import setup_loggers_hydra_aware
 from mqed.utils.orientation import resolve_angle_deg, spherical_to_cartesian_dipole
@@ -35,21 +36,14 @@ def _get(mapping: Any, key: str, default: Any = None) -> Any:
 
 
 def _normalize_vectors(vectors: np.ndarray, expected_count: int) -> np.ndarray:
-    orientations = np.asarray(vectors, dtype=float)
-    if orientations.shape == (3,):
-        orientations = np.tile(orientations, (expected_count, 1))
-    if orientations.shape != (expected_count, 3):
-        raise ValueError(
-            f"Emitter orientations must have shape ({expected_count}, 3) or (3,), "
-            f"got {orientations.shape}."
-        )
-    norms = np.linalg.norm(orientations, axis=1)
-    if np.any(norms == 0.0):
-        raise ValueError("Emitter orientations must be nonzero vectors.")
-    return orientations / norms[:, np.newaxis]
+    return normalize_orientation_vectors(vectors, expected_count, allow_single_vector=True)
 
 
-def resolve_emitter_orientations(config: Any, n_emitters: int) -> np.ndarray:
+def resolve_emitter_orientations(
+    config: Any,
+    n_emitters: int,
+    stored_orientations: np.ndarray | None = None,
+) -> np.ndarray:
     cfg = _to_plain(config)
     orientations_cfg = _get(cfg, "orientations", {})
     explicit = _get(cfg, "emitter_orientations", None)
@@ -61,6 +55,13 @@ def resolve_emitter_orientations(config: Any, n_emitters: int) -> np.ndarray:
         explicit = _get(orientations_cfg, "U_list", None)
     if explicit is not None:
         return _normalize_vectors(np.asarray(explicit, dtype=float), n_emitters)
+
+    has_angle_config = any(
+        _get(orientations_cfg, key, None) is not None or _get(cfg, key, None) is not None
+        for key in ("theta_deg", "phi_deg")
+    )
+    if not has_angle_config and stored_orientations is not None:
+        return _normalize_vectors(np.asarray(stored_orientations, dtype=float), n_emitters)
 
     theta_raw = _get(orientations_cfg, "theta_deg", _get(cfg, "theta_deg", 90.0))
     phi_raw = _get(orientations_cfg, "phi_deg", _get(cfg, "phi_deg", 0.0))
@@ -252,6 +253,8 @@ def _read_green_component(input_path: Path, component: str) -> dict[str, Any]:
         }
         if layout == "pair":
             data["emitter_positions_nm"] = h5["emitter_positions_nm"][:].astype(float)
+            if "emitter_orientations" in h5:
+                data["emitter_orientations"] = h5["emitter_orientations"][:].astype(float)
         else:
             data["Rx_nm"] = h5["Rx_nm"][:].astype(float)
     return data
@@ -317,7 +320,11 @@ def run_from_config(cfg: Any, output_dir: Path, original_cwd: Path | None = None
 
     if gf_layout == "pair":
         n_emitters = G.shape[1]
-        orientations = resolve_emitter_orientations(cfg, n_emitters)
+        orientations = resolve_emitter_orientations(
+            cfg,
+            n_emitters,
+            stored_orientations=green_data.get("emitter_orientations"),
+        )
         projected_G = project_pair_green(G, orientations)
     elif gf_layout == "separation":
         n_emitters = int(cfg.get("n_emitters", cfg.get("N_mol", 2)))
