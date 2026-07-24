@@ -7,19 +7,17 @@ near plasmonic interfaces using macroscopic quantum electrodynamics.
 Latest Update
 -------------
 
-**Version 1.4.0** turns the N-layer and Mie Green's-function workflows into
-documented spectral-density pipelines. Scan-indexed Mie HDF5 files now work with
-``mqed_calc_spec_dens`` and ``mqed_plot_spec_dens``, preserving explicit
-source/observer positions and selecting scan curves by physical distance. The
-release also adds curated N-layer reference HDF5 files, comparison plot configs,
-and reference figures for direct quadrature, singularity-aware integration, and
-pole-aware hybrid DCIM.
+**Version 1.4.1** stabilizes DBP-in-DBR Green-tensor calculations and adds direct
+physical-coupling analysis. The N-layer workflow now keeps the DBP emitter in the
+intended zero-based source layer, rejects non-finite tensors before caching, and
+avoids algebraic high-q overflow for off-center source positions.
 
-New tutorials cover N-layer planar stacks and Mie core-shell spherical cavities,
-while new theory pages summarize N-layer Sommerfeld integrals, singularity-aware
-pole extraction, hybrid DCIM acceleration, and Mie Green's functions. The Mie
-workflow remains experimental until benchmark comparisons against literature
-results are completed.
+The new ``mqed_plot_dbr_couplings`` command projects separation-indexed Green
+tensors onto donor and acceptor orientations and plots signed or absolute
+``V_ij`` and ``hbarGamma_ij`` values without vacuum-normalized enhancement
+ratios. Ordered ``Rx_nm`` selection can combine dense near-field samples with
+sparse far-field DBR points, using strict or nearest-grid matching with complete
+HDF5, CSV, and PNG provenance.
 
 .. image:: _static/workflow_diagram.png
    :width: 600
