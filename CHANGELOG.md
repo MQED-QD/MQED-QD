@@ -1,5 +1,35 @@
 # Changelog
 
+## 1.4.2 - 2026-07-25
+
+### Polarization-resolved N-layer Green tensors
+
+- Added opt-in TE- and TM-resolved scattering tensors to the N-layer solver without duplicating Sommerfeld integrations.
+- Added optional `green_function_structure`, `green_function_scattering_te`, and `green_function_scattering_tm` HDF5 datasets while preserving the legacy total/vacuum-only schema by default.
+- Enforced `structure = TE + TM` and `total = vacuum + structure` before saving polarized output, with consistent support across sequential, Joblib, MPI, direct, and fixed-grid execution paths.
+- Added support for sources and observers in the semi-infinite top exterior while retaining the complete multilayer reflection response below the source region.
+
+### Effective collective-emission analysis
+
+- Extended the Varguet-effective convention to separation-indexed linear chains, using structure-only self terms and adding the real vacuum tensor only for nonzero separations.
+- Added a renormalized-total convention that keeps structure-only self terms and the full complex total Green tensor off diagonal.
+- Added explicit full, TE, and TM structure-channel selection with validation and provenance; TE/TM spectra are independent channel calculations rather than additive intensities.
+- Added strict chain-size, spacing, separation-grid, tensor-shape, finite-value, and metadata validation.
+- Updated emission maps to place transition energy on the horizontal axis and emission energy on the vertical axis.
+
+### Verified sphere-ring workflow
+
+- Added reusable sphere-ring geometry generation with configurable emitter count and orientation.
+- Persisted Mie pair-layout emitter positions and orientations so emission analysis consumes the exact simulated geometry.
+- Added and verified ring-oriented HPC and emission-analysis configurations, including out-of-plane molecular orientations.
+
+### Configuration, privacy, and validation
+
+- Added automatic local Hydra overlays and ignored `local/` at repository level so personal or unpublished configurations remain private while retaining normal `--config-name` usage.
+- Documented the optional polarized HDF5 schema and top-exterior N-layer coordinate convention.
+- Added comprehensive regression coverage for polarization decomposition, integration reuse, HDF5 compatibility, chain reconstruction, effective conventions, sphere-ring geometry, plotting axes, and configuration composition.
+- Verified the complete test suite with **187 passing tests** before release preparation.
+
 ## 1.4.1 - 2026-07-24
 
 ### DBP-in-DBR Green tensors

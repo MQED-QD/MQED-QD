@@ -16,12 +16,13 @@ near plasmonic interfaces using macroscopic quantum electrodynamics (MQED).
 
 ## Latest Update
 
-**Version 1.4.1** stabilizes DBP-in-DBR Green-tensor calculations and adds direct physical-coupling analysis across selected near- and far-field separations.
+**Version 1.4.2** adds polarization-resolved N-layer Green tensors and extends collective emission analysis for separation-indexed chains and verified sphere-ring geometries.
 
-- **Correct DBP source-layer handling** keeps the emitter in the intended zero-based N-layer index and rejects invalid Green tensors before they enter cached analysis workflows.
-- **Stable off-center N-layer kernels** avoid high-q overflow for finite source offsets while preserving the established on-axis calculation path.
-- **Physical DBR coupling plots** add `mqed_plot_dbr_couplings` for signed or absolute $V_{ij}$ and $\hbar\Gamma_{ij}$ curves without unstable vacuum-normalized enhancement ratios.
-- **Near-/far-field separation selection** accepts ordered `Rx_nm` values or source indices, with strict or nearest-grid matching and complete HDF5, CSV, and PNG provenance.
+- **TE/TM-resolved N-layer output** optionally stores structure, TE-scattering, and TM-scattering tensors while preserving the existing total/vacuum-only HDF5 schema by default.
+- **Effective collective-emission conventions** support Varguet-effective and renormalized-total Green matrices for both pair and separation layouts, with explicit full, TE, and TM structure channels.
+- **Verified sphere-ring geometry** persists emitter positions and orientations in Mie pair files so emission analysis consumes the exact simulated geometry.
+- **Literature-style emission maps** place transition energy on the horizontal axis and emission energy on the vertical axis, while curve plots retain emission energy as their scan axis.
+- **Private Hydra overlays** keep personal or unpublished configurations under ignored `local/configs/<group>/` paths without changing normal `--config-name` commands.
 
 See `CHANGELOG.md` for the full release notes.
 
@@ -158,9 +159,8 @@ mqed_nhse --config-name=my_nhse
 ```
 
 This keeps shared reproducible configs in `configs/` while letting personal
-experiments live under `local/` without changing your normal CLI habits. Keep
-`local/` excluded locally with `.git/info/exclude` if those files should stay
-off GitHub.
+experiments live under the repository-ignored `local/` tree without changing
+your normal CLI habits.
 
 See the [Configuration Reference](https://mqed-qd.github.io/MQED-QD/configuration.html) for full documentation.
 
