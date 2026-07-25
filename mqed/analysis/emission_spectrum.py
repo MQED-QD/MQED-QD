@@ -226,11 +226,44 @@ def _read_green_component(input_path: Path, component: str) -> dict[str, Any]:
         "scattered": "green_function_structure",
     }
     dataset_name = dataset_by_component.get(component_key)
-    if dataset_name is None:
-        raise ValueError("green_component must be 'total', 'vacuum', or 'structure'.")
+    is_varguet_effective = component_key == "varguet_effective"
+    if dataset_name is None and not is_varguet_effective:
+        raise ValueError(
+            "green_component must be 'total', 'vacuum', 'structure', 'scattered', "
+            "or 'varguet_effective'."
+        )
 
     with h5py.File(input_path, "r") as h5:
-        if dataset_name not in h5:
+        layout = h5.attrs.get("gf_layout", "separation")
+        if isinstance(layout, bytes):
+            layout = layout.decode()
+        if is_varguet_effective:
+            if layout != "pair":
+                raise ValueError("green_component='varguet_effective' requires pair-layout data.")
+            vacuum = h5["green_function_vacuum"][:]
+            if "green_function_structure" in h5:
+                structure = h5["green_function_structure"][:]
+                _validate_pair_green_data(
+                    structure,
+                    vacuum,
+                    h5["energy_eV"],
+                    h5["emitter_positions_nm"],
+                    primary_name="structure",
+                )
+            else:
+                total = h5["green_function_total"][:]
+                _validate_pair_green_data(
+                    total,
+                    vacuum,
+                    h5["energy_eV"],
+                    h5["emitter_positions_nm"],
+                    primary_name="total",
+                )
+                structure = total - vacuum
+            G = structure + np.real(vacuum)
+            diagonal = np.arange(G.shape[1])
+            G[:, diagonal, diagonal] = structure[:, diagonal, diagonal]
+        elif dataset_name not in h5:
             if component_key in {"structure", "scattered"}:
                 logger.warning(
                     "Requested green_component='{}' but {} is absent; using total-vacuum.",
@@ -242,12 +275,8 @@ def _read_green_component(input_path: Path, component: str) -> dict[str, Any]:
                 raise KeyError(f"Missing dataset {dataset_name!r} in {input_path}.")
         else:
             G = h5[dataset_name][:]
-        layout = h5.attrs.get("gf_layout", "separation")
-        if isinstance(layout, bytes):
-            layout = layout.decode()
         data: dict[str, Any] = {
             "G": G,
-            "G_total": h5["green_function_total"][:],
             "energy_eV": h5["energy_eV"][:].astype(float),
             "gf_layout": layout,
         }
@@ -258,6 +287,38 @@ def _read_green_component(input_path: Path, component: str) -> dict[str, Any]:
         else:
             data["Rx_nm"] = h5["Rx_nm"][:].astype(float)
     return data
+
+
+def _validate_pair_green_data(
+    primary: np.ndarray,
+    vacuum: np.ndarray,
+    energy_dataset: h5py.Dataset,
+    positions_dataset: h5py.Dataset,
+    primary_name: str,
+) -> None:
+    if primary.ndim != 5 or primary.shape[-2:] != (3, 3):
+        raise ValueError(
+            "Pair Green tensors must have shape (M,N,N,3,3); "
+            f"got {primary_name} shape {primary.shape}."
+        )
+    if primary.shape[1] != primary.shape[2]:
+        raise ValueError(f"Pair Green emitter axes must be square; got {primary.shape}.")
+    if vacuum.shape != primary.shape:
+        raise ValueError(
+            "Varguet effective Green tensors require matching shapes; "
+            f"got {primary_name} {primary.shape} and vacuum {vacuum.shape}."
+        )
+    energy_shape = energy_dataset.shape
+    if energy_shape != (primary.shape[0],):
+        raise ValueError(
+            f"energy_eV length must match M={primary.shape[0]}; got shape {energy_shape}."
+        )
+    positions_shape = positions_dataset.shape
+    if positions_shape != (primary.shape[1], 3):
+        raise ValueError(
+            f"emitter_positions_nm must have shape ({primary.shape[1]}, 3); "
+            f"got {positions_shape}."
+        )
 
 
 def _transition_grid(cfg, energy_eV: np.ndarray) -> np.ndarray:

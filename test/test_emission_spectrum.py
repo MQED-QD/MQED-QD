@@ -7,6 +7,7 @@ import yaml
 from omegaconf import OmegaConf
 
 from mqed.analysis.emission_spectrum import (
+    _read_green_component,
     compute_emission_spectrum,
     project_pair_green,
     project_separation_green_to_pair,
@@ -106,6 +107,111 @@ def test_project_pair_green_uses_left_observer_and_right_source_orientations():
 
     assert projected.shape == (1, 2, 2)
     assert projected[0, 0, 1] == 5.0 + 1.0j
+
+
+def test_varguet_effective_component_uses_scattered_diagonal_and_real_vacuum_off_diagonal(
+    tmp_path,
+):
+    path = tmp_path / "varguet_component.h5"
+    structure = np.full((1, 2, 2, 3, 3), 2.0 + 3.0j, dtype=complex)
+    vacuum = np.full_like(structure, 5.0 + 7.0j)
+    total = structure + vacuum
+    with h5py.File(path, "w") as h5:
+        h5.attrs["gf_layout"] = "pair"
+        h5.create_dataset("green_function_total", data=total)
+        h5.create_dataset("green_function_vacuum", data=vacuum)
+        h5.create_dataset("green_function_structure", data=structure)
+        h5.create_dataset("energy_eV", data=[2.85])
+        h5.create_dataset("emitter_positions_nm", data=np.zeros((2, 3)))
+
+    green_data = _read_green_component(path, "varguet_effective")
+
+    assert np.all(green_data["G"][:, 0, 0] == structure[:, 0, 0])
+    assert np.all(green_data["G"][:, 1, 1] == structure[:, 1, 1])
+    assert np.all(green_data["G"][:, 0, 1] == structure[:, 0, 1] + 5.0)
+    assert np.all(green_data["G"][:, 1, 0] == structure[:, 1, 0] + 5.0)
+
+
+def test_varguet_effective_component_falls_back_to_total_minus_vacuum(tmp_path):
+    path = tmp_path / "varguet_component_fallback.h5"
+    structure = np.full((1, 2, 2, 3, 3), 2.0 + 3.0j, dtype=complex)
+    vacuum = np.full_like(structure, 5.0 + 7.0j)
+    with h5py.File(path, "w") as h5:
+        h5.attrs["gf_layout"] = "pair"
+        h5.create_dataset("green_function_total", data=structure + vacuum)
+        h5.create_dataset("green_function_vacuum", data=vacuum)
+        h5.create_dataset("energy_eV", data=[2.85])
+        h5.create_dataset("emitter_positions_nm", data=np.zeros((2, 3)))
+
+    green_data = _read_green_component(path, "varguet_effective")
+
+    assert np.all(green_data["G"][:, 0, 0] == structure[:, 0, 0])
+    assert np.all(green_data["G"][:, 0, 1] == structure[:, 0, 1] + 5.0)
+
+
+def test_varguet_effective_fallback_rejects_broadcastable_total_shape(tmp_path):
+    path = tmp_path / "varguet_component_broadcast_fallback.h5"
+    with h5py.File(path, "w") as h5:
+        h5.attrs["gf_layout"] = "pair"
+        h5.create_dataset(
+            "green_function_total",
+            data=np.zeros((1, 1, 1, 3, 3), dtype=complex),
+        )
+        h5.create_dataset(
+            "green_function_vacuum",
+            data=np.zeros((1, 2, 2, 3, 3), dtype=complex),
+        )
+        h5.create_dataset("energy_eV", data=[2.85])
+        h5.create_dataset("emitter_positions_nm", data=np.zeros((2, 3)))
+
+    with pytest.raises(ValueError, match="matching shapes"):
+        _read_green_component(path, "varguet_effective")
+
+
+@pytest.mark.parametrize(
+    "dataset_name,dataset_shape,error_match",
+    [
+        ("green_function_vacuum", (1, 2, 1, 3, 3), "matching shapes"),
+        ("green_function_structure", (1, 2, 2, 2, 2), r"shape \(M,N,N,3,3\)"),
+    ],
+)
+def test_varguet_effective_component_rejects_malformed_pair_tensors(
+    tmp_path,
+    dataset_name,
+    dataset_shape,
+    error_match,
+):
+    path = tmp_path / f"malformed_{dataset_name}.h5"
+    shapes = {
+        "green_function_total": (1, 2, 2, 3, 3),
+        "green_function_vacuum": (1, 2, 2, 3, 3),
+        "green_function_structure": (1, 2, 2, 3, 3),
+    }
+    shapes[dataset_name] = dataset_shape
+    with h5py.File(path, "w") as h5:
+        h5.attrs["gf_layout"] = "pair"
+        for name, shape in shapes.items():
+            h5.create_dataset(name, data=np.zeros(shape, dtype=complex))
+        h5.create_dataset("energy_eV", data=[2.85])
+        h5.create_dataset("emitter_positions_nm", data=np.zeros((2, 3)))
+
+    with pytest.raises(ValueError, match=error_match):
+        _read_green_component(path, "varguet_effective")
+
+
+def test_varguet_effective_component_rejects_inconsistent_pair_metadata(tmp_path):
+    path = tmp_path / "malformed_metadata.h5"
+    tensor = np.zeros((2, 2, 2, 3, 3), dtype=complex)
+    with h5py.File(path, "w") as h5:
+        h5.attrs["gf_layout"] = "pair"
+        h5.create_dataset("green_function_total", data=tensor)
+        h5.create_dataset("green_function_vacuum", data=tensor)
+        h5.create_dataset("green_function_structure", data=tensor)
+        h5.create_dataset("energy_eV", data=[2.85])
+        h5.create_dataset("emitter_positions_nm", data=np.zeros((3, 3)))
+
+    with pytest.raises(ValueError, match="energy_eV length"):
+        _read_green_component(path, "varguet_effective")
 
 
 def test_project_separation_green_to_pair_maps_chain_separations():
