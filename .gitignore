@@ -1,5 +1,6 @@
 # Personal simulation results
 outputs/
+local/
 data/*
 !data/example/
 test/BEM/
