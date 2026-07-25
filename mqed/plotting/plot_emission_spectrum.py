@@ -110,19 +110,19 @@ def _plot_map(spectrum: np.ndarray, emission_energy_eV: np.ndarray, transition_e
     ps = cfg.plot_settings
     fig, ax = plt.subplots(figsize=tuple(ps.get("figsize", [7, 5])))
     image = ax.imshow(
-        spectrum,
+        spectrum.T,
         origin="lower",
         aspect="auto",
         extent=[
-            float(emission_energy_eV[0]),
-            float(emission_energy_eV[-1]),
             float(transition_energy_eV[0]),
             float(transition_energy_eV[-1]),
+            float(emission_energy_eV[0]),
+            float(emission_energy_eV[-1]),
         ],
         cmap=ps.get("cmap", "viridis"),
     )
-    ax.set_xlabel(ps.get("xlabel", "Emission energy (eV)"))
-    ax.set_ylabel(ps.get("map_ylabel", ps.get("ylabel", "Transition energy (eV)")))
+    ax.set_xlabel(ps.get("map_xlabel", ps.get("xlabel", r"Transition energy $\omega_0$ (eV)")))
+    ax.set_ylabel(ps.get("map_ylabel", ps.get("ylabel", r"Emission energy $\omega$ (eV)")))
     ax.set_title(ps.get("title", "Emission spectrum"))
     cbar = fig.colorbar(image, ax=ax)
     cbar.set_label(ps.get("colorbar_label", "D(ω)"))

@@ -1,6 +1,6 @@
 defaults:
+  - hydra: default
   - _self_
-  - override hydra/job_logging: default
 
 hydra:
   job:
@@ -23,9 +23,10 @@ plot_settings:
   transition_values_eV: []
   transition_value_tolerance_eV: 1.0e-9
   label_template: "ω0 = {omega0:.3f} eV"
+  map_xlabel: 'Transition energy $\omega_0$ (eV)'
   xlabel: "Emission energy (eV)"
   ylabel: "D(ω)"
-  map_ylabel: "Transition energy (eV)"
+  map_ylabel: 'Emission energy $\omega$ (eV)'
   curve_ylabel: "D(ω)"
   title: "Emission spectrum"
   colorbar_label: "D(ω)"

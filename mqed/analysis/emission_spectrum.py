@@ -126,6 +126,39 @@ def project_separation_green_to_pair(
     return projected
 
 
+def _separation_tensor_to_pair(
+    G_separation: np.ndarray,
+    Rx_nm: np.ndarray,
+    n_emitters: int,
+    d_nm: float,
+    tolerance_nm: float = 1e-6,
+) -> np.ndarray:
+    G_separation = np.asarray(G_separation)
+    Rx_nm = np.asarray(Rx_nm, dtype=float)
+    if G_separation.ndim != 4 or G_separation.shape[-2:] != (3, 3):
+        raise ValueError(
+            f"Separation Green tensor must have shape (M,K,3,3), got {G_separation.shape}."
+        )
+    pair = np.zeros((G_separation.shape[0], n_emitters, n_emitters, 3, 3), dtype=complex)
+    for alpha in range(n_emitters):
+        for beta in range(n_emitters):
+            separation_nm = abs(alpha - beta) * d_nm
+            matches = np.where(np.isclose(Rx_nm, separation_nm, rtol=0.0, atol=tolerance_nm))[0]
+            if matches.size == 0:
+                nearest = int(np.argmin(np.abs(Rx_nm - separation_nm)))
+                raise ValueError(
+                    f"No Rx_nm entry for emitter pair ({alpha},{beta}) separation "
+                    f"{separation_nm:g} nm within {tolerance_nm:g} nm; nearest is "
+                    f"Rx_nm[{nearest}]={Rx_nm[nearest]:g} nm."
+                )
+            pair[:, alpha, beta] = G_separation[:, int(matches[0])]
+    return pair
+
+
+def _project_tensor_pair(G_pair: np.ndarray, orientations: np.ndarray) -> np.ndarray:
+    return np.einsum("ia,mijab,jb->mij", orientations, G_pair, orientations)
+
+
 def self_energy_from_projected_green(
     projected_G: np.ndarray,
     energy_eV: np.ndarray,
@@ -217,8 +250,80 @@ def compute_emission_spectrum(
     return spectra
 
 
-def _read_green_component(input_path: Path, component: str) -> dict[str, Any]:
+def _validate_separation_green_data(
+    primary: np.ndarray,
+    vacuum: np.ndarray,
+    energy_dataset: h5py.Dataset,
+    rx_dataset: h5py.Dataset,
+    primary_name: str,
+) -> None:
+    if primary.ndim != 4 or primary.shape[-2:] != (3, 3):
+        raise ValueError(
+            "Separation Green tensors must have shape (M,K,3,3); "
+            f"got {primary_name} shape {primary.shape}."
+        )
+    if vacuum.shape != primary.shape:
+        raise ValueError(
+            "Separation effective Green tensors require matching shapes; "
+            f"got {primary_name} {primary.shape} and vacuum {vacuum.shape}."
+        )
+    if energy_dataset.shape != (primary.shape[0],):
+        raise ValueError(
+            f"energy_eV length must match M={primary.shape[0]}; got shape {energy_dataset.shape}."
+        )
+    if rx_dataset.shape != (primary.shape[1],):
+        raise ValueError(f"Rx_nm length must match K={primary.shape[1]}; got shape {rx_dataset.shape}.")
+
+
+def _read_structure_with_fallback(h5: h5py.File, layout: str) -> np.ndarray:
+    if "green_function_structure" in h5:
+        return h5["green_function_structure"][:]
+    total = h5["green_function_total"][:]
+    vacuum = h5["green_function_vacuum"][:]
+    if total.shape != vacuum.shape:
+        raise ValueError(
+            "Structure fallback requires matching shapes for total/vacuum; "
+            f"got total {total.shape} and vacuum {vacuum.shape}."
+        )
+    logger.warning("green_function_structure absent for {} layout; using total-vacuum.", layout)
+    return total - vacuum
+
+
+def _apply_effective_pair_convention(
+    component_key: str,
+    structure: np.ndarray,
+    vacuum: np.ndarray,
+) -> np.ndarray:
+    if component_key == "renormalized_total":
+        G = structure + vacuum
+    else:
+        G = structure + np.real(vacuum)
+    diagonal = np.arange(G.shape[1])
+    G[:, diagonal, diagonal] = structure[:, diagonal, diagonal]
+    return G
+
+
+def _apply_effective_separation_convention(
+    component_key: str,
+    structure: np.ndarray,
+    vacuum: np.ndarray,
+    rx_nm: np.ndarray,
+) -> np.ndarray:
+    G = np.array(structure, copy=True)
+    rx_nm = np.asarray(rx_nm, dtype=float)
+    nonzero = ~np.isclose(rx_nm, 0.0, rtol=0.0, atol=1e-9)
+    if component_key == "renormalized_total":
+        G[:, nonzero] = structure[:, nonzero] + vacuum[:, nonzero]
+    else:
+        G[:, nonzero] = structure[:, nonzero] + np.real(vacuum[:, nonzero])
+    return G
+
+
+def _read_green_component(input_path: Path, component: str, channel: str = "full") -> dict[str, Any]:
     component_key = str(component).strip().lower()
+    channel_key = str(channel).strip().lower()
+    if channel_key not in {"full", "te", "tm"}:
+        raise ValueError("green_channel must be 'full', 'te', or 'tm'.")
     dataset_by_component = {
         "total": "green_function_total",
         "vacuum": "green_function_vacuum",
@@ -226,23 +331,54 @@ def _read_green_component(input_path: Path, component: str) -> dict[str, Any]:
         "scattered": "green_function_structure",
     }
     dataset_name = dataset_by_component.get(component_key)
-    is_varguet_effective = component_key == "varguet_effective"
-    if dataset_name is None and not is_varguet_effective:
+    is_effective = component_key in {"varguet_effective", "renormalized_total"}
+    if dataset_name is None and not is_effective:
         raise ValueError(
             "green_component must be 'total', 'vacuum', 'structure', 'scattered', "
-            "or 'varguet_effective'."
+            "'varguet_effective', or 'renormalized_total'."
         )
+    if channel_key in {"te", "tm"} and component_key not in {
+        "structure",
+        "scattered",
+        "varguet_effective",
+        "renormalized_total",
+    }:
+        raise ValueError("green_channel='te' or 'tm' is only defined for structure/effective components.")
 
     with h5py.File(input_path, "r") as h5:
         layout = h5.attrs.get("gf_layout", "separation")
         if isinstance(layout, bytes):
             layout = layout.decode()
-        if is_varguet_effective:
-            if layout != "pair":
-                raise ValueError("green_component='varguet_effective' requires pair-layout data.")
+        convention = component_key
+        if channel_key in {"te", "tm"}:
+            channel_dataset = f"green_function_scattering_{channel_key}"
+            if channel_dataset not in h5:
+                raise KeyError(f"Missing dataset {channel_dataset!r} in {input_path}.")
+            G = h5[channel_dataset][:]
             vacuum = h5["green_function_vacuum"][:]
-            if "green_function_structure" in h5:
-                structure = h5["green_function_structure"][:]
+            if layout == "pair":
+                _validate_pair_green_data(
+                    G,
+                    vacuum,
+                    h5["energy_eV"],
+                    h5["emitter_positions_nm"],
+                    primary_name=channel_dataset,
+                )
+            elif layout == "separation":
+                _validate_separation_green_data(
+                    G,
+                    vacuum,
+                    h5["energy_eV"],
+                    h5["Rx_nm"],
+                    primary_name=channel_dataset,
+                )
+            else:
+                raise ValueError(f"green_channel='{channel_key}' is not supported for {layout} layout.")
+            convention = f"{channel_key}_scattering_only"
+        elif is_effective:
+            vacuum = h5["green_function_vacuum"][:]
+            structure = _read_structure_with_fallback(h5, layout)
+            if layout == "pair":
                 _validate_pair_green_data(
                     structure,
                     vacuum,
@@ -250,19 +386,23 @@ def _read_green_component(input_path: Path, component: str) -> dict[str, Any]:
                     h5["emitter_positions_nm"],
                     primary_name="structure",
                 )
-            else:
-                total = h5["green_function_total"][:]
-                _validate_pair_green_data(
-                    total,
+                G = _apply_effective_pair_convention(component_key, structure, vacuum)
+            elif layout == "separation":
+                _validate_separation_green_data(
+                    structure,
                     vacuum,
                     h5["energy_eV"],
-                    h5["emitter_positions_nm"],
-                    primary_name="total",
+                    h5["Rx_nm"],
+                    primary_name="structure",
                 )
-                structure = total - vacuum
-            G = structure + np.real(vacuum)
-            diagonal = np.arange(G.shape[1])
-            G[:, diagonal, diagonal] = structure[:, diagonal, diagonal]
+                G = _apply_effective_separation_convention(
+                    component_key,
+                    structure,
+                    vacuum,
+                    h5["Rx_nm"][:].astype(float),
+                )
+            else:
+                raise ValueError(f"green_component='{component_key}' is not supported for {layout} layout.")
         elif dataset_name not in h5:
             if component_key in {"structure", "scattered"}:
                 logger.warning(
@@ -279,6 +419,9 @@ def _read_green_component(input_path: Path, component: str) -> dict[str, Any]:
             "G": G,
             "energy_eV": h5["energy_eV"][:].astype(float),
             "gf_layout": layout,
+            "green_component": component_key,
+            "green_channel": channel_key,
+            "green_convention": convention,
         }
         if layout == "pair":
             data["emitter_positions_nm"] = h5["emitter_positions_nm"][:].astype(float)
@@ -354,6 +497,29 @@ def _bright_weights(cfg, n_emitters: int) -> np.ndarray | None:
     return weights
 
 
+def _separation_chain_parameters(cfg: Any) -> tuple[int, float, float]:
+    n_raw = cfg.get("n_emitters", cfg.get("N_mol", None))
+    d_raw = cfg.get("d_nm", None)
+    if n_raw is None or d_raw is None:
+        raise ValueError(
+            "Separation-layout emission analysis requires explicit n_emitters (or N_mol) "
+            "and d_nm."
+        )
+    if isinstance(n_raw, bool):
+        raise ValueError("n_emitters must be a positive integer, not a boolean.")
+    n_value = float(n_raw)
+    if not np.isfinite(n_value) or not n_value.is_integer() or n_value <= 0.0:
+        raise ValueError("n_emitters must be a positive integer.")
+    n_emitters = int(n_value)
+    d_nm = float(d_raw)
+    tolerance_nm = float(cfg.get("rx_tolerance_nm", 1e-6))
+    if not np.isfinite(d_nm) or d_nm <= 0.0:
+        raise ValueError("d_nm must be finite and positive.")
+    if not np.isfinite(tolerance_nm) or tolerance_nm < 0.0:
+        raise ValueError("rx_tolerance_nm must be finite and non-negative.")
+    return n_emitters, d_nm, tolerance_nm
+
+
 def _save_emission_h5(filepath: Path, data: dict[str, Any]) -> None:
     filepath.parent.mkdir(parents=True, exist_ok=True)
     with h5py.File(filepath, "w") as h5:
@@ -374,7 +540,8 @@ def run_from_config(cfg: Any, output_dir: Path, original_cwd: Path | None = None
         input_path = original_cwd / input_path
 
     green_component = str(cfg.get("green_component", "total"))
-    green_data = _read_green_component(input_path, green_component)
+    green_channel = str(cfg.get("green_channel", "full"))
+    green_data = _read_green_component(input_path, green_component, green_channel)
     energy_eV = green_data["energy_eV"]
     gf_layout = green_data["gf_layout"]
     G = green_data["G"]
@@ -388,16 +555,17 @@ def run_from_config(cfg: Any, output_dir: Path, original_cwd: Path | None = None
         )
         projected_G = project_pair_green(G, orientations)
     elif gf_layout == "separation":
-        n_emitters = int(cfg.get("n_emitters", cfg.get("N_mol", 2)))
-        d_nm = float(cfg.get("d_nm", 1.0))
+        n_emitters, d_nm, tolerance_nm = _separation_chain_parameters(cfg)
         orientations = resolve_emitter_orientations(cfg, n_emitters)
-        projected_G = project_separation_green_to_pair(
-            G,
-            green_data["Rx_nm"],
-            n_emitters,
-            d_nm,
+        projected_G = _project_tensor_pair(
+            _separation_tensor_to_pair(
+                G,
+                green_data["Rx_nm"],
+                n_emitters,
+                d_nm,
+                tolerance_nm=tolerance_nm,
+            ),
             orientations,
-            tolerance_nm=float(cfg.get("rx_tolerance_nm", 1e-6)),
         )
     else:
         raise ValueError(f"Unknown GF layout: {gf_layout}")
@@ -407,6 +575,9 @@ def run_from_config(cfg: Any, output_dir: Path, original_cwd: Path | None = None
     transition_energy_eV = _transition_grid(cfg, energy_eV)
     shift_method = str(cfg.get("shift_method", "real_green"))
     normalize = bool(cfg.get("normalize", False))
+    if not np.all(np.isfinite(projected_G)):
+        invalid = np.argwhere(~np.isfinite(projected_G))[0]
+        raise FloatingPointError(f"Selected/projected Green tensor contains non-finite data at index {tuple(invalid)}.")
     self_energy_eV = self_energy_from_projected_green(
         projected_G,
         energy_eV,
@@ -422,11 +593,14 @@ def run_from_config(cfg: Any, output_dir: Path, original_cwd: Path | None = None
         normalize=normalize,
     )
 
-    output_prefix = str(cfg.get("output_prefix", "emission_spectrum"))
-    output_file = output_dir / (
-        f"{output_prefix}_Emin_{energy_eV[0]:.3f}_Emax_{energy_eV[-1]:.3f}_"
-        f"{len(energy_eV)}pts.h5"
-    )
+    output_filename = cfg.get("output_filename", None)
+    if output_filename is None:
+        output_prefix = str(cfg.get("output_prefix", "emission_spectrum"))
+        output_filename = (
+            f"{output_prefix}_Emin_{energy_eV[0]:.3f}_Emax_{energy_eV[-1]:.3f}_"
+            f"{len(energy_eV)}pts.h5"
+        )
+    output_file = output_dir / str(output_filename)
     result = {
         "emission_spectrum": emission_spectrum,
         "emission_energy_eV": energy_eV,
@@ -436,6 +610,8 @@ def run_from_config(cfg: Any, output_dir: Path, original_cwd: Path | None = None
         "emitter_orientations": orientations,
         "gf_layout": str(gf_layout),
         "green_component": green_component,
+        "green_channel": green_data["green_channel"],
+        "green_convention": green_data["green_convention"],
         "shift_method": shift_method,
         "mu_debye": mu_debye,
         "gamma0_eV": gamma0_eV,
