@@ -7,17 +7,17 @@ near plasmonic interfaces using macroscopic quantum electrodynamics.
 Latest Update
 -------------
 
-**Version 1.4.1** stabilizes DBP-in-DBR Green-tensor calculations and adds direct
-physical-coupling analysis. The N-layer workflow now keeps the DBP emitter in the
-intended zero-based source layer, rejects non-finite tensors before caching, and
-avoids algebraic high-q overflow for off-center source positions.
+**Version 1.4.2** adds optional TE/TM-resolved scattering output to the N-layer
+solver while preserving the existing total/vacuum-only schema by default.
+Stored structure tensors satisfy ``structure = TE + TM`` and can be selected
+independently by downstream collective-emission analysis.
 
-The new ``mqed_plot_dbr_couplings`` command projects separation-indexed Green
-tensors onto donor and acceptor orientations and plots signed or absolute
-``V_ij`` and ``hbarGamma_ij`` values without vacuum-normalized enhancement
-ratios. Ordered ``Rx_nm`` selection can combine dense near-field samples with
-sparse far-field DBR points, using strict or nearest-grid matching with complete
-HDF5, CSV, and PNG provenance.
+Emission workflows now support Varguet-effective and renormalized-total Green
+matrices for separation-indexed chains as well as pair-indexed geometries.  The
+verified sphere-ring workflow persists its emitter positions and orientations,
+and emission maps follow the literature convention with transition energy on
+the horizontal axis and emission energy on the vertical axis. Personal or
+unpublished Hydra configurations can remain under the ignored ``local/`` tree.
 
 .. image:: _static/workflow_diagram.png
    :width: 600
