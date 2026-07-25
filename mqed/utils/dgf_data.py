@@ -77,6 +77,11 @@ def save_gf_h5(
     Rxnm: np.ndarray,
     zD: float,
     zA: float,
+    *,
+    Gstructure: np.ndarray | None = None,
+    G_scattering_te: np.ndarray | None = None,
+    G_scattering_tm: np.ndarray | None = None,
+    attrs: Dict[str, Any] | None = None,
 ) -> None:
     """Save separation-indexed Green's function arrays to HDF5.
 
@@ -88,16 +93,44 @@ def save_gf_h5(
         Rxnm:    Separation grid in nm, shape ``(K,)``.
         zD:      Source (donor) z-position in meters.
         zA:      Observer (acceptor) z-position in meters.
+        Gstructure: Optional scattering/structure Green tensor, same shape as ``Gtot``.
+        G_scattering_te: Optional TE scattering tensor, same shape as ``Gtot``.
+        G_scattering_tm: Optional TM scattering tensor, same shape as ``Gtot``.
+        attrs: Optional root attributes.
     """
+    total = np.asarray(Gtot)
+    vacuum = np.asarray(Gvac)
+    if total.shape != vacuum.shape:
+        raise ValueError(f"Gtot and Gvac must have matching shapes; got {total.shape} and {vacuum.shape}.")
+    optional_arrays = {
+        "Gstructure": Gstructure,
+        "G_scattering_te": G_scattering_te,
+        "G_scattering_tm": G_scattering_tm,
+    }
+    for name, values in optional_arrays.items():
+        if values is not None and np.asarray(values).shape != total.shape:
+            raise ValueError(f"{name} must have shape {total.shape}; got {np.asarray(values).shape}.")
+
     with h5py.File(h5_path, "w") as f:
         f.attrs["gf_layout"] = "separation"
-        f.create_dataset("green_function_total", data=Gtot)
-        f.create_dataset("green_function_vacuum", data=Gvac)
+        f.create_dataset("green_function_total", data=total)
+        f.create_dataset("green_function_vacuum", data=vacuum)
         f.create_dataset("energy_eV", data=E)
         f.create_dataset("Rx_nm", data=Rxnm)
         pos = f.create_group("position_fixed")
         pos.attrs["zD_meters"] = zD
         pos.attrs["zA_meters"] = zA
+        _write_optional_common_metadata(
+            f,
+            Gstructure=None if Gstructure is None else np.asarray(Gstructure),
+            wavelength_m=None,
+            observer_region=None,
+            attrs=attrs,
+        )
+        if G_scattering_te is not None:
+            f.create_dataset("green_function_scattering_te", data=np.asarray(G_scattering_te))
+        if G_scattering_tm is not None:
+            f.create_dataset("green_function_scattering_tm", data=np.asarray(G_scattering_tm))
 
 
 # ── Pair-indexed (arbitrary geometry) ────────────────────────────────
@@ -326,6 +359,10 @@ def load_gf_h5(h5_path: str) -> Dict[str, np.ndarray]:
                 result["G_structure"] = f["green_function_structure"][:]
             elif "G_structure" in f:
                 result["G_structure"] = f["G_structure"][:]
+            if "green_function_scattering_te" in f:
+                result["G_scattering_te"] = f["green_function_scattering_te"][:]
+            if "green_function_scattering_tm" in f:
+                result["G_scattering_tm"] = f["green_function_scattering_tm"][:]
 
             if layout == "pair":
                 result["emitter_positions_nm"] = f["emitter_positions_nm"][:].astype(float)

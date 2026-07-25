@@ -72,8 +72,15 @@ def _require_finite_green_results(
     vacuum: np.ndarray,
     energy_eV: float,
     rx_values_m: np.ndarray,
+    scattering_te: np.ndarray | None = None,
+    scattering_tm: np.ndarray | None = None,
 ) -> None:
-    for dataset_name, values in (("total", total), ("vacuum", vacuum)):
+    datasets = [("total", total), ("vacuum", vacuum)]
+    if scattering_te is not None:
+        datasets.append(("scattering_te", scattering_te))
+    if scattering_tm is not None:
+        datasets.append(("scattering_tm", scattering_tm))
+    for dataset_name, values in datasets:
         invalid = np.argwhere(~np.isfinite(values))
         if invalid.size == 0:
             continue
@@ -83,6 +90,34 @@ def _require_finite_green_results(
             f"Rx index {rx_index} ({rx_values_m[rx_index] * 1e9:.6g} nm), "
             f"component ({row}, {column}). Check stack.source_layer and integration settings."
         )
+
+
+def _require_polarization_identities(
+    total: np.ndarray,
+    vacuum: np.ndarray,
+    scattering_te: np.ndarray,
+    scattering_tm: np.ndarray,
+    energy_eV: float,
+) -> np.ndarray:
+    structure = scattering_te + scattering_tm
+    if total.shape != vacuum.shape or total.shape != structure.shape:
+        raise ValueError(
+            "Polarization output arrays must match total/vacuum shape; got "
+            f"total {total.shape}, vacuum {vacuum.shape}, TE {scattering_te.shape}, "
+            f"TM {scattering_tm.shape}."
+        )
+    if not np.allclose(total, vacuum + structure, rtol=1e-8, atol=1e-12):
+        mismatch = float(np.max(np.abs(total - vacuum - structure)))
+        raise FloatingPointError(
+            f"TE/TM algebraic identity failed at energy {energy_eV:.6f} eV; "
+            f"max |total-vacuum-TE-TM|={mismatch:.3e}."
+        )
+    return structure
+
+
+def _save_polarization_components(cfg) -> bool:
+    output_cfg = cfg.get("output", {})
+    return bool(output_cfg.get("save_polarization_components", False)) if output_cfg else False
 
 
 def _energy_grid(sim_params):
@@ -113,9 +148,20 @@ def _compute_one_energy(
     materials_cfg,
     integ_cfg,
     rx_progress_desc: str | None = None,
+    save_polarization_components: bool = False,
 ):
     omega = 2 * np.pi * c / lambda_m
-    integration_method = "direct" if integ_cfg is None else str(integ_cfg.get("method", "direct"))
+    integration_method = (
+        "direct"
+        if integ_cfg is None
+        else str(integ_cfg.get("method", "direct")).strip().lower()
+    )
+    if save_polarization_components and integration_method == "componentwise":
+        raise ValueError(
+            "output.save_polarization_components=true is not supported with "
+            "simulation.integration.method=componentwise. Componentwise integrates assembled "
+            "tensor entries and cannot safely return same-run TE/TM scattering components."
+        )
     layers = build_layers(stack_cfg, materials_cfg, omega)
     calculator = NLayerGreenFunction(
         layers=layers,
@@ -176,21 +222,42 @@ def _compute_one_energy(
 
     total = np.zeros((len(rx_values_m), 3, 3), dtype=complex)
     vacuum = np.zeros_like(total)
+    scattering_te = np.zeros_like(total) if save_polarization_components else None
+    scattering_tm = np.zeros_like(total) if save_polarization_components else None
     if integration_method == "fixed_grid":
-        total[:] = calculator.calculate_total_Green_functions_for_x_values(
-            rx_values_m,
-            y=0.0,
-            z_observer=z_observer,
-            z_source=z_source,
-        )
-        for rx_index, rx_m in enumerate(rx_values_m):
-            vacuum[rx_index] = calculator.vacuum_component(
-                x=rx_m,
+        if save_polarization_components:
+            total[:], vacuum[:], scattering_te[:], scattering_tm[:] = (
+                calculator.calculate_Green_function_components_for_x_values(
+                    rx_values_m,
+                    y=0.0,
+                    z_observer=z_observer,
+                    z_source=z_source,
+                )
+            )
+        else:
+            total[:] = calculator.calculate_total_Green_functions_for_x_values(
+                rx_values_m,
                 y=0.0,
                 z_observer=z_observer,
                 z_source=z_source,
             )
-        _require_finite_green_results(total, vacuum, energy_eV, rx_values_m)
+            for rx_index, rx_m in enumerate(rx_values_m):
+                vacuum[rx_index] = calculator.vacuum_component(
+                    x=rx_m,
+                    y=0.0,
+                    z_observer=z_observer,
+                    z_source=z_source,
+                )
+        _require_finite_green_results(total, vacuum, energy_eV, rx_values_m, scattering_te, scattering_tm)
+        if save_polarization_components:
+            structure = _require_polarization_identities(
+                total,
+                vacuum,
+                scattering_te,
+                scattering_tm,
+                energy_eV,
+            )
+            return idx, total, vacuum, structure, scattering_te, scattering_tm
         return idx, total, vacuum
 
     rx_iter = enumerate(rx_values_m)
@@ -198,26 +265,52 @@ def _compute_one_energy(
         rx_iter = enumerate(tqdm(rx_values_m, desc=rx_progress_desc, ncols=100, leave=False))
 
     for rx_index, rx_m in rx_iter:
-        total[rx_index] = calculator.calculate_total_Green_function(
-            x=rx_m,
-            y=0.0,
-            z_observer=z_observer,
-            z_source=z_source,
-        )
-        vacuum[rx_index] = calculator.vacuum_component(
-            x=rx_m,
-            y=0.0,
-            z_observer=z_observer,
-            z_source=z_source,
-        )
+        if save_polarization_components:
+            (
+                total[rx_index],
+                vacuum[rx_index],
+                scattering_te[rx_index],
+                scattering_tm[rx_index],
+            ) = calculator.calculate_Green_function_components(
+                x=rx_m,
+                y=0.0,
+                z_observer=z_observer,
+                z_source=z_source,
+            )
+        else:
+            total[rx_index] = calculator.calculate_total_Green_function(
+                x=rx_m,
+                y=0.0,
+                z_observer=z_observer,
+                z_source=z_source,
+            )
+            vacuum[rx_index] = calculator.vacuum_component(
+                x=rx_m,
+                y=0.0,
+                z_observer=z_observer,
+                z_source=z_source,
+            )
 
-    _require_finite_green_results(total, vacuum, energy_eV, rx_values_m)
+    _require_finite_green_results(total, vacuum, energy_eV, rx_values_m, scattering_te, scattering_tm)
+    if save_polarization_components:
+        structure = _require_polarization_identities(
+            total,
+            vacuum,
+            scattering_te,
+            scattering_tm,
+            energy_eV,
+        )
+        return idx, total, vacuum, structure, scattering_te, scattering_tm
     return idx, total, vacuum
 
 
 def _run_sequential(energy_ev_array, target_lambdas_m, rx_values_m, cfg):
     results_total = np.zeros((len(energy_ev_array), len(rx_values_m), 3, 3), dtype=complex)
     results_vacuum = np.zeros_like(results_total)
+    save_components = _save_polarization_components(cfg)
+    results_structure = np.zeros_like(results_total) if save_components else None
+    results_scattering_te = np.zeros_like(results_total) if save_components else None
+    results_scattering_tm = np.zeros_like(results_total) if save_components else None
     sim_params = cfg.simulation
     z_source = _position_m(sim_params.position, "zD", "zD_nm")
     z_observer = _position_m(sim_params.position, "zA", "zA_nm")
@@ -225,7 +318,7 @@ def _run_sequential(energy_ev_array, target_lambdas_m, rx_values_m, cfg):
 
     for energy_index in tqdm(range(len(energy_ev_array)), desc="Energies", ncols=100):
         logger.info("N-layer energy {}/{}: {:.3f} eV", energy_index + 1, len(energy_ev_array), energy_ev_array[energy_index])
-        _, total, vacuum = _compute_one_energy(
+        result = _compute_one_energy(
             idx=energy_index,
             energy_eV=energy_ev_array[energy_index],
             lambda_m=target_lambdas_m[energy_index],
@@ -236,10 +329,20 @@ def _run_sequential(energy_ev_array, target_lambdas_m, rx_values_m, cfg):
             materials_cfg=cfg.materials,
             integ_cfg=getattr(sim_params, "integration", None),
             rx_progress_desc="Rx points" if show_rx_progress else None,
+            save_polarization_components=save_components,
         )
+        if save_components:
+            _, total, vacuum, structure, scattering_te, scattering_tm = result
+            results_structure[energy_index] = structure
+            results_scattering_te[energy_index] = scattering_te
+            results_scattering_tm[energy_index] = scattering_tm
+        else:
+            _, total, vacuum = result
         results_total[energy_index] = total
         results_vacuum[energy_index] = vacuum
 
+    if save_components:
+        return results_total, results_vacuum, results_structure, results_scattering_te, results_scattering_tm
     return results_total, results_vacuum
 
 
@@ -248,6 +351,7 @@ def _run_joblib(energy_ev_array, target_lambdas_m, rx_values_m, cfg, n_jobs: int
     from mqed.utils.joblib_track import tqdm_joblib
 
     sim_params = cfg.simulation
+    save_components = _save_polarization_components(cfg)
     z_source = _position_m(sim_params.position, "zD", "zD_nm")
     z_observer = _position_m(sim_params.position, "zA", "zA_nm")
     stack_plain = OmegaConf.create(OmegaConf.to_container(cfg.stack, resolve=True))
@@ -267,12 +371,24 @@ def _run_joblib(energy_ev_array, target_lambdas_m, rx_values_m, cfg, n_jobs: int
                 stack_cfg=stack_plain,
                 materials_cfg=materials_plain,
                 integ_cfg=integ_plain,
+                save_polarization_components=save_components,
             )
             for energy_index in range(len(energy_ev_array))
         )
 
     results_total = np.zeros((len(energy_ev_array), len(rx_values_m), 3, 3), dtype=complex)
     results_vacuum = np.zeros_like(results_total)
+    if save_components:
+        results_structure = np.zeros_like(results_total)
+        results_scattering_te = np.zeros_like(results_total)
+        results_scattering_tm = np.zeros_like(results_total)
+        for idx, total, vacuum, structure, scattering_te, scattering_tm in raw_results:
+            results_total[idx] = total
+            results_vacuum[idx] = vacuum
+            results_structure[idx] = structure
+            results_scattering_te[idx] = scattering_te
+            results_scattering_tm[idx] = scattering_tm
+        return results_total, results_vacuum, results_structure, results_scattering_te, results_scattering_tm
     for idx, total, vacuum in raw_results:
         results_total[idx] = total
         results_vacuum[idx] = vacuum
@@ -288,6 +404,7 @@ def _run_mpi(energy_ev_array, target_lambdas_m, rx_values_m, cfg):
     n_energy = len(energy_ev_array)
     n_rx = len(rx_values_m)
     sim_params = cfg.simulation
+    save_components = _save_polarization_components(cfg)
     z_source = _position_m(sim_params.position, "zD", "zD_nm")
     z_observer = _position_m(sim_params.position, "zA", "zA_nm")
     stack_plain = OmegaConf.create(OmegaConf.to_container(cfg.stack, resolve=True))
@@ -324,6 +441,7 @@ def _run_mpi(energy_ev_array, target_lambdas_m, rx_values_m, cfg):
                 stack_cfg=stack_plain,
                 materials_cfg=materials_plain,
                 integ_cfg=integ_plain,
+                save_polarization_components=save_components,
             )
         )
 
@@ -333,6 +451,18 @@ def _run_mpi(energy_ev_array, target_lambdas_m, rx_values_m, cfg):
 
     results_total = np.zeros((n_energy, n_rx, 3, 3), dtype=complex)
     results_vacuum = np.zeros_like(results_total)
+    if save_components:
+        results_structure = np.zeros_like(results_total)
+        results_scattering_te = np.zeros_like(results_total)
+        results_scattering_tm = np.zeros_like(results_total)
+        for rank_results in all_results:
+            for idx, total, vacuum, structure, scattering_te, scattering_tm in rank_results:
+                results_total[idx] = total
+                results_vacuum[idx] = vacuum
+                results_structure[idx] = structure
+                results_scattering_te[idx] = scattering_te
+                results_scattering_tm[idx] = scattering_tm
+        return results_total, results_vacuum, results_structure, results_scattering_te, results_scattering_tm
     for rank_results in all_results:
         for idx, total, vacuum in rank_results:
             results_total[idx] = total
@@ -352,6 +482,12 @@ def run_simulation(cfg: DictConfig) -> None:
     sim_params = cfg.simulation
     integ_cfg = getattr(sim_params, "integration", None)
     integration_method = "direct" if integ_cfg is None else str(integ_cfg.get("method", "direct"))
+    save_components = _save_polarization_components(cfg)
+    if save_components and integration_method.strip().lower() == "componentwise":
+        raise ValueError(
+            "output.save_polarization_components=true is not supported with "
+            "simulation.integration.method=componentwise. Use a non-componentwise method."
+        )
     if integration_method.strip().lower() not in {
         "direct",
         "dcim",
@@ -379,14 +515,14 @@ def run_simulation(cfg: DictConfig) -> None:
         _maybe_auto_launch_mpi(parallel_cfg)
 
     if backend == "sequential":
-        results_total, results_vacuum = _run_sequential(
+        run_results = _run_sequential(
             energy_ev_array,
             target_lambdas_m,
             rx_values_m,
             cfg,
         )
     elif backend == "joblib":
-        results_total, results_vacuum = _run_joblib(
+        run_results = _run_joblib(
             energy_ev_array,
             target_lambdas_m,
             rx_values_m,
@@ -394,7 +530,7 @@ def run_simulation(cfg: DictConfig) -> None:
             int(parallel_cfg.get("n_jobs", -1)),
         )
     elif backend == "mpi":
-        results_total, results_vacuum = _run_mpi(
+        run_results = _run_mpi(
             energy_ev_array,
             target_lambdas_m,
             rx_values_m,
@@ -410,12 +546,24 @@ def run_simulation(cfg: DictConfig) -> None:
     else:
         raise ValueError("N-layer runner supports parallel.backend values: sequential, joblib, mpi.")
 
+    if save_components:
+        results_total, results_vacuum, results_structure, results_scattering_te, results_scattering_tm = run_results
+    else:
+        results_total, results_vacuum = run_results
+        results_structure = None
+        results_scattering_te = None
+        results_scattering_tm = None
+
     output_dir.mkdir(parents=True, exist_ok=True)
-    output_file = output_dir / (
-        f"{cfg.output.prefix}"
-        f"_Emin_{energy_ev_array[0]:.2f}_Emax_{energy_ev_array[-1]:.2f}_{len(energy_ev_array)}pts"
-        f"_Rx_{rx_values_nm[-1]:.0f}nm_{len(rx_values_nm)}pts.hdf5"
-    )
+    output_filename = cfg.output.get("filename", None)
+    if output_filename is None:
+        output_filename = (
+            f"{cfg.output.prefix}"
+            f"_Emin_{energy_ev_array[0]:.2f}_Emax_{energy_ev_array[-1]:.2f}_"
+            f"{len(energy_ev_array)}pts"
+            f"_Rx_{rx_values_nm[-1]:.0f}nm_{len(rx_values_nm)}pts.hdf5"
+        )
+    output_file = output_dir / str(output_filename)
     save_gf_h5(
         output_file,
         results_total,
@@ -424,6 +572,10 @@ def run_simulation(cfg: DictConfig) -> None:
         rx_values_nm,
         _position_m(sim_params.position, "zD", "zD_nm"),
         _position_m(sim_params.position, "zA", "zA_nm"),
+        Gstructure=results_structure,
+        G_scattering_te=results_scattering_te,
+        G_scattering_tm=results_scattering_tm,
+        attrs={"save_polarization_components": 1} if save_components else None,
     )
     logger.success("N-layer simulation complete. Output saved to: {}", output_file.absolute())
 

@@ -1,6 +1,8 @@
 import numpy as np
 import pytest
 from mqed.Dyadic_GF.GF_NLayer import LayerSpec, NLayerGreenFunction
+from mqed.Dyadic_GF.GF_Sommerfeld import Greens_function_analytical
+from mqed.utils.dgf_data import load_gf_h5, save_gf_h5
 from mqed.Dyadic_GF.dcim import (
     fit_exponentials,
     integrate_complex_images,
@@ -58,6 +60,140 @@ def test_nlayer_no_contrast_has_zero_scattering_kernels():
     kernels = solver.bessel_free_kernels(1.0e6, 40e-9, 40e-9)
 
     assert np.allclose(kernels, np.zeros(7, dtype=complex))
+
+
+def test_top_exterior_source_reduces_to_two_layer_sommerfeld_kernels():
+    energy_eV = 2.0
+    omega = energy_eV * 1.602176634e-19 / 1.054571817e-34
+    metal_epsilon = -10.0 + 0.5j
+    q = 1.5e7
+    z_observer = 30e-9
+    z_source = 45e-9
+    solver = NLayerGreenFunction(
+        layers=[
+            LayerSpec(epsilon=metal_epsilon, thickness_m=None),
+            LayerSpec(epsilon=1.0 + 0.0j, thickness_m=None),
+        ],
+        source_layer=1,
+        omega=omega,
+        qmax=2.0e7,
+    )
+    sommerfeld = Greens_function_analytical(
+        metal_epsi=metal_epsilon,
+        omega=omega,
+        eps_0=1.0,
+        qmax=2.0e7,
+    )
+
+    actual = solver.bessel_free_kernels(q, z_observer, z_source)
+    beta = sommerfeld._kz(0, q)
+    phase = np.exp(1j * beta * (z_observer + z_source))
+    reflection_s = sommerfeld._rs(q)
+    reflection_p = sommerfeld._rp(q)
+    expected = np.array(
+        [
+            reflection_s * q * phase / (2 * beta),
+            reflection_s * q * phase / (2 * beta),
+            reflection_p * q * beta * phase / (2 * solver.k0**2),
+            reflection_p * q * beta * phase / (2 * solver.k0**2),
+            1j * reflection_p * q**2 * phase / solver.k0**2,
+            1j * reflection_p * q**2 * phase / solver.k0**2,
+            reflection_p * q**3 * phase / (beta * solver.k0**2),
+        ],
+        dtype=complex,
+    )
+
+    assert np.allclose(actual, expected, rtol=1e-12, atol=1e-12)
+
+
+def test_top_exterior_source_runs_for_finite_silver_film_on_substrate():
+    energy_eV = 2.0
+    omega = energy_eV * 1.602176634e-19 / 1.054571817e-34
+    solver = NLayerGreenFunction(
+        layers=[
+            LayerSpec(epsilon=1.0 + 0.0j, thickness_m=None, name="bottom_air"),
+            LayerSpec(epsilon=15.8 + 0.24j, thickness_m=5e-6, name="substrate"),
+            LayerSpec(epsilon=-17.0 + 2.2j, thickness_m=100e-9, name="silver"),
+            LayerSpec(epsilon=1.0 + 0.0j, thickness_m=None, name="top_air"),
+        ],
+        source_layer=3,
+        omega=omega,
+        qmax_factor=4.0,
+        epsabs=1e-6,
+        epsrel=1e-6,
+        limit=80,
+        integration_method="direct",
+    )
+
+    tensor = solver.calculate_total_Green_function(12e-9, 0.0, 300e-9, 300e-9)
+
+    assert tensor.shape == (3, 3)
+    assert np.all(np.isfinite(tensor))
+
+
+def test_top_exterior_source_rejects_negative_interface_heights():
+    solver = NLayerGreenFunction(
+        layers=[
+            LayerSpec(epsilon=2.25 + 0.0j, thickness_m=None),
+            LayerSpec(epsilon=1.0 + 0.0j, thickness_m=None),
+        ],
+        source_layer=1,
+        omega=2.0e15,
+        qmax=1.0e7,
+    )
+
+    with pytest.raises(ValueError, match="finite non-negative heights"):
+        solver.bessel_free_kernels(1.0e6, -1e-9, 20e-9)
+
+
+@pytest.mark.parametrize("position", [np.nan, np.inf, -np.inf])
+def test_top_exterior_source_rejects_nonfinite_interface_heights(position):
+    solver = NLayerGreenFunction(
+        layers=[
+            LayerSpec(epsilon=2.25 + 0.0j, thickness_m=None),
+            LayerSpec(epsilon=1.0 + 0.0j, thickness_m=None),
+        ],
+        source_layer=1,
+        omega=2.0e15,
+        qmax=1.0e7,
+    )
+
+    with pytest.raises(ValueError, match="finite non-negative heights"):
+        solver.bessel_free_kernels(1.0e6, position, 20e-9)
+
+
+def test_top_exterior_airy_denominator_is_regular_at_zero_reflection():
+    solver = NLayerGreenFunction(
+        layers=[
+            LayerSpec(epsilon=1.0 + 0.0j, thickness_m=None),
+            LayerSpec(epsilon=1.0 + 0.0j, thickness_m=None),
+        ],
+        source_layer=1,
+        omega=2.0e15,
+        qmax=1.0e7,
+    )
+
+    assert solver.reflection_coefficient(1.0e6, "down", "p") == 0.0
+    assert np.isfinite(solver.airy_denominator(1.0e6, "p"))
+    assert solver.airy_denominator(1.0e6, "p") != 0.0
+
+
+def test_top_exterior_airy_denominator_vanishes_at_two_layer_spp():
+    metal_epsilon = -10.0 + 0.5j
+    solver = NLayerGreenFunction(
+        layers=[
+            LayerSpec(epsilon=metal_epsilon, thickness_m=None),
+            LayerSpec(epsilon=1.0 + 0.0j, thickness_m=None),
+        ],
+        source_layer=1,
+        omega=2.0e15,
+        qmax=2.0e7,
+    )
+    expected_q = solver.k0 * np.lib.scimath.sqrt(
+        metal_epsilon / (metal_epsilon + 1.0)
+    )
+
+    assert abs(solver.airy_denominator(expected_q, "p")) < 1e-8
 
 
 def test_nlayer_off_center_evanescent_kernels_remain_finite():
@@ -347,6 +483,95 @@ def test_compute_integrals_rejects_componentwise_api_ambiguity():
 
     with pytest.raises(ValueError, match="componentwise.*scattering tensor.*seven scalar"):
         solver.compute_integrals(20e-9, 40e-9, 40e-9)
+
+
+def test_scattering_components_from_integrals_split_te_tm_and_sum():
+    solver = NLayerGreenFunction(
+        layers=[
+            LayerSpec(epsilon=1.0 + 0.0j, thickness_m=None),
+            LayerSpec(epsilon=2.25 + 0.0j, thickness_m=80e-9),
+            LayerSpec(epsilon=1.0 + 0.0j, thickness_m=None),
+        ],
+        source_layer=1,
+        omega=2.0e15,
+        qmax=1.0e7,
+    )
+    integrals = np.arange(1, 8, dtype=float).astype(complex) + 0.5j
+
+    scattering, scattering_te, scattering_tm = solver.scattering_components_from_integrals(
+        20e-9,
+        10e-9,
+        integrals,
+    )
+
+    prefactor = 1j / (4 * np.pi)
+    assert np.allclose(scattering_te, prefactor * solver.scattering_s_component(20e-9, 10e-9, integrals))
+    assert np.allclose(scattering_tm, prefactor * solver.scattering_p_component(20e-9, 10e-9, integrals))
+    assert np.allclose(scattering, scattering_te + scattering_tm)
+    assert np.allclose(scattering, solver.scatter_component_from_integrals(20e-9, 10e-9, integrals))
+
+
+def test_green_function_components_reuse_one_integral_call(monkeypatch):
+    solver = NLayerGreenFunction(
+        layers=[
+            LayerSpec(epsilon=1.0 + 0.0j, thickness_m=None),
+            LayerSpec(epsilon=2.25 + 0.0j, thickness_m=80e-9),
+            LayerSpec(epsilon=1.0 + 0.0j, thickness_m=None),
+        ],
+        source_layer=1,
+        omega=2.0e15,
+        qmax=1.0e7,
+    )
+    calls = []
+
+    def fake_compute_integrals(rho, z_observer, z_source):
+        calls.append((rho, z_observer, z_source))
+        return np.arange(1, 8, dtype=float).astype(complex)
+
+    monkeypatch.setattr(solver, "compute_integrals", fake_compute_integrals)
+
+    total, vacuum, scattering_te, scattering_tm = solver.calculate_Green_function_components(
+        3e-9,
+        4e-9,
+        40e-9,
+        40e-9,
+    )
+
+    assert len(calls) == 1
+    assert np.isclose(calls[0][0], 5e-9)
+    assert np.allclose(total, vacuum + scattering_te + scattering_tm)
+
+
+def test_fixed_grid_components_reuse_one_batch_integral_call(monkeypatch):
+    solver = NLayerGreenFunction(
+        layers=[
+            LayerSpec(epsilon=1.0 + 0.0j, thickness_m=None),
+            LayerSpec(epsilon=2.25 + 0.0j, thickness_m=80e-9),
+            LayerSpec(epsilon=1.0 + 0.0j, thickness_m=None),
+        ],
+        source_layer=1,
+        omega=2.0e15,
+        qmax=1.0e7,
+        integration_method="fixed_grid",
+    )
+    calls = []
+
+    def fake_batch(rhos, z_observer, z_source):
+        calls.append((np.array(rhos), z_observer, z_source))
+        return np.tile(np.arange(1, 8, dtype=float).astype(complex), (len(rhos), 1))
+
+    monkeypatch.setattr(solver, "compute_integrals_fixed_grid_for_rhos", fake_batch)
+
+    total, vacuum, scattering_te, scattering_tm = solver.calculate_Green_function_components_for_x_values(
+        np.array([0.0, 3e-9]),
+        4e-9,
+        40e-9,
+        40e-9,
+    )
+
+    assert len(calls) == 1
+    assert total.shape == (2, 3, 3)
+    assert np.allclose(total, vacuum + scattering_te + scattering_tm)
 
 
 def test_componentwise_rho_zero_smoke_for_no_contrast_stack():
@@ -683,6 +908,180 @@ def test_compute_one_energy_passes_componentwise_method(monkeypatch):
     assert vacuum.shape == (2, 3, 3)
     assert captured["integration_method"] == "componentwise"
     assert captured["qmax_factor"] == 30.0
+
+
+def test_compute_one_energy_opt_in_returns_structure_and_polarization_arrays(monkeypatch):
+    main_nlayer = pytest.importorskip("mqed.Dyadic_GF.main_nlayer")
+
+    class AttrDict(dict):
+        def __getattr__(self, name):
+            try:
+                return self[name]
+            except KeyError as exc:
+                raise AttributeError(name) from exc
+
+    class FakeCalculator:
+        def __init__(self, **kwargs):
+            pass
+
+        def calculate_Green_function_components(self, x, y, z_observer, z_source):
+            vacuum = np.eye(3, dtype=complex)
+            scattering_te = np.eye(3, dtype=complex) * (2.0 + x)
+            scattering_tm = np.eye(3, dtype=complex) * (3.0 + y + z_observer + z_source)
+            return vacuum + scattering_te + scattering_tm, vacuum, scattering_te, scattering_tm
+
+    monkeypatch.setattr(
+        main_nlayer,
+        "build_layers",
+        lambda stack_cfg, materials_cfg, omega: [
+            LayerSpec(epsilon=1.0 + 0.0j, thickness_m=None),
+            LayerSpec(epsilon=2.25 + 0.0j, thickness_m=80e-9),
+            LayerSpec(epsilon=1.0 + 0.0j, thickness_m=None),
+        ],
+    )
+    monkeypatch.setattr(main_nlayer, "NLayerGreenFunction", FakeCalculator)
+
+    result = main_nlayer._compute_one_energy(
+        idx=0,
+        energy_eV=2.0,
+        lambda_m=600e-9,
+        rx_values_m=np.array([0.0, 10e-9]),
+        z_observer=40e-9,
+        z_source=40e-9,
+        stack_cfg=AttrDict({"source_layer": 1}),
+        materials_cfg=AttrDict({}),
+        integ_cfg=AttrDict({"method": "direct", "qmax": 2.0e7, "epsabs": 1e-6, "epsrel": 1e-6, "limit": 50, "split_propagating": False}),
+        save_polarization_components=True,
+    )
+
+    _, total, vacuum, structure, scattering_te, scattering_tm = result
+    assert total.shape == (2, 3, 3)
+    assert np.allclose(structure, scattering_te + scattering_tm)
+    assert np.allclose(total, vacuum + structure)
+
+
+def test_compute_one_energy_normalizes_fixed_grid_method(monkeypatch):
+    main_nlayer = pytest.importorskip("mqed.Dyadic_GF.main_nlayer")
+
+    class AttrDict(dict):
+        def __getattr__(self, name):
+            try:
+                return self[name]
+            except KeyError as exc:
+                raise AttributeError(name) from exc
+
+    calls = {"batch": 0}
+
+    class FakeCalculator:
+        def __init__(self, **kwargs):
+            assert kwargs["integration_method"] == "fixed_grid"
+
+        def calculate_total_Green_functions_for_x_values(self, x_values, **kwargs):
+            calls["batch"] += 1
+            return np.zeros((len(x_values), 3, 3), dtype=complex)
+
+        def vacuum_component(self, **kwargs):
+            return np.zeros((3, 3), dtype=complex)
+
+    monkeypatch.setattr(
+        main_nlayer,
+        "build_layers",
+        lambda stack_cfg, materials_cfg, omega: [
+            LayerSpec(epsilon=1.0 + 0.0j, thickness_m=None),
+            LayerSpec(epsilon=2.25 + 0.0j, thickness_m=80e-9),
+            LayerSpec(epsilon=1.0 + 0.0j, thickness_m=None),
+        ],
+    )
+    monkeypatch.setattr(main_nlayer, "NLayerGreenFunction", FakeCalculator)
+
+    main_nlayer._compute_one_energy(
+        idx=0,
+        energy_eV=2.0,
+        lambda_m=600e-9,
+        rx_values_m=np.array([0.0, 10e-9]),
+        z_observer=40e-9,
+        z_source=40e-9,
+        stack_cfg=AttrDict({"source_layer": 1}),
+        materials_cfg=AttrDict({}),
+        integ_cfg=AttrDict(
+            {
+                "method": " Fixed_Grid ",
+                "qmax": 2.0e7,
+                "epsabs": 1e-6,
+                "epsrel": 1e-6,
+                "limit": 50,
+                "split_propagating": False,
+            }
+        ),
+    )
+
+    assert calls["batch"] == 1
+
+
+def test_compute_one_energy_rejects_componentwise_polarization_output():
+    main_nlayer = pytest.importorskip("mqed.Dyadic_GF.main_nlayer")
+
+    class AttrDict(dict):
+        def __getattr__(self, name):
+            try:
+                return self[name]
+            except KeyError as exc:
+                raise AttributeError(name) from exc
+
+    with pytest.raises(ValueError, match="save_polarization_components.*componentwise"):
+        main_nlayer._compute_one_energy(
+            idx=0,
+            energy_eV=2.0,
+            lambda_m=600e-9,
+            rx_values_m=np.array([0.0]),
+            z_observer=40e-9,
+            z_source=40e-9,
+            stack_cfg=AttrDict({"source_layer": 1}),
+            materials_cfg=AttrDict({}),
+            integ_cfg=AttrDict({"method": "componentwise", "qmax": 2.0e7, "epsabs": 1e-6, "epsrel": 1e-6, "limit": 50, "split_propagating": False}),
+            save_polarization_components=True,
+        )
+
+
+def test_save_gf_h5_round_trips_optional_polarization_datasets(tmp_path):
+    path = tmp_path / "polarized_gf.h5"
+    total = np.ones((1, 2, 3, 3), dtype=complex) * 4.0
+    vacuum = np.ones_like(total)
+    scattering_te = np.ones_like(total) * 1.0
+    scattering_tm = np.ones_like(total) * 2.0
+    structure = scattering_te + scattering_tm
+
+    save_gf_h5(
+        str(path),
+        total,
+        vacuum,
+        np.array([2.0]),
+        np.array([0.0, 2.0]),
+        40e-9,
+        40e-9,
+        Gstructure=structure,
+        G_scattering_te=scattering_te,
+        G_scattering_tm=scattering_tm,
+        attrs={"source": "test"},
+    )
+    loaded = load_gf_h5(str(path))
+
+    assert np.allclose(loaded["G_structure"], structure)
+    assert np.allclose(loaded["G_scattering_te"], scattering_te)
+    assert np.allclose(loaded["G_scattering_tm"], scattering_tm)
+
+
+def test_save_gf_h5_default_schema_omits_optional_polarization_datasets(tmp_path):
+    path = tmp_path / "default_gf.h5"
+    total = np.ones((1, 1, 3, 3), dtype=complex)
+    vacuum = np.zeros_like(total)
+
+    save_gf_h5(str(path), total, vacuum, np.array([2.0]), np.array([0.0]), 0.0, 0.0)
+    loaded = load_gf_h5(str(path))
+
+    assert "G_structure" not in loaded
+    assert "G_scattering_te" not in loaded
+    assert "G_scattering_tm" not in loaded
 
 
 def test_dcim_family_routes_rho_zero_to_singularity_aware(monkeypatch):

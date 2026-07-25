@@ -4,8 +4,9 @@ The implementation follows the Tomas/Welsch convention used in
 ``local/derivation/multi_layer_GF.tex``.  Layers are ordered from bottom to
 top.  The first and last layers are normally semi-infinite; finite internal
 layers carry a physical thickness.  Source and observer are assumed to lie in
-the same layer, with their z-coordinates measured upward from that layer's
-lower interface.
+the same layer.  Coordinates in a finite source layer are measured upward from
+its lower interface; coordinates in the supported semi-infinite top exterior
+are non-negative heights above the top-stack interface.
 """
 
 from __future__ import annotations
@@ -79,8 +80,8 @@ class NLayerGreenFunction:
 
     where ``M_s`` and ``M_p`` are assembled from seven scalar Sommerfeld
     integrals.  The layer stack enters those integrals only through recursive
-    effective mirrors ``r_minus`` and ``r_plus`` and the source-layer Airy
-    denominator
+    effective mirrors ``r_minus`` and ``r_plus`` and, for a finite source
+    layer, the Airy denominator
 
     .. math::
 
@@ -379,15 +380,22 @@ class NLayerGreenFunction:
            R_{ij}^{p}=\frac{\epsilon_j\beta_i-\epsilon_i\beta_j}
            {\epsilon_j\beta_i+\epsilon_i\beta_j}.
         """
+        numerator, denominator = self._fresnel_terms(layer_i, layer_j, q, polarization)
+        return numerator / denominator
+
+    def _fresnel_terms(self, layer_i: int, layer_j: int, q, polarization: str):
         beta_i = self._kz(layer_i, q)
         beta_j = self._kz(layer_j, q)
+        scale = self.k0
 
         if polarization == "s":
-            return (beta_i - beta_j) / (beta_i + beta_j)
+            return (beta_i - beta_j) / scale, (beta_i + beta_j) / scale
         if polarization == "p":
             eps_i = self.eps[layer_i]
             eps_j = self.eps[layer_j]
-            return (eps_j * beta_i - eps_i * beta_j) / (eps_j * beta_i + eps_i * beta_j)
+            numerator = eps_j * beta_i - eps_i * beta_j
+            denominator = eps_j * beta_i + eps_i * beta_j
+            return numerator / scale, denominator / scale
         raise ValueError("polarization must be 's' or 'p'.")
 
     def _finite_phase(self, layer: int, q):
@@ -435,26 +443,94 @@ class NLayerGreenFunction:
         The recursion terminates at the semi-infinite outer layer, where the
         effective reflection is the bare Fresnel coefficient.
         """
+        numerator, denominator = self._effective_reflection_terms(
+            layer,
+            step,
+            q,
+            polarization,
+        )
+        return numerator / denominator
+
+    def _effective_reflection_terms(self, layer: int, step: int, q, polarization: str):
         next_layer = layer + step
         if next_layer < 0 or next_layer >= len(self.layers):
-            return 0.0 + 0.0j
+            return 0.0 + 0.0j, 1.0 + 0.0j
 
-        direct = self._fresnel(layer, next_layer, q, polarization)
+        direct_numerator, direct_denominator = self._fresnel_terms(
+            layer,
+            next_layer,
+            q,
+            polarization,
+        )
         beyond = next_layer + step
         if beyond < 0 or beyond >= len(self.layers):
-            return direct
+            return direct_numerator, direct_denominator
 
-        sub_stack = self._effective_reflection(next_layer, step, q, polarization)
+        sub_numerator, sub_denominator = self._effective_reflection_terms(
+            next_layer,
+            step,
+            q,
+            polarization,
+        )
         phase = self._finite_phase(next_layer, q)
-        return (direct + sub_stack * phase) / (1 + direct * sub_stack * phase)
+        numerator = (
+            direct_numerator * sub_denominator
+            + direct_denominator * sub_numerator * phase
+        )
+        denominator = (
+            direct_denominator * sub_denominator
+            + direct_numerator * sub_numerator * phase
+        )
+        return numerator, denominator
 
     def _source_layer_thickness(self) -> float:
         if self.source_thickness_m is None:
             raise ValueError(
-                "The full N-layer amplitude formula requires source_layer to have "
-                "finite thickness. For a two-layer half-space, use GF_Sommerfeld."
+                "The finite-cavity amplitude formula requires source_layer to have "
+                "finite thickness. A semi-infinite source region is supported only "
+                "for the top exterior layer."
             )
         return float(self.source_thickness_m)
+
+    def _is_top_exterior_source(self) -> bool:
+        return self.source_layer == len(self.layers) - 1 and self.source_thickness_m is None
+
+    @staticmethod
+    def _validate_top_exterior_positions(z_observer: float, z_source: float) -> None:
+        positions = np.asarray([z_observer, z_source], dtype=float)
+        if not np.all(np.isfinite(positions)) or np.any(positions < 0.0):
+            raise ValueError(
+                "For a semi-infinite top source layer, z_observer and z_source must be "
+                "finite non-negative heights measured from the top-stack interface."
+            )
+
+    def _top_exterior_amplitude_coefficients(
+        self,
+        q,
+        z_observer: float,
+        z_source: float,
+    ):
+        r"""Return the one-sided reflection amplitudes for a top exterior source.
+
+        The upper effective mirror is zero in the semi-infinite exterior, so the
+        finite source-layer Airy formula has the exact limit
+
+        .. math::
+
+           C_s=C_p^+=C_p^-=S_p^+=S_p^-
+           =\widetilde R_-\exp[i\beta_j(z+z')],
+
+        with the TE coefficient used for ``C_s`` and the TM coefficient used for
+        the four ``p`` amplitudes.  ``z`` and ``z'`` are non-negative heights
+        above the top interface.  The generalized reflection ``R_-`` retains all
+        finite-film and substrate multiple reflections.
+        """
+        self._validate_top_exterior_positions(z_observer, z_source)
+        beta_j = self._kz(self.source_layer, q)
+        path = np.exp(1j * beta_j * (z_observer + z_source))
+        c_s = self.reflection_coefficient(q, "down", "s") * path
+        amplitude_p = self.reflection_coefficient(q, "down", "p") * path
+        return c_s, amplitude_p, amplitude_p, amplitude_p, amplitude_p
 
     def amplitude_coefficients(self, q, z_observer: float, z_source: float):
         r"""Five scalar amplitudes entering the N-layer scattered tensor.
@@ -485,6 +561,9 @@ class NLayerGreenFunction:
         exp(-i beta_j(z+z0-d_j)) r_plus_p`` and ``A_p`` using the same two
         terms with a minus sign between them.
         """
+        if self._is_top_exterior_source():
+            return self._top_exterior_amplitude_coefficients(q, z_observer, z_source)
+
         d_j = self._source_layer_thickness()
         beta_j = self._kz(self.source_layer, q)
 
@@ -529,6 +608,9 @@ class NLayerGreenFunction:
         evaluating the algebraically cancelling factors in
         :meth:`amplitude_coefficients` for off-center source positions.
         """
+        if self._is_top_exterior_source():
+            return self._top_exterior_amplitude_coefficients(q, z_observer, z_source)
+
         d_j = self._source_layer_thickness()
         beta_j = self._kz(self.source_layer, q)
 
@@ -578,6 +660,15 @@ class NLayerGreenFunction:
 
         Zeros of this denominator are guided-mode or plasmonic pole candidates.
         """
+        if self._is_top_exterior_source():
+            _, denominator = self._effective_reflection_terms(
+                self.source_layer,
+                -1,
+                q,
+                polarization,
+            )
+            return denominator
+
         d_j = self._source_layer_thickness()
         beta_j = self._kz(self.source_layer, q)
         r_minus = self.reflection_coefficient(q, "down", polarization)
@@ -2236,6 +2327,40 @@ class NLayerGreenFunction:
         mp = self.scattering_p_component(x, y, integrals)
         return 1j / (4 * np.pi) * (ms + mp)
 
+    def scattering_components_from_integrals(
+        self,
+        x: float,
+        y: float,
+        integrals: np.ndarray,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        prefactor = 1j / (4 * np.pi)
+        scattering_te = prefactor * self.scattering_s_component(x, y, integrals)
+        scattering_tm = prefactor * self.scattering_p_component(x, y, integrals)
+        return scattering_te + scattering_tm, scattering_te, scattering_tm
+
+    def calculate_Green_function_components(
+        self,
+        x: float,
+        y: float,
+        z_observer: float,
+        z_source: float,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        if self.integration_method == "componentwise":
+            raise ValueError(
+                "Polarization-resolved TE/TM output is not available with componentwise "
+                "integration because that path integrates assembled tensor entries rather "
+                "than the seven TE/TM Sommerfeld kernels. Use a non-componentwise method."
+            )
+        rho = np.sqrt(x**2 + y**2)
+        integrals = self.compute_integrals(rho, z_observer, z_source)
+        scattering, scattering_te, scattering_tm = self.scattering_components_from_integrals(
+            x,
+            y,
+            integrals,
+        )
+        vacuum = self.vacuum_component(x, y, z_observer, z_source)
+        return vacuum + scattering, vacuum, scattering_te, scattering_tm
+
     @staticmethod
     def _phi(x: float, y: float) -> float:
         return 0.0 if x == 0 and y == 0 else float(np.arctan2(y, x))
@@ -2351,3 +2476,43 @@ class NLayerGreenFunction:
                 z_source,
             ) + self.scatter_component_from_integrals(x, y, integrals)
         return values
+
+    def calculate_Green_function_components_for_x_values(
+        self,
+        x_values: np.ndarray,
+        y: float,
+        z_observer: float,
+        z_source: float,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        if self.integration_method == "componentwise":
+            raise ValueError(
+                "Polarization-resolved TE/TM output is not available with componentwise "
+                "integration because that path integrates assembled tensor entries rather "
+                "than the seven TE/TM Sommerfeld kernels. Use a non-componentwise method."
+            )
+        x_values = np.asarray(x_values, dtype=float)
+        total = np.zeros((len(x_values), 3, 3), dtype=complex)
+        vacuum = np.zeros_like(total)
+        scattering_te = np.zeros_like(total)
+        scattering_tm = np.zeros_like(total)
+
+        if self.integration_method != "fixed_grid":
+            for index, x in enumerate(x_values):
+                total[index], vacuum[index], scattering_te[index], scattering_tm[index] = (
+                    self.calculate_Green_function_components(x, y, z_observer, z_source)
+                )
+            return total, vacuum, scattering_te, scattering_tm
+
+        rhos = np.sqrt(x_values**2 + y**2)
+        integrals_by_rho = self.compute_integrals_fixed_grid_for_rhos(
+            rhos,
+            z_observer,
+            z_source,
+        )
+        for index, (x, integrals) in enumerate(zip(x_values, integrals_by_rho)):
+            scattering, scattering_te[index], scattering_tm[index] = (
+                self.scattering_components_from_integrals(x, y, integrals)
+            )
+            vacuum[index] = self.vacuum_component(x, y, z_observer, z_source)
+            total[index] = vacuum[index] + scattering
+        return total, vacuum, scattering_te, scattering_tm
