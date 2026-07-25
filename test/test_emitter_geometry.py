@@ -73,6 +73,17 @@ def test_equatorial_ring_phase_offset_and_radial_mode():
     assert np.allclose(orientations[0], [0.0, 1.0, 0.0], atol=1e-12)
 
 
+def test_equatorial_ring_out_of_plane_mode_uses_parallel_z_dipoles():
+    positions_nm, orientations = equatorial_ring_positions_orientations_nm(
+        4,
+        10.0,
+        orientation="out_of_plane",
+    )
+
+    assert np.allclose(positions_nm[:, 2], 0.0)
+    assert np.allclose(orientations, np.tile([0.0, 0.0, 1.0], (4, 1)))
+
+
 @pytest.mark.parametrize(
     "config",
     [

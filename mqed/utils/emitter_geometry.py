@@ -5,7 +5,7 @@ from typing import Mapping, Tuple
 import numpy as np
 
 
-SUPPORTED_RING_ORIENTATIONS = ("orthoradial", "radial")
+SUPPORTED_RING_ORIENTATIONS = ("orthoradial", "radial", "out_of_plane")
 
 
 def normalize_orientation_vectors(
@@ -77,6 +77,8 @@ def equatorial_ring_positions_orientations_nm(
         orientation: Orientation mode. ``"orthoradial"`` gives local azimuthal
             unit vectors ``[-sin(phi), cos(phi), 0]``. ``"radial"`` gives
             outward radial unit vectors ``[cos(phi), sin(phi), 0]``.
+            ``"out_of_plane"`` gives the same unit vector ``[0, 0, 1]`` for
+            every emitter, normal to the equatorial ring plane.
 
     Returns:
         Tuple ``(positions_nm, orientations)`` where both arrays have shape
@@ -105,8 +107,10 @@ def equatorial_ring_positions_orientations_nm(
     )
     if orientation_mode == "orthoradial":
         orientations = np.column_stack([-sin_phi, cos_phi, np.zeros(count)])
-    else:
+    elif orientation_mode == "radial":
         orientations = np.column_stack([cos_phi, sin_phi, np.zeros(count)])
+    else:
+        orientations = np.tile([0.0, 0.0, 1.0], (count, 1))
     return positions_nm.astype(float), orientations.astype(float)
 
 

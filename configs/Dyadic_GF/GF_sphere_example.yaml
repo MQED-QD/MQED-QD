@@ -3,13 +3,17 @@
 #
 # Geometry:
 #   - silver sphere radius R = 8 nm in air/vacuum
-#   - N_e orthoradial emitters in the equatorial xy plane
+#   - N_e emitters in the equatorial xy plane with parallel z-oriented dipoles
 #   - emitter-surface gap h = 2 nm, so emitter radius is R + h = 10 nm
 #   - dipole moment magnitude d = 24 D
 #
-# The generated ring uses angles phi_j = phase_offset_deg + 360*j/N_e and local
-# azimuthal unit vectors e_phi = [-sin(phi_j), cos(phi_j), 0]. Nearest-neighbor
-# chord distances at 10 nm radius: N=1 -> 0 nm, N=15 -> 4.158 nm,
+# The generated ring uses angles phi_j = phase_offset_deg + 360*j/N_e and
+# out-of-plane unit vectors e_z = [0, 0, 1] for every emitter. This orientation
+# reproduces the paper's quoted free-space Van der Waals shifts: about 12 meV
+# for N=15 and 438 meV for N=50. Local azimuthal vectors would instead select a
+# different angular sector and nearly cancel the N=50 sphere-mediated bright
+# response. Nearest-neighbor chord distances at 10 nm radius: N=1 -> 0 nm,
+# N=15 -> 4.158 nm,
 # N=50 -> 1.256 nm. Example override: simulation.emitter_ring.emitter_count=50
 
 defaults:
@@ -44,7 +48,7 @@ simulation:
     # emitter_radius_nm: 10.0  # Optional alternative; must match radius + gap if both are set.
     z_nm: 0.0
     phase_offset_deg: 0.0
-    orientation: orthoradial
+    orientation: out_of_plane
 
 materials:
   regions:

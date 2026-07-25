@@ -451,7 +451,7 @@ def test_mie_scan_mpi_backend_runs_single_rank_when_mpi4py_available(tmp_path):
         assert h5["G_total"].shape == (1, 2, 3, 3)
 
 
-def test_gf_sphere_example_config_defines_equatorial_orthoradial_ring():
+def test_gf_sphere_example_config_defines_equatorial_out_of_plane_ring():
     config_path = Path("configs/Dyadic_GF/GF_sphere_example.yaml")
     config = OmegaConf.to_container(OmegaConf.load(config_path), resolve=True)
     simulation = config["simulation"]
@@ -469,7 +469,7 @@ def test_gf_sphere_example_config_defines_equatorial_orthoradial_ring():
     assert np.allclose(radii_nm, 10.0)
     assert np.allclose(positions_nm[:, 2], 0.0)
     assert np.allclose(np.linalg.norm(orientations, axis=1), 1.0)
-    assert np.allclose(np.einsum("ij,ij->i", positions_nm, orientations), 0.0, atol=1e-12)
+    assert np.allclose(orientations, np.tile([0.0, 0.0, 1.0], (15, 1)))
     assert np.isclose(equatorial_ring_nearest_neighbor_chord_nm(15, 10.0), 4.158, atol=5e-4)
     assert simulation["sphere_example"]["dipole_moment_debye"] == 24.0
 

@@ -150,7 +150,7 @@ def test_gf_sphere_example_hydra_generates_ring_and_accepts_count_override():
     assert positions_m.shape == (15, 3)
     assert orientations.shape == (15, 3)
     assert np.allclose(np.linalg.norm(positions_m[:, :2], axis=1) * 1e9, 10.0)
-    assert np.allclose(np.linalg.norm(orientations, axis=1), 1.0)
+    assert np.allclose(orientations, np.tile([0.0, 0.0, 1.0], (15, 1)))
     nearest_spacing_nm = np.linalg.norm(positions_m[1] - positions_m[0]) * 1e9
     assert np.isclose(nearest_spacing_nm, 4.158, atol=5e-4)
 
@@ -163,3 +163,4 @@ def test_gf_sphere_example_hydra_generates_ring_and_accepts_count_override():
 
     assert override_positions_m.shape == (50, 3)
     assert override_orientations.shape == (50, 3)
+    assert np.allclose(override_orientations, np.tile([0.0, 0.0, 1.0], (50, 1)))
