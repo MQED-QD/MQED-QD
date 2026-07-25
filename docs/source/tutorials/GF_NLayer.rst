@@ -186,6 +186,18 @@ two-layer Sommerfeld workflow:
    Rx_nm[K]
    gf_layout = "separation"
 
+Set ``output.save_polarization_components: true`` to add:
+
+.. code-block:: text
+
+   green_function_structure[M, K, 3, 3]
+   green_function_scattering_te[M, K, 3, 3]
+   green_function_scattering_tm[M, K, 3, 3]
+
+These optional tensors satisfy ``structure = TE + TM`` and
+``total = vacuum + structure``.  TE and TM are scattering-only channels; the
+analytical homogeneous vacuum tensor is not assigned a TE/TM decomposition.
+
 Here ``M`` is the number of energy points and ``K`` is the number of lateral
 separations.  This layout can be passed directly to
 :ref:`tutorial-spectral-density`, field-enhancement calculations, or quantum
@@ -282,7 +294,9 @@ Common mistakes
 ===============
 
 * **Wrong layer index**: ``source_layer`` is zero-based and must point to the
-  finite layer containing ``zD_nm`` and ``zA_nm``.
+  layer containing ``zD_nm`` and ``zA_nm``.  Internal source layers must be
+  finite.  The semi-infinite top exterior is also supported; there ``zD_nm``
+  and ``zA_nm`` are non-negative heights above the top-stack interface.
 * **Expecting arbitrary emitter positions**: N-layer output is indexed by
   lateral separation ``Rx``.  Use Mie ``pair`` or BEM reconstruction for fully
   arbitrary 3D emitter positions.

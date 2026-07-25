@@ -26,7 +26,9 @@ and piecewise homogeneous along :math:`z`:
 Top and bottom layers are usually semi-infinite, while internal layers have
 finite thickness.  In the current workflow the source and observer are in a
 chosen source layer, with vertical coordinates :math:`z'` and :math:`z` and
-lateral separation :math:`\rho`.
+lateral separation :math:`\rho`.  A finite source layer uses coordinates from
+its lower interface.  When the source layer is the semi-infinite top exterior,
+:math:`z,z'\geq0` are heights measured upward from the top-stack interface.
 
 
 Spectral-domain Green function
@@ -57,6 +59,14 @@ produce Airy denominators of the form
 
 where :math:`j` is the source layer and :math:`d_j` is its thickness.  Zeros of
 :math:`D_q` correspond to guided modes, Fabry--Pérot modes, or plasmonic modes.
+For a source in the semi-infinite top exterior, the upper mirror vanishes, so
+the finite-cavity Airy denominator itself tends to one.  The scattered response
+is instead proportional to the one-sided generalized reflection of the entire
+finite stack below.  For pole searches, the solver uses the analytic
+denominator of that generalized reflection, whose zeros locate its physical
+poles without mistaking reflection zeros for modes.  Replacing the multilayer
+with the two-layer Sommerfeld solver would discard the finite-film and
+substrate reflections.
 
 The scattered Green tensor is assembled from a small set of scalar Sommerfeld
 integrals,

@@ -211,3 +211,7 @@ parallel:
 
 output:
   prefix: "NLayer_GF_five_layer_Ag_spacer"
+  # Opt-in only: when true the N-layer HDF5 includes green_function_structure,
+  # green_function_scattering_te, and green_function_scattering_tm. Default false
+  # preserves the legacy total/vacuum-only schema.
+  save_polarization_components: false

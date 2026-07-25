@@ -164,3 +164,11 @@ def test_gf_sphere_example_hydra_generates_ring_and_accepts_count_override():
     assert override_positions_m.shape == (50, 3)
     assert override_orientations.shape == (50, 3)
     assert np.allclose(override_orientations, np.tile([0.0, 0.0, 1.0], (50, 1)))
+
+
+def test_nlayer_polarization_flag_defaults_false():
+    cfg_dir = Path(__file__).resolve().parents[1] / "configs" / "Dyadic_GF"
+
+    cfg = _compose(cfg_dir, "GF_NLayer_five_layer")
+
+    assert cfg.output.save_polarization_components is False
