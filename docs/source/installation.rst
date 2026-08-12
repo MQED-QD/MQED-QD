@@ -106,13 +106,13 @@ first run:
 
    mkdir -p data/GF_cache data/QDyn_cache
 
-==================  ===============================================
-Directory           Purpose
-==================  ===============================================
-``data/GF_cache``   Cached Green's function HDF5 files
-``data/QDyn_cache`` Cached quantum-dynamics HDF5 files
-``outputs/``        Created automatically by Hydra at runtime
-==================  ===============================================
+===================  ===============================================
+Directory            Purpose
+===================  ===============================================
+``data/GF_cache``    Cached Green's function HDF5 files
+``data/QDyn_cache``  Cached quantum-dynamics HDF5 files
+``outputs/``         Created automatically by Hydra at runtime
+===================  ===============================================
 
 .. seealso::
 

@@ -13,7 +13,7 @@ stage of the workflow.
    configs/
    ├── Dyadic_GF/      # Green's function computation
    ├── Lindblad/        # Quantum dynamics solver
-├── analysis/        # Green-tensor post-processing and coupling analysis
+   ├── analysis/         # Green-tensor post-processing and coupling analysis
    ├── BEM/             # Boundary-element-method utilities
    └── plots/           # Observable plotting
 

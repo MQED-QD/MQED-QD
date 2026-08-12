@@ -25,7 +25,7 @@ the dielectric medium, and :math:`\hat{V}_\mathrm{MP}` is the light--matter coup
 in the multipolar gauge. The key distinction from standard cavity QED is that the
 bosonic field operators :math:`\hat{\mathbf{f}}(\mathbf{r},\omega)` create and
 annihilate photons *dressed* by the dielectric medium, rather than vacuum photons.
-We refer the reader to [Liu2025]_ for the full derivation of each term.
+We refer the reader to [Liu2026]_ for the full derivation of each term.
 
 
 The Dyadic Green's Function
@@ -292,5 +292,6 @@ Casimir--Polder shifts—follow directly from it.
 References
 ----------
 
-.. [Liu2026] G. Liu *et al.*, "Liu, G., Wang, S. and Chen, H.T., 2026. MQED-QD: An Open-Source Package for 
-Quantum Dynamics Simulation in Complex Dielectric Environments. Journal of Chemical Theory and Computation."
+.. [Liu2026] G. Liu *et al.*, "Liu, G., Wang, S. and Chen, H.T., 2026.
+   MQED-QD: An Open-Source Package for Quantum Dynamics Simulation in Complex
+   Dielectric Environments. Journal of Chemical Theory and Computation."
