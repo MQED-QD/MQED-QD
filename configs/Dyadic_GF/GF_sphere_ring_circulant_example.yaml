@@ -1,0 +1,62 @@
+# Compact Mie Green-function example for the equatorial emitter ring in
+# Varguet et al., J. Chem. Phys. 154, 084303 (2021), Fig. 1.
+#
+# This configuration is deliberately opt-in. It stores one dipole-projected
+# cyclic row per energy instead of all N x N Cartesian dyadics. Use
+# GF_sphere_example.yaml when full tensors or arbitrary emitter geometry are
+# required.
+
+defaults:
+  - hydra: default
+  - _self_
+
+hydra:
+  job:
+    name: GF_sphere_ring_circulant_example
+
+simulation:
+  spectral_param: energy_eV
+  energy_eV:
+    min: 2.6
+    max: 3.2
+    points: 121
+  nmax: 20
+  strict_regions: true
+
+  geometry:
+    boundary: sphere
+    radius_nm: 8.0
+
+  sphere_example:
+    reference: "Varguet et al., J. Chem. Phys. 154, 084303 (2021), Fig. 1"
+    dipole_moment_debye: 24.0
+
+  emitter_ring:
+    emitter_count: 15
+    sphere_radius_nm: ${simulation.geometry.radius_nm}
+    emitter_surface_gap_nm: 2.0
+    z_nm: 0.0
+    phase_offset_deg: 0.0
+    orientation: out_of_plane
+
+materials:
+  regions:
+    - n: 1.0
+      name: vacuum exterior
+    - type: drude
+      eps_inf: 6.0
+      omega_p_eV: 7.8985434828
+      gamma_eV: 0.0509456045
+      name: silver sphere
+
+parallel:
+  backend: sequential
+  n_jobs: -1
+  mpi_nproc: 4
+  mpi_auto_launch: false
+  mpi_exec: mpiexec
+
+output:
+  directory: ../../outputs
+  prefix: mie_silver_sphere_ring_circulant
+  layout: ring_circulant
