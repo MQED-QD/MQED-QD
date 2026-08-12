@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 import hydra
@@ -395,6 +396,129 @@ def _run_joblib(energy_ev_array, target_lambdas_m, rx_values_m, cfg, n_jobs: int
     return results_total, results_vacuum
 
 
+def _mpi_task_slices(
+    n_energy: int,
+    n_rx: int,
+    size: int,
+    integration_method: str,
+) -> list[tuple[int, np.ndarray]]:
+    """Build ordered energy/Rx work units for the MPI backend.
+
+    Energy-level tasks remain preferable when there are enough energies to occupy
+    the ranks. When energies are scarce, each energy row is split into contiguous
+    Rx chunks. ``fixed_grid`` is deliberately excluded from Rx splitting because
+    its vectorized solver reuses one expensive sampled q grid for the complete Rx
+    batch; splitting that batch would duplicate the sampling work on every rank.
+
+    Args:
+        n_energy: Number of spectral points.
+        n_rx: Number of lateral-separation points.
+        size: Number of MPI ranks.
+        integration_method: Normalized integration method name.
+
+    Returns:
+        Ordered ``(energy_index, rx_indices)`` work units. Every energy/Rx pair
+        appears exactly once.
+    """
+    if n_energy < 1 or n_rx < 1:
+        raise ValueError("MPI decomposition requires at least one energy and one Rx point.")
+    if size < 1:
+        raise ValueError("MPI decomposition requires at least one rank.")
+
+    all_rx_indices = np.arange(n_rx, dtype=int)
+    if integration_method == "fixed_grid" or n_energy >= size:
+        return [(energy_index, all_rx_indices.copy()) for energy_index in range(n_energy)]
+
+    chunks_per_energy = min(n_rx, math.ceil(size / n_energy))
+    tasks = []
+    for energy_index in range(n_energy):
+        for rx_indices in np.array_split(all_rx_indices, chunks_per_energy):
+            if rx_indices.size:
+                tasks.append((energy_index, rx_indices))
+    return tasks
+
+
+def _assemble_mpi_results(all_results, n_energy: int, n_rx: int, save_components: bool):
+    results_total = np.zeros((n_energy, n_rx, 3, 3), dtype=complex)
+    results_vacuum = np.zeros_like(results_total)
+    coverage = np.zeros((n_energy, n_rx), dtype=np.uint16)
+    if save_components:
+        results_structure = np.zeros_like(results_total)
+        results_scattering_te = np.zeros_like(results_total)
+        results_scattering_tm = np.zeros_like(results_total)
+
+    for rank_results in all_results:
+        for result in rank_results:
+            expected_fields = 7 if save_components else 4
+            if len(result) != expected_fields:
+                raise ValueError(
+                    f"MPI worker result must contain {expected_fields} fields; got {len(result)}."
+                )
+            energy_index, rx_indices, total, vacuum = result[:4]
+            if (
+                isinstance(energy_index, (bool, np.bool_))
+                or not isinstance(energy_index, (int, np.integer))
+                or not 0 <= int(energy_index) < n_energy
+            ):
+                raise ValueError(
+                    f"MPI worker returned invalid energy index {energy_index!r}; "
+                    f"expected an integer in [0, {n_energy})."
+                )
+            energy_index = int(energy_index)
+            rx_indices = np.asarray(rx_indices)
+            if rx_indices.ndim != 1 or rx_indices.size == 0:
+                raise ValueError("MPI worker Rx indices must be a non-empty one-dimensional array.")
+            if not np.issubdtype(rx_indices.dtype, np.integer):
+                raise ValueError("MPI worker Rx indices must contain integers without coercion.")
+            rx_indices = rx_indices.astype(int, copy=False)
+            if np.any(rx_indices < 0) or np.any(rx_indices >= n_rx):
+                raise ValueError(
+                    f"MPI worker Rx indices must be in [0, {n_rx}); got {rx_indices.tolist()}."
+                )
+            if np.unique(rx_indices).size != rx_indices.size:
+                raise ValueError(
+                    f"MPI worker Rx indices must be unique within each slice; "
+                    f"got {rx_indices.tolist()}."
+                )
+            if total.shape != (len(rx_indices), 3, 3) or vacuum.shape != total.shape:
+                raise ValueError(
+                    "MPI worker returned incompatible Green-function slice shapes: "
+                    f"total={total.shape}, vacuum={vacuum.shape}, Rx count={len(rx_indices)}."
+                )
+            results_total[energy_index, rx_indices] = total
+            results_vacuum[energy_index, rx_indices] = vacuum
+            coverage[energy_index, rx_indices] += 1
+            if save_components:
+                _, _, _, _, structure, scattering_te, scattering_tm = result
+                if not (
+                    structure.shape == total.shape
+                    and scattering_te.shape == total.shape
+                    and scattering_tm.shape == total.shape
+                ):
+                    raise ValueError("MPI polarization slices must match the total slice shape.")
+                results_structure[energy_index, rx_indices] = structure
+                results_scattering_te[energy_index, rx_indices] = scattering_te
+                results_scattering_tm[energy_index, rx_indices] = scattering_tm
+
+    if not np.all(coverage == 1):
+        missing = np.argwhere(coverage == 0)
+        duplicate = np.argwhere(coverage > 1)
+        raise RuntimeError(
+            "MPI result coverage must contain every energy/Rx pair exactly once; "
+            f"missing={missing.tolist()}, duplicate={duplicate.tolist()}."
+        )
+
+    if save_components:
+        return (
+            results_total,
+            results_vacuum,
+            results_structure,
+            results_scattering_te,
+            results_scattering_tm,
+        )
+    return results_total, results_vacuum
+
+
 def _run_mpi(energy_ev_array, target_lambdas_m, rx_values_m, cfg):
     from mpi4py import MPI
 
@@ -411,63 +535,58 @@ def _run_mpi(energy_ev_array, target_lambdas_m, rx_values_m, cfg):
     materials_plain = OmegaConf.create(OmegaConf.to_container(cfg.materials, resolve=True))
     integ_cfg = getattr(sim_params, "integration", None)
     integ_plain = OmegaConf.create(OmegaConf.to_container(integ_cfg, resolve=True)) if integ_cfg else None
-
-    local_indices = list(range(rank, n_energy, size))
+    integration_method = (
+        "direct"
+        if integ_plain is None
+        else str(integ_plain.get("method", "direct")).strip().lower()
+    )
+    tasks = _mpi_task_slices(n_energy, n_rx, size, integration_method)
+    local_tasks = tasks[rank::size]
     if rank == 0:
         logger.info(
-            "MPI backend: {} ranks, {} energies (rank 0 handles {} energies)",
+            "MPI backend: {} ranks, {} energies × {} Rx points, {} work units "
+            "(rank 0 handles {})",
             size,
             n_energy,
-            len(local_indices),
+            n_rx,
+            len(tasks),
+            len(local_tasks),
         )
+        if integration_method == "fixed_grid" and n_energy < size:
+            logger.info(
+                "fixed_grid keeps one task per energy to preserve shared q-grid batching; "
+                "some MPI ranks may remain idle."
+            )
 
     local_results = []
-    for energy_index in local_indices:
+    for energy_index, rx_indices in local_tasks:
         logger.info(
-            "[rank {}] N-layer energy {}/{}: {:.3f} eV",
+            "[rank {}] N-layer energy {}/{}: {:.3f} eV, {} Rx points",
             rank,
             energy_index + 1,
             n_energy,
             energy_ev_array[energy_index],
+            len(rx_indices),
         )
-        local_results.append(
-            _compute_one_energy(
-                idx=energy_index,
-                energy_eV=energy_ev_array[energy_index],
-                lambda_m=target_lambdas_m[energy_index],
-                rx_values_m=rx_values_m,
-                z_observer=z_observer,
-                z_source=z_source,
-                stack_cfg=stack_plain,
-                materials_cfg=materials_plain,
-                integ_cfg=integ_plain,
-                save_polarization_components=save_components,
-            )
+        result = _compute_one_energy(
+            idx=energy_index,
+            energy_eV=energy_ev_array[energy_index],
+            lambda_m=target_lambdas_m[energy_index],
+            rx_values_m=rx_values_m[rx_indices],
+            z_observer=z_observer,
+            z_source=z_source,
+            stack_cfg=stack_plain,
+            materials_cfg=materials_plain,
+            integ_cfg=integ_plain,
+            save_polarization_components=save_components,
         )
+        local_results.append((result[0], rx_indices, *result[1:]))
 
     all_results = comm.gather(local_results, root=0)
     if rank != 0:
         return None, None
 
-    results_total = np.zeros((n_energy, n_rx, 3, 3), dtype=complex)
-    results_vacuum = np.zeros_like(results_total)
-    if save_components:
-        results_structure = np.zeros_like(results_total)
-        results_scattering_te = np.zeros_like(results_total)
-        results_scattering_tm = np.zeros_like(results_total)
-        for rank_results in all_results:
-            for idx, total, vacuum, structure, scattering_te, scattering_tm in rank_results:
-                results_total[idx] = total
-                results_vacuum[idx] = vacuum
-                results_structure[idx] = structure
-                results_scattering_te[idx] = scattering_te
-                results_scattering_tm[idx] = scattering_tm
-        return results_total, results_vacuum, results_structure, results_scattering_te, results_scattering_tm
-    for rank_results in all_results:
-        for idx, total, vacuum in rank_results:
-            results_total[idx] = total
-            results_vacuum[idx] = vacuum
-    return results_total, results_vacuum
+    return _assemble_mpi_results(all_results, n_energy, n_rx, save_components)
 
 
 HYDRA_CONFIG_PATH: str = prepare_hydra_config_path("Dyadic_GF", __file__)

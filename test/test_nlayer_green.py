@@ -1043,6 +1043,155 @@ def test_compute_one_energy_rejects_componentwise_polarization_output():
         )
 
 
+def test_mpi_task_slices_split_rx_when_energies_cannot_fill_ranks():
+    main_nlayer = pytest.importorskip("mqed.Dyadic_GF.main_nlayer")
+
+    tasks = main_nlayer._mpi_task_slices(
+        n_energy=1,
+        n_rx=7,
+        size=3,
+        integration_method="componentwise",
+    )
+
+    assert [energy_index for energy_index, _ in tasks] == [0, 0, 0]
+    assert [indices.tolist() for _, indices in tasks] == [[0, 1, 2], [3, 4], [5, 6]]
+    assert sorted(index for _, indices in tasks for index in indices) == list(range(7))
+
+
+def test_mpi_task_slices_keep_fixed_grid_batched_by_energy():
+    main_nlayer = pytest.importorskip("mqed.Dyadic_GF.main_nlayer")
+
+    tasks = main_nlayer._mpi_task_slices(
+        n_energy=1,
+        n_rx=7,
+        size=4,
+        integration_method="fixed_grid",
+    )
+
+    assert len(tasks) == 1
+    assert tasks[0][0] == 0
+    assert tasks[0][1].tolist() == list(range(7))
+
+
+def test_mpi_task_slices_keep_energy_rows_when_energies_fill_ranks():
+    main_nlayer = pytest.importorskip("mqed.Dyadic_GF.main_nlayer")
+
+    tasks = main_nlayer._mpi_task_slices(
+        n_energy=4,
+        n_rx=5,
+        size=3,
+        integration_method="componentwise",
+    )
+
+    assert [energy_index for energy_index, _ in tasks] == [0, 1, 2, 3]
+    assert all(indices.tolist() == list(range(5)) for _, indices in tasks)
+
+
+def test_mpi_task_slices_split_multiple_scarce_energies():
+    main_nlayer = pytest.importorskip("mqed.Dyadic_GF.main_nlayer")
+
+    tasks = main_nlayer._mpi_task_slices(
+        n_energy=2,
+        n_rx=3,
+        size=5,
+        integration_method="componentwise",
+    )
+
+    assert len(tasks) == 6
+    for energy_index in range(2):
+        assigned = [indices.item() for task_energy, indices in tasks if task_energy == energy_index]
+        assert assigned == [0, 1, 2]
+
+
+def test_assemble_mpi_results_restores_rx_order_with_empty_rank():
+    main_nlayer = pytest.importorskip("mqed.Dyadic_GF.main_nlayer")
+
+    def tensors(indices, offset):
+        return np.asarray([np.eye(3, dtype=complex) * (offset + index) for index in indices])
+
+    gathered = [
+        [(0, np.array([0, 3]), tensors([0, 3], 10), tensors([0, 3], 20))],
+        [(0, np.array([1, 4]), tensors([1, 4], 10), tensors([1, 4], 20))],
+        [(0, np.array([2]), tensors([2], 10), tensors([2], 20))],
+        [],
+    ]
+
+    total, vacuum = main_nlayer._assemble_mpi_results(
+        gathered,
+        n_energy=1,
+        n_rx=5,
+        save_components=False,
+    )
+
+    assert total.shape == (1, 5, 3, 3)
+    for rx_index in range(5):
+        assert np.allclose(total[0, rx_index], np.eye(3) * (10 + rx_index))
+        assert np.allclose(vacuum[0, rx_index], np.eye(3) * (20 + rx_index))
+
+
+def test_assemble_mpi_results_preserves_polarization_components():
+    main_nlayer = pytest.importorskip("mqed.Dyadic_GF.main_nlayer")
+    vacuum = np.ones((2, 3, 3), dtype=complex)
+    scattering_te = np.ones_like(vacuum) * 2.0
+    scattering_tm = np.ones_like(vacuum) * 3.0
+    structure = scattering_te + scattering_tm
+    total = vacuum + structure
+    gathered = [[(0, np.array([0, 1]), total, vacuum, structure, scattering_te, scattering_tm)]]
+
+    assembled = main_nlayer._assemble_mpi_results(
+        gathered,
+        n_energy=1,
+        n_rx=2,
+        save_components=True,
+    )
+
+    result_total, result_vacuum, result_structure, result_te, result_tm = assembled
+    assert np.allclose(result_structure, result_te + result_tm)
+    assert np.allclose(result_total, result_vacuum + result_structure)
+
+
+def test_assemble_mpi_results_rejects_missing_or_duplicate_work():
+    main_nlayer = pytest.importorskip("mqed.Dyadic_GF.main_nlayer")
+    tensor = np.zeros((1, 3, 3), dtype=complex)
+    gathered = [[
+        (0, np.array([0]), tensor, tensor),
+        (0, np.array([0]), tensor, tensor),
+    ]]
+
+    with pytest.raises(RuntimeError, match="missing=.*duplicate="):
+        main_nlayer._assemble_mpi_results(
+            gathered,
+            n_energy=1,
+            n_rx=2,
+            save_components=False,
+        )
+
+
+@pytest.mark.parametrize(
+    "result, message",
+    [
+        ((0, np.array([-1]), np.zeros((1, 3, 3)), np.zeros((1, 3, 3))), r"in \[0, 1\)"),
+        ((0, np.array([1]), np.zeros((1, 3, 3)), np.zeros((1, 3, 3))), r"in \[0, 1\)"),
+        ((0, np.array([0.5]), np.zeros((1, 3, 3)), np.zeros((1, 3, 3))), "integers"),
+        ((0, np.array([[0]]), np.zeros((1, 3, 3)), np.zeros((1, 3, 3))), "one-dimensional"),
+        ((0, np.array([], dtype=int), np.zeros((0, 3, 3)), np.zeros((0, 3, 3))), "non-empty"),
+        ((0, np.array([0, 0]), np.zeros((2, 3, 3)), np.zeros((2, 3, 3))), "unique"),
+        ((-1, np.array([0]), np.zeros((1, 3, 3)), np.zeros((1, 3, 3))), "energy index"),
+        ((0, np.array([0]), np.zeros((1, 3, 3)), np.zeros((1, 3, 3)), None), "4 fields"),
+    ],
+)
+def test_assemble_mpi_results_rejects_invalid_worker_contracts(result, message):
+    main_nlayer = pytest.importorskip("mqed.Dyadic_GF.main_nlayer")
+
+    with pytest.raises(ValueError, match=message):
+        main_nlayer._assemble_mpi_results(
+            [[result]],
+            n_energy=1,
+            n_rx=1,
+            save_components=False,
+        )
+
+
 def test_save_gf_h5_round_trips_optional_polarization_datasets(tmp_path):
     path = tmp_path / "polarized_gf.h5"
     total = np.ones((1, 2, 3, 3), dtype=complex) * 4.0
