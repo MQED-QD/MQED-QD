@@ -15,6 +15,10 @@ Two Green's function input formats are supported:
     (Purcell factor) and inter-site coupling depend on absolute emitter
     position — not just their separation.
 
+**Projected circulant** ``G_circulant`` of shape ``(N,)``
+    One already dipole-projected cyclic row for a symmetric emitter ring.
+    It reconstructs scalar pair couplings without allocating dyadic tensors.
+
 The public entry point :func:`build_ddi_matrix` auto-dispatches based on
 which argument is provided.  The legacy function
 :func:`build_ddi_matrix_from_Gslice` is preserved for backward
@@ -27,6 +31,9 @@ from loguru import logger
 from mqed.utils.SI_unit import c, eps0, hbar, eV_to_J, D2CMM
 from mqed.utils.orientation import spherical_to_cartesian_dipole, resolve_angle_deg
 from mqed.utils.orientation_disorder import phi_wrapped_normal_deg as _phi_wrapped_normal_deg
+
+
+DEFAULT_MAX_CIRCULANT_DDI_BYTES = 2 * 1024**3
 
 
 def _separation_lookup_indices(Rx_nm: np.ndarray, needed: np.ndarray) -> Dict[float, int]:
@@ -203,6 +210,45 @@ def build_ddi_matrix_from_Gpair(
     return V_eV, hbarGamma_eV
 
 
+def build_ddi_matrix_from_projected_circulant(
+    projected_row: np.ndarray,
+    energy_emitter: float,
+    N_mol: int,
+    mu_D_debye: float,
+    mu_A_debye: Optional[float] = None,
+    *,
+    max_allocation_bytes: int = DEFAULT_MAX_CIRCULANT_DDI_BYTES,
+) -> tuple:
+    """Build DDI matrices from one dipole-projected circulant Green row."""
+    row = np.asarray(projected_row, dtype=complex)
+    if row.shape != (N_mol,):
+        raise ValueError(f"projected_row must have shape ({N_mol},), got {row.shape}.")
+    if max_allocation_bytes <= 0:
+        raise ValueError("max_allocation_bytes must be positive.")
+    matrix_entries = N_mol**2
+    required_bytes = matrix_entries * (
+        np.dtype(np.intp).itemsize
+        + np.dtype(complex).itemsize
+        + 2 * np.dtype(float).itemsize
+    )
+    if required_bytes > max_allocation_bytes:
+        raise ValueError(
+            "Building circulant DDI matrices requires approximately "
+            f"{required_bytes / 1024**2:.1f} MiB, exceeding the configured "
+            f"{max_allocation_bytes / 1024**2:.1f} MiB limit."
+        )
+    mu_A_debye = mu_D_debye if mu_A_debye is None else mu_A_debye
+    omega = energy_emitter * eV_to_J / hbar
+    prefactor = omega**2 * (mu_D_debye * D2CMM) * (mu_A_debye * D2CMM) / (eps0 * c**2)
+    indices = np.arange(N_mol)
+    offsets = (indices[np.newaxis, :] - indices[:, np.newaxis]) % N_mol
+    matrix = row[offsets]
+    V_eV = -(prefactor * np.real(matrix)) / eV_to_J
+    hbarGamma_eV = (2.0 * prefactor * np.imag(matrix)) / eV_to_J
+    np.fill_diagonal(V_eV, 0.0)
+    return V_eV, hbarGamma_eV
+
+
 # ─────────────────────────────────────────────────────────────────────
 #  Separation-indexed builder  (ORIGINAL — planar / translational sym.)
 # ─────────────────────────────────────────────────────────────────────
@@ -356,6 +402,7 @@ def build_ddi_matrix(
     d_nm: Optional[float] = None,
     # --- pair-indexed input (arbitrary geometry) ---
     G_pair: Optional[np.ndarray] = None,
+    G_circulant: Optional[np.ndarray] = None,
     # --- orientation ---
     mode: str = "stationary",
     uD: Optional[np.ndarray] = None,
@@ -368,9 +415,8 @@ def build_ddi_matrix(
 ) -> tuple:
     r"""Build DDI matrices, auto-dispatching by Green's function format.
 
-    Provide **either** ``G_pair`` (pair-indexed) **or** the trio
-    ``(G_slice, Rx_nm, d_nm)`` (separation-indexed).  If both are given,
-    ``G_pair`` takes precedence.
+    Provide ``G_circulant``, ``G_pair``, or the trio ``(G_slice, Rx_nm, d_nm)``.
+    Inputs are checked in that order.
 
     Args:
         energy_emitter: Emitter transition energy in eV.
@@ -381,6 +427,7 @@ def build_ddi_matrix(
         Rx_nm:          Separation grid ``(K,)`` in nm.
         d_nm:           Lattice spacing in nm.
         G_pair:         Pair-indexed ``(N, N, 3, 3)`` Green's function.
+        G_circulant:    Projected cyclic row ``(N,)`` for a symmetric ring.
         mode:           ``"stationary"`` or ``"disorder"``.
         (orientation kwargs): see individual builders.
 
@@ -393,6 +440,13 @@ def build_ddi_matrix(
         disorder_sigma_phi_deg=disorder_sigma_phi_deg,
         disorder_seed=disorder_seed,
     )
+
+    if G_circulant is not None:
+        if mode != "stationary":
+            raise ValueError("Projected ring-circulant data supports stationary stored orientations only.")
+        return build_ddi_matrix_from_projected_circulant(
+            G_circulant, energy_emitter, N_mol, mu_D_debye, mu_A_debye
+        )
 
     if G_pair is not None:
         logger.info(
@@ -416,6 +470,6 @@ def build_ddi_matrix(
         )
 
     raise ValueError(
-        "Must provide either G_pair (pair-indexed) or "
+        "Must provide G_circulant, G_pair (pair-indexed), or "
         "G_slice + Rx_nm + d_nm (separation-indexed)."
     )

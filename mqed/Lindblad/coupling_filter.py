@@ -1,15 +1,26 @@
 # mqed/Lindblad/coupling_filter.py
 import numpy as np
 
-def _mask_within_hops(N: int, hop_radius: int, *, include_on_site: bool) -> np.ndarray:
-    """Boolean mask for sites within a hop distance on a 1D chain.
+def _mask_within_hops(
+    N: int,
+    hop_radius: int,
+    *,
+    include_on_site: bool,
+    topology: str,
+) -> np.ndarray:
+    """Boolean mask for sites within a hop distance on a chain or ring.
 
     Condition: ``abs(i - j) <= hop_radius``. Example: ``hop_radius=1`` keeps
     nearest neighbours (and on-site when ``include_on_site=True``); ``hop_radius=2``
     keeps up to next-nearest neighbours.
     """
+    if topology not in {"chain", "ring"}:
+        raise ValueError(f"Unknown coupling topology {topology!r}; expected 'chain' or 'ring'.")
     i = np.arange(N)
-    M = (np.abs(i[:, None] - i[None, :]) <= hop_radius)
+    distance = np.abs(i[:, None] - i[None, :])
+    if topology == "ring" and N > 0:
+        distance = np.minimum(distance, N - distance)
+    M = distance <= hop_radius
     if not include_on_site:
         np.fill_diagonal(M, False)
     return M
@@ -21,17 +32,20 @@ def enforce_coupling_range(
     Gamma_rule: str = "leave",            # "leave" | "same_as_V" | "diagonal_only" | "limit_by_hops"
     Gamma_hop_radius: int | None = None,
     keep_Gamma_on_site: bool = True,
+    topology: str = "chain",
 ) -> tuple[np.ndarray, np.ndarray]:
     """Zero out V and Γ beyond a chosen hop range.
 
     Args:
         V: (N, N) coherent coupling matrix.
         Gamma: (N, N) dissipative coupling matrix.
-        V_hop_radius: If set, keep pairs with ``abs(i-j) <= V_hop_radius``.
+        V_hop_radius: If set, keep pairs within this hop radius.
         keep_V_on_site: If False, zero the diagonal of V.
         Gamma_rule: How to mask Γ ("leave", "same_as_V", "diagonal_only", "limit_by_hops").
         Gamma_hop_radius: Hop limit for Γ when ``Gamma_rule="limit_by_hops"``.
         keep_Gamma_on_site: If False, zero the diagonal of Γ where applicable.
+        topology: ``"chain"`` uses ``abs(i-j)``; ``"ring"`` uses the shorter
+            periodic distance ``min(abs(i-j), N-abs(i-j))``.
 
     Returns:
         tuple[np.ndarray, np.ndarray]: Filtered, symmetrized copies of V and Γ.
@@ -41,7 +55,9 @@ def enforce_coupling_range(
 
     # --- V (coherent)
     if V_hop_radius is not None:
-        MV = _mask_within_hops(N, V_hop_radius, include_on_site=keep_V_on_site)
+        MV = _mask_within_hops(
+            N, V_hop_radius, include_on_site=keep_V_on_site, topology=topology
+        )
     else:
         MV = np.ones_like(V_new, dtype=bool)
     V_new[~MV] = 0.0
@@ -60,7 +76,9 @@ def enforce_coupling_range(
     elif Gamma_rule == "limit_by_hops":
         if Gamma_hop_radius is None:
             raise ValueError("Gamma_hop_radius required for Gamma_rule='limit_by_hops'.")
-        MG = _mask_within_hops(N, Gamma_hop_radius, include_on_site=keep_Gamma_on_site)
+        MG = _mask_within_hops(
+            N, Gamma_hop_radius, include_on_site=keep_Gamma_on_site, topology=topology
+        )
         G_new[~MG] = 0.0
     else:
         raise ValueError(f"Unknown Gamma_rule '{Gamma_rule}'.")

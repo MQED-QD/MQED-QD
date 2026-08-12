@@ -3,12 +3,18 @@ This is the script to test our Fresnel implementation generated matrix element i
 previous MATLAB generated matrix element (which is benchmark). Test results confirm our implementation is correct.
 '''
 import numpy as np
+import pytest
 from scipy.io import loadmat
 from matplotlib import pyplot as plt
 from scipy.stats import norm
 import os
 
-from mqed.Lindblad.ddi_matrix import build_ddi_matrix_from_Gslice, _phi_wrapped_normal_deg
+from mqed.Lindblad.ddi_matrix import (
+    _phi_wrapped_normal_deg,
+    build_ddi_matrix_from_Gpair,
+    build_ddi_matrix_from_Gslice,
+    build_ddi_matrix_from_projected_circulant,
+)
 from mqed.utils.dgf_data import load_gf_h5
 from mqed.utils.orientation import resolve_angle_deg, spherical_to_cartesian_dipole
 
@@ -166,6 +172,29 @@ def test_sparse_rx_grid_matches_dense_equivalent():
 
     assert np.allclose(sparse_v, dense_v)
     assert np.allclose(sparse_gamma, dense_gamma)
+
+
+def test_projected_circulant_ddi_matches_equivalent_pair_tensor():
+    row = np.array([1.0 + 2.0j, 3.0 + 4.0j, 5.0 + 6.0j])
+    offsets = (np.arange(3)[None, :] - np.arange(3)[:, None]) % 3
+    pair = np.zeros((3, 3, 3, 3), dtype=complex)
+    pair[:, :, 2, 2] = row[offsets]
+    orientation = np.array([0.0, 0.0, 1.0])
+
+    expected_v, expected_gamma = build_ddi_matrix_from_Gpair(
+        pair, 2.0, 3, 3.8, uD=orientation, uA=orientation
+    )
+    actual_v, actual_gamma = build_ddi_matrix_from_projected_circulant(row, 2.0, 3, 3.8)
+
+    assert np.allclose(actual_v, expected_v)
+    assert np.allclose(actual_gamma, expected_gamma)
+
+
+def test_projected_circulant_ddi_rejects_oversized_expansion():
+    with pytest.raises(ValueError, match="exceeding the configured"):
+        build_ddi_matrix_from_projected_circulant(
+            np.ones(4), 2.0, 4, 3.8, max_allocation_bytes=1
+        )
 
 if __name__ == "__main__":
     # test_stationary()
