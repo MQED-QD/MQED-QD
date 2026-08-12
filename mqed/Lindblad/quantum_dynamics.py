@@ -67,7 +67,7 @@ class QuantumDynamics(ABC):
             p_acceptor = spherical_to_cartesian_dipole(self.cfg.theta_deg,
                                                     self.phi_deg)
         
-            green_kwargs = {"G_pair": Green} if self.cfg.gf_layout == "pair" else {
+            green_kwargs = {"G_circulant": Green} if self.cfg.gf_layout == "ring_circulant" else {"G_pair": Green} if self.cfg.gf_layout == "pair" else {
                 "G_slice": Green,
                 "Rx_nm": self.cfg.Rx_nm,
                 "d_nm": self.cfg.d_nm,
@@ -88,7 +88,7 @@ class QuantumDynamics(ABC):
             )
         else:  # disorder mode
             logger.info("Building Hamiltonian for orientation-disordered system.")
-            green_kwargs = {"G_pair": Green} if self.cfg.gf_layout == "pair" else {
+            green_kwargs = {"G_circulant": Green} if self.cfg.gf_layout == "ring_circulant" else {"G_pair": Green} if self.cfg.gf_layout == "pair" else {
                 "G_slice": Green,
                 "Rx_nm": self.cfg.Rx_nm,
                 "d_nm": self.cfg.d_nm,
@@ -114,6 +114,7 @@ class QuantumDynamics(ABC):
                 Gamma_rule      = cl.Gamma_rule,
                 Gamma_hop_radius= cl.Gamma_hop_radius,
                 keep_Gamma_on_site = cl.keep_Gamma_on_site,
+                topology="ring" if self.cfg.gf_layout == "ring_circulant" else "chain",
             )
             if cl.V_hop_radius ==1:
                 logger.info("Applied coupling limit: V to nearest-neighbours only.")

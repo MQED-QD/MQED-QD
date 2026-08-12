@@ -202,6 +202,16 @@ def app_run(cfg: DictConfig, output_dir: Optional[Path] = None):
             f"Pair-indexed GF has emitter shape {G_slice.shape[:2]}, "
             f"but simulation.Nmol={cfg.simulation.Nmol}."
         )
+    if gf_layout == "ring_circulant" and G_slice.shape != (cfg.simulation.Nmol,):
+        raise ValueError(
+            f"Ring-circulant GF has emitter shape {G_slice.shape}, "
+            f"but simulation.Nmol={cfg.simulation.Nmol}."
+        )
+    if gf_layout == "ring_circulant" and str(cfg.simulation.mode).lower() != "stationary":
+        raise ValueError(
+            "ring_circulant Green data already embeds stored dipole orientations and "
+            "supports stationary dynamics only."
+        )
 
 
     # 2) Build SimulationConfig (unify with your abstractions)

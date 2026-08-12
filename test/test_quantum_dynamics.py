@@ -12,6 +12,7 @@ import pytest
 from mqed.utils.dgf_data import load_gf_h5
 from mqed.Lindblad.quantum_dynamics import SimulationConfig, LindbladDynamics, NonHermitianSchDynamics
 from mqed.Lindblad.quantum_operator import position_square_operator, x_shift2_conditional_callable
+from mqed.Lindblad.coupling_filter import enforce_coupling_range
 
 dir_path = os.path.dirname(os.path.abspath(__file__))
 # Test the result of Lindblad and non-Hermitian dynamics for MQED setup
@@ -147,3 +148,21 @@ def test_quantum_dynamics_build_hamiltonian_accepts_pair_layout():
     assert hamiltonian.shape == (3, 3)
     assert lindblad_dyn.V_ab.shape == (2, 2)
     assert lindblad_dyn.Gamma_ab.shape == (2, 2)
+
+
+def test_coupling_filter_uses_periodic_distance_for_ring_topology():
+    V = np.ones((5, 5), dtype=float)
+    Gamma = np.ones((5, 5), dtype=float)
+
+    V_filtered, Gamma_filtered = enforce_coupling_range(
+        V,
+        Gamma,
+        V_hop_radius=1,
+        Gamma_rule="same_as_V",
+        topology="ring",
+    )
+
+    assert V_filtered[0, 4] == 1.0
+    assert Gamma_filtered[0, 4] == 1.0
+    assert V_filtered[0, 2] == 0.0
+    assert Gamma_filtered[0, 2] == 0.0
