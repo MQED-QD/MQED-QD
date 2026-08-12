@@ -16,13 +16,13 @@ near plasmonic interfaces using macroscopic quantum electrodynamics (MQED).
 
 ## Latest Update
 
-**Version 1.4.2** adds polarization-resolved N-layer Green tensors and extends collective emission analysis for separation-indexed chains and verified sphere-ring geometries.
+**Version 1.4.3** adds compact projected Mie ring workflows and improves MPI utilization for single-frequency N-layer distance sweeps.
 
-- **TE/TM-resolved N-layer output** optionally stores structure, TE-scattering, and TM-scattering tensors while preserving the existing total/vacuum-only HDF5 schema by default.
-- **Effective collective-emission conventions** support Varguet-effective and renormalized-total Green matrices for both pair and separation layouts, with explicit full, TE, and TM structure channels.
-- **Verified sphere-ring geometry** persists emitter positions and orientations in Mie pair files so emission analysis consumes the exact simulated geometry.
-- **Literature-style emission maps** place transition energy on the horizontal axis and emission energy on the vertical axis, while curve plots retain emission energy as their scan axis.
-- **Private Hydra overlays** keep personal or unpublished configurations under ignored `local/configs/<group>/` paths without changing normal `--config-name` commands.
+- **Ring-circulant Mie output** stores one dipole-projected cyclic Green-function row for symmetry-compatible spherical emitter rings instead of the full pair-indexed Cartesian tensor.
+- **Downstream ring analysis** supports emission spectra, spectral densities, pair-style plotting, projected DDI construction, and stationary Lindblad dynamics with periodic coupling filters.
+- **Validated compact data** carries explicit representation and emitter-geometry provenance, with shape, finite-value, and memory-allocation guards.
+- **Rx-aware N-layer MPI** distributes horizontal-distance chunks across ranks when a small energy grid would otherwise leave most ranks idle, while preserving fixed-grid kernel reuse.
+- **Annotated examples and tutorials** cover the compact sphere-ring workflow and a single-frequency, 121-point DBP/DBR MPI sweep.
 
 See `CHANGELOG.md` for the full release notes.
 

@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.4.3 - 2026-08-12
+
+### Compact Mie ring-circulant workflows
+
+- Added an opt-in `ring_circulant` Mie output layout for symmetry-compatible spherical emitter rings, storing one dipole-projected cyclic Green-function row instead of the full pair-indexed Cartesian tensor.
+- Added strict projected-representation metadata, finite-value and shape validation, required emitter geometry provenance, and configurable memory guards for loading or expanding compact ring data.
+- Extended emission-spectrum and spectral-density analysis to reconstruct scalar pair matrices from ring-circulant rows, and routed spectral-density plotting through the existing pair-index selection workflow.
+- Added stationary Lindblad/DDI support for projected circulant couplings, including periodic ring-distance filtering, while explicitly rejecting unsupported reorientation and non-stationary workflows.
+
+### Rx-aware N-layer MPI scheduling
+
+- Improved N-layer MPI utilization for single- or few-frequency sweeps by distributing contiguous Rx chunks when energy-level scheduling cannot occupy all ranks.
+- Preserved whole-energy batching for `fixed_grid` integration so sampled Sommerfeld kernels remain reusable across the complete Rx grid.
+- Added strict root-side validation for worker indices, tensor shapes, complete coverage, duplicate work, and optional TE/TM component assembly without changing the saved HDF5 result layout.
+- Added an annotated single-frequency DBP/DBR MPI example for a 0--120 nm, 121-point horizontal-distance sweep.
+
+### Documentation and validation
+
+- Added Mie ring-circulant and spectral-density tutorial guidance, example configuration, and expanded Sphinx API reference coverage for Mie, analysis, plotting, and emitter-geometry modules.
+- Added regression coverage for compact Mie output, HDF5 validation, ring reconstruction, emission and spectral analysis, projected DDI construction, periodic coupling filters, and Rx-aware MPI scheduling and assembly.
+
 ## 1.4.2 - 2026-07-25
 
 ### Polarization-resolved N-layer Green tensors
