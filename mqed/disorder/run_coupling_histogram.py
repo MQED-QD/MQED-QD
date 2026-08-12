@@ -83,6 +83,11 @@ def _build_coupling_payload(cfg: DictConfig) -> Dict[str, Any]:
         disorder_sigma_phi_deg, mode.
     """
     data = load_gf_h5(cfg.greens.h5_path)
+    if data["gf_layout"] != "separation":
+        raise ValueError(
+            "Orientation-disorder coupling histograms require separation-layout dyadic "
+            f"Green data; got {data['gf_layout']!r}."
+        )
     g_slice = np.asarray(data["G_total"][0])
     emitter_ev = float(np.asarray(data["energy_eV"])[0])
     rx_nm = np.asarray(data["Rx_nm"])

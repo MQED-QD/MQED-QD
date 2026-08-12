@@ -122,6 +122,11 @@ def _build_payload(cfg: DictConfig) -> tuple[DisorderPayload, bool, np.ndarray]:
         A tuple of (payload, compute_root_msd_flag, time_grid_ps).
     """
     data = load_gf_h5(cfg.greens.h5_path)
+    if data["gf_layout"] != "separation":
+        raise ValueError(
+            "Orientation-disorder dynamics requires separation-layout dyadic Green data; "
+            f"got {data['gf_layout']!r}. Projected ring data cannot be reoriented."
+        )
     g_slice = np.asarray(data["G_total"][0])
     emitter_ev = float(np.asarray(data["energy_eV"])[0])
     rx_nm = np.asarray(data["Rx_nm"])
