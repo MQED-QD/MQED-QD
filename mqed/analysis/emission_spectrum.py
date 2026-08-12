@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pathlib import Path
 from typing import Any
 
@@ -87,6 +89,35 @@ def project_pair_green(G_pair: np.ndarray, orientations: np.ndarray) -> np.ndarr
             f"Orientations shape {orientations.shape} does not match pair Green tensor N={G_pair.shape[1]}."
         )
     return np.einsum("ia,mijab,jb->mij", orientations, G_pair, orientations)
+
+
+DEFAULT_MAX_CIRCULANT_EXPANSION_BYTES = 2 * 1024**3
+
+
+def circulant_row_to_pair(
+    projected_row: np.ndarray,
+    *,
+    max_allocation_bytes: int = DEFAULT_MAX_CIRCULANT_EXPANSION_BYTES,
+) -> np.ndarray:
+    """Expand projected circulant rows to scalar pair matrices."""
+    row = np.asarray(projected_row, dtype=complex)
+    if row.ndim != 2 or row.shape[1] == 0:
+        raise ValueError(f"Circulant Green row must have shape (M,N), got {row.shape}.")
+    if max_allocation_bytes <= 0:
+        raise ValueError("max_allocation_bytes must be positive.")
+    energy_count, emitter_count = row.shape
+    output_bytes = energy_count * emitter_count**2 * row.dtype.itemsize
+    offset_bytes = emitter_count**2 * np.dtype(np.intp).itemsize
+    required_bytes = output_bytes + offset_bytes
+    if required_bytes > max_allocation_bytes:
+        raise ValueError(
+            "Expanding the circulant Green row requires approximately "
+            f"{required_bytes / 1024**2:.1f} MiB, exceeding the configured "
+            f"{max_allocation_bytes / 1024**2:.1f} MiB limit."
+        )
+    indices = np.arange(row.shape[1])
+    offsets = (indices[np.newaxis, :] - indices[:, np.newaxis]) % row.shape[1]
+    return row[:, offsets]
 
 
 def project_separation_green_to_pair(
@@ -319,6 +350,16 @@ def _apply_effective_separation_convention(
     return G
 
 
+def _apply_effective_ring_convention(
+    component_key: str,
+    structure: np.ndarray,
+    vacuum: np.ndarray,
+) -> np.ndarray:
+    G = structure + (vacuum if component_key == "renormalized_total" else np.real(vacuum))
+    G[:, 0] = structure[:, 0]
+    return G
+
+
 def _read_green_component(input_path: Path, component: str, channel: str = "full") -> dict[str, Any]:
     component_key = str(component).strip().lower()
     channel_key = str(channel).strip().lower()
@@ -372,6 +413,16 @@ def _read_green_component(input_path: Path, component: str, channel: str = "full
                     h5["Rx_nm"],
                     primary_name=channel_dataset,
                 )
+            elif layout == "ring_circulant":
+                _validate_ring_green_data(
+                    G,
+                    vacuum,
+                    h5["energy_eV"],
+                    h5["emitter_positions_nm"],
+                    h5.get("emitter_orientations"),
+                    h5.attrs.get("green_representation", ""),
+                    channel_dataset,
+                )
             else:
                 raise ValueError(f"green_channel='{channel_key}' is not supported for {layout} layout.")
             convention = f"{channel_key}_scattering_only"
@@ -401,6 +452,17 @@ def _read_green_component(input_path: Path, component: str, channel: str = "full
                     vacuum,
                     h5["Rx_nm"][:].astype(float),
                 )
+            elif layout == "ring_circulant":
+                _validate_ring_green_data(
+                    structure,
+                    vacuum,
+                    h5["energy_eV"],
+                    h5["emitter_positions_nm"],
+                    h5.get("emitter_orientations"),
+                    h5.attrs.get("green_representation", ""),
+                    "structure",
+                )
+                G = _apply_effective_ring_convention(component_key, structure, vacuum)
             else:
                 raise ValueError(f"green_component='{component_key}' is not supported for {layout} layout.")
         elif dataset_name not in h5:
@@ -415,6 +477,16 @@ def _read_green_component(input_path: Path, component: str, channel: str = "full
                 raise KeyError(f"Missing dataset {dataset_name!r} in {input_path}.")
         else:
             G = h5[dataset_name][:]
+        if layout == "ring_circulant" and not is_effective and channel_key not in {"te", "tm"}:
+            _validate_ring_green_data(
+                G,
+                h5["green_function_vacuum"][:],
+                h5["energy_eV"],
+                h5["emitter_positions_nm"],
+                h5.get("emitter_orientations"),
+                h5.attrs.get("green_representation", ""),
+                dataset_name or "structure",
+            )
         data: dict[str, Any] = {
             "G": G,
             "energy_eV": h5["energy_eV"][:].astype(float),
@@ -423,7 +495,7 @@ def _read_green_component(input_path: Path, component: str, channel: str = "full
             "green_channel": channel_key,
             "green_convention": convention,
         }
-        if layout == "pair":
+        if layout in {"pair", "ring_circulant"}:
             data["emitter_positions_nm"] = h5["emitter_positions_nm"][:].astype(float)
             if "emitter_orientations" in h5:
                 data["emitter_orientations"] = h5["emitter_orientations"][:].astype(float)
@@ -462,6 +534,41 @@ def _validate_pair_green_data(
             f"emitter_positions_nm must have shape ({primary.shape[1]}, 3); "
             f"got {positions_shape}."
         )
+
+
+def _validate_ring_green_data(
+    primary: np.ndarray,
+    vacuum: np.ndarray,
+    energy_dataset: h5py.Dataset,
+    positions_dataset: h5py.Dataset,
+    orientations_dataset: h5py.Dataset | None,
+    representation: str | bytes,
+    primary_name: str,
+) -> None:
+    if isinstance(representation, bytes):
+        representation = representation.decode()
+    if representation != "dipole_projected_scalar_circulant_row":
+        raise ValueError(
+            "ring_circulant files must declare the dipole-projected scalar representation."
+        )
+    if primary.ndim != 2 or primary.shape[1] == 0:
+        raise ValueError(
+            f"Circulant Green rows must have shape (M,N); got {primary_name} shape {primary.shape}."
+        )
+    if vacuum.shape != primary.shape:
+        raise ValueError(
+            f"Circulant effective Green rows require matching shapes; got {primary.shape} and {vacuum.shape}."
+        )
+    if energy_dataset.shape != (primary.shape[0],):
+        raise ValueError(f"energy_eV length must match M={primary.shape[0]}.")
+    if positions_dataset.shape != (primary.shape[1], 3):
+        raise ValueError(f"emitter_positions_nm must have shape ({primary.shape[1]}, 3).")
+    if orientations_dataset is None or orientations_dataset.shape != positions_dataset.shape:
+        raise ValueError(
+            f"emitter_orientations must have shape ({primary.shape[1]}, 3) for ring_circulant data."
+        )
+    if not np.all(np.isfinite(primary)) or not np.all(np.isfinite(vacuum)):
+        raise ValueError("Circulant Green rows must contain only finite values.")
 
 
 def _transition_grid(cfg, energy_eV: np.ndarray) -> np.ndarray:
@@ -554,6 +661,13 @@ def run_from_config(cfg: Any, output_dir: Path, original_cwd: Path | None = None
             stored_orientations=green_data.get("emitter_orientations"),
         )
         projected_G = project_pair_green(G, orientations)
+    elif gf_layout == "ring_circulant":
+        n_emitters = G.shape[1]
+        stored_orientations = green_data.get("emitter_orientations")
+        if stored_orientations is None:
+            raise ValueError("ring_circulant data must store emitter_orientations provenance.")
+        orientations = _normalize_vectors(stored_orientations, n_emitters)
+        projected_G = circulant_row_to_pair(G)
     elif gf_layout == "separation":
         n_emitters, d_nm, tolerance_nm = _separation_chain_parameters(cfg)
         orientations = resolve_emitter_orientations(cfg, n_emitters)

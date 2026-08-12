@@ -93,7 +93,7 @@ This is valid when :math:`J_{\\alpha\\beta}(\\omega)` varies slowly near
 Data layouts
 ^^^^^^^^^^^^
 
-This module supports three Green's function storage layouts:
+This module supports four Green's function storage layouts:
 
 * **Separation-indexed** (``gf_layout='separation'``):
   :math:`G(K, 3, 3)` per energy, indexed by donor–acceptor separation
@@ -103,6 +103,10 @@ This module supports three Green's function storage layouts:
 * **Pair-indexed** (``gf_layout='pair'``):
   :math:`G(N, N, 3, 3)` per energy, for all emitter pairs.
   Output shape: ``(N, N, M)`` where *N* = number of emitters.
+
+* **Projected circulant ring** (``gf_layout='ring_circulant'``):
+  A projected scalar row ``G(M, N)`` whose cyclic shifts reconstruct the
+  emitter-pair coupling matrix. Output shape: ``(N, N, M)``.
 
 * **Scan-indexed** (``gf_layout='scan'``):
   :math:`G(P, 3, 3)` per energy, for one fixed source and explicit observer
@@ -118,6 +122,7 @@ from hydra.core.hydra_config import HydraConfig
 from loguru import logger
 from omegaconf import OmegaConf
 
+from mqed.analysis.emission_spectrum import circulant_row_to_pair
 from mqed.utils.dgf_data import load_gf_h5
 from mqed.utils.logging_utils import setup_loggers_hydra_aware
 from mqed.utils.hydra_local import prepare_hydra_config_path
@@ -274,6 +279,23 @@ def compute_spectral_density_pair(
     J_eV = np.transpose(J, (1, 2, 0)) * hbar / eV_to_J  # (N, N, M)
 
     return J_eV
+
+
+def compute_spectral_density_ring_circulant(
+    projected_imag_row: np.ndarray,
+    energy_eV: np.ndarray,
+    mu_debye: float = 1.0,
+) -> np.ndarray:
+    """Compute ``J(N,N,M)`` from an already projected circulant Green row."""
+    _require_finite_green_data(projected_imag_row)
+    row = np.asarray(projected_imag_row, dtype=float)
+    if row.ndim != 2 or row.shape[0] != len(energy_eV):
+        raise ValueError(f"projected_imag_row must have shape (M,N), got {row.shape}.")
+    mu_si = mu_debye * D2CMM
+    omega = np.asarray(energy_eV, dtype=float) * eV_to_J / hbar
+    prefactor = mu_si * mu_si * omega**2 / (np.pi * hbar * eps0 * c**2)
+    pair = circulant_row_to_pair(row).real
+    return np.transpose(prefactor[:, None, None] * pair, (1, 2, 0)) * hbar / eV_to_J
 
 
 def compute_spectral_density_scan(
@@ -458,6 +480,22 @@ def compute_and_save_spectral_density(cfg) -> None:
         }
         if emitter_positions_nm is not None:
             results["emitter_positions_nm"] = emitter_positions_nm
+
+    elif gf_layout == "ring_circulant":
+        N = G_total.shape[1]
+        J_eV = compute_spectral_density_ring_circulant(
+            G_imag, energy_eV, mu_debye=mu_D_debye
+        )
+        output_file = output_dir / output_fname
+        results = {
+            "J_eV": J_eV,
+            "energy_eV": energy_eV,
+            "gf_layout": gf_layout,
+            "emitter_positions_nm": gf_data["emitter_positions_nm"],
+            "emitter_orientations": gf_data["emitter_orientations"],
+            "mu_debye": mu_D_debye,
+        }
+        logger.success(f"Spectral density computed: shape {J_eV.shape} (N, N, M), N={N}")
 
     elif gf_layout == "scan":
         observer_positions_nm = gf_data["observer_positions_nm"]

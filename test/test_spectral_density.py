@@ -5,6 +5,7 @@ import pytest
 from mqed.analysis.spectral_density import (
     _save_spectral_density_h5,
     compute_spectral_density_pair,
+    compute_spectral_density_ring_circulant,
     compute_spectral_density_scan,
     compute_spectral_density_separation,
 )
@@ -24,6 +25,20 @@ def test_pair_spectral_density_preserves_close_0_2_20_nm_curves():
     assert j_eV.shape == (3, 3, 3)
     assert np.allclose(j_eV[0, 1], j_eV[0, 0], rtol=1.1e-3)
     assert np.allclose(j_eV[0, 2], j_eV[0, 0], rtol=1.1e-3)
+
+
+def test_ring_circulant_spectral_density_matches_projected_pair():
+    energy_eV = np.array([1.0, 1.5])
+    projected_row = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+    g_imag = np.zeros((2, 3, 3, 3, 3), dtype=float)
+    offsets = (np.arange(3)[None, :] - np.arange(3)[:, None]) % 3
+    g_imag[:, :, :, 2, 2] = projected_row[:, offsets]
+    orientations = np.tile([0.0, 0.0, 1.0], (3, 1))
+
+    expected = compute_spectral_density_pair(g_imag, energy_eV, orientations, mu_debye=2.0)
+    actual = compute_spectral_density_ring_circulant(projected_row, energy_eV, mu_debye=2.0)
+
+    assert np.allclose(actual, expected)
 
 
 def test_scan_spectral_density_preserves_fixed_source_observer_curves():

@@ -9,6 +9,7 @@ from omegaconf import OmegaConf
 from mqed.analysis.emission_spectrum import (
     _read_green_component,
     compute_emission_spectrum,
+    circulant_row_to_pair,
     project_pair_green,
     project_separation_green_to_pair,
     resolve_emitter_orientations,
@@ -138,6 +139,57 @@ def test_project_pair_green_uses_left_observer_and_right_source_orientations():
 
     assert projected.shape == (1, 2, 2)
     assert projected[0, 0, 1] == 5.0 + 1.0j
+
+
+def test_circulant_row_to_pair_reconstructs_cyclic_observer_rows():
+    rows = np.array([[1.0, 2.0, 3.0, 4.0]])
+
+    pair = circulant_row_to_pair(rows)
+
+    assert np.allclose(
+        pair[0],
+        [[1.0, 2.0, 3.0, 4.0], [4.0, 1.0, 2.0, 3.0],
+         [3.0, 4.0, 1.0, 2.0], [2.0, 3.0, 4.0, 1.0]],
+    )
+
+
+def test_circulant_row_to_pair_rejects_oversized_expansion():
+    with pytest.raises(ValueError, match="exceeding the configured"):
+        circulant_row_to_pair(np.ones((2, 4)), max_allocation_bytes=1)
+
+
+def test_ring_circulant_varguet_effective_uses_structure_self_and_real_vacuum(tmp_path):
+    path = tmp_path / "ring_varguet.h5"
+    structure = np.array([[2.0 + 3.0j, 4.0 + 5.0j]])
+    vacuum = np.array([[7.0 + 11.0j, 13.0 + 17.0j]])
+    with h5py.File(path, "w") as h5:
+        h5.attrs["gf_layout"] = "ring_circulant"
+        h5.attrs["green_representation"] = "dipole_projected_scalar_circulant_row"
+        h5.create_dataset("green_function_total", data=structure + vacuum)
+        h5.create_dataset("green_function_vacuum", data=vacuum)
+        h5.create_dataset("green_function_structure", data=structure)
+        h5.create_dataset("energy_eV", data=[2.85])
+        h5.create_dataset("emitter_positions_nm", data=np.zeros((2, 3)))
+        h5.create_dataset("emitter_orientations", data=np.tile([0.0, 0.0, 1.0], (2, 1)))
+
+    green_data = _read_green_component(path, "varguet_effective")
+
+    assert green_data["G"][0, 0] == structure[0, 0]
+    assert green_data["G"][0, 1] == structure[0, 1] + np.real(vacuum[0, 1])
+
+
+def test_ring_circulant_component_rejects_missing_projection_marker(tmp_path):
+    path = tmp_path / "ring_missing_marker.h5"
+    with h5py.File(path, "w") as h5:
+        h5.attrs["gf_layout"] = "ring_circulant"
+        h5.create_dataset("green_function_total", data=np.ones((1, 2), dtype=complex))
+        h5.create_dataset("green_function_vacuum", data=np.zeros((1, 2), dtype=complex))
+        h5.create_dataset("energy_eV", data=[2.85])
+        h5.create_dataset("emitter_positions_nm", data=np.zeros((2, 3)))
+        h5.create_dataset("emitter_orientations", data=np.tile([0.0, 0.0, 1.0], (2, 1)))
+
+    with pytest.raises(ValueError, match="dipole-projected scalar representation"):
+        _read_green_component(path, "total")
 
 
 def test_varguet_effective_component_uses_scattered_diagonal_and_real_vacuum_off_diagonal(
