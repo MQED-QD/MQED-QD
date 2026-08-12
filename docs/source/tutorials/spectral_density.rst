@@ -207,7 +207,8 @@ The output figure will look like this: (identical to the reference [Chuang2022]_
   is in ``separation`` layout and the plotted curves are selected by
   ``separation_indices`` or ``separation_values_nm``.  Mie scan outputs use
   ``scan_distance_values_nm`` instead, and pair-layout outputs use
-  ``pair_indices``.
+  ``pair_indices``. Compact ``ring_circulant`` inputs are expanded to the same
+  scalar pair-matrix output and also use ``pair_indices``.
 
 Green-function layouts
 ======================
@@ -235,6 +236,12 @@ Green-function drivers:
    * - ``pair``
      - ``G[M, N, N, 3, 3]`` for all observer/source emitter pairs.
      - ``plot_settings.pair_indices`` such as ``[[0, 0], [0, 3]]``.
+   * - ``ring_circulant``
+     - ``G[M, N]`` containing one dipole-projected cyclic row for an equally
+       spaced, symmetry-compatible emitter ring.
+     - ``plot_settings.pair_indices`` after reconstruction of the scalar
+       ``J[N, N, M]`` matrix. Dipole orientations are already embedded in the
+       stored Green values.
 
 The projection formula is the same in all cases.  The layout only controls how
 position metadata is interpreted and how the curves are indexed.

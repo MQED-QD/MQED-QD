@@ -910,7 +910,7 @@ def _plot_dataset_on_axes(data: dict, cfg, ax, curve_cfg=None) -> None:
     if gf_layout == "separation":
         _plot_separation_layout(J_eV, energy_eV, data["Rx_nm"], cfg, ax=ax, curve_cfg=curve_cfg)
         return
-    if gf_layout == "pair":
+    if gf_layout in {"pair", "ring_circulant"}:
         _plot_pair_layout(
             J_eV,
             energy_eV,

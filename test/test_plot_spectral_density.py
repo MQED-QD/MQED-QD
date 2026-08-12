@@ -125,6 +125,31 @@ def test_plot_pair_layout_plots_multiple_curves():
     assert fig.axes[0].lines[1].get_linestyle() == ":"
 
 
+def test_plot_dataset_routes_ring_circulant_output_through_pair_layout():
+    cfg = OmegaConf.create({
+        "plot_settings": {
+            "pair_indices": [[0, 2]],
+            "pair_multipliers": [1.0],
+            "figsize": [4, 3],
+        }
+    })
+    data = {
+        "gf_layout": "ring_circulant",
+        "J_eV": np.arange(18, dtype=float).reshape(3, 3, 2),
+        "energy_eV": np.array([1.0, 2.0]),
+        "emitter_positions_nm": np.zeros((3, 3)),
+    }
+
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots()
+    _plot_dataset_on_axes(data, cfg, ax)
+
+    assert len(ax.lines) == 1
+    assert np.allclose(ax.lines[0].get_ydata(), data["J_eV"][0, 2, :])
+    plt.close(fig)
+
+
 def test_resolve_pair_indices_from_physical_separations():
     cfg = OmegaConf.create({
         "pair_separation_values_nm": [0.0, 2.0, 20.0],

@@ -3,8 +3,8 @@
 # function HDF5 data.  See mqed/analysis/spectral_density.py for details.
 
 defaults:
+  - hydra: default
   - _self_
-  - override hydra/job_logging: default
 
 hydra:
   job:
