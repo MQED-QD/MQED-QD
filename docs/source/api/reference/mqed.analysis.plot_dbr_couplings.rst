@@ -9,6 +9,3 @@ plot\_dbr\_couplings
    :private-members:
    :special-members:
    :exclude-members: __weakref__, __hash__
-
-
-
