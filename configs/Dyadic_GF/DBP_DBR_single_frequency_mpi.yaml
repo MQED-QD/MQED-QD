@@ -1,0 +1,141 @@
+defaults:
+  - hydra: default
+  - _self_
+
+# Single-frequency, many-Rx DBP/DBR example for the Rx-aware MPI scheduler.
+#
+# Recommended HPC launch (manual launch avoids nested mpiexec processes):
+#   mpiexec -n 24 mqed_GF_NLayer --config-name DBP_DBR_single_frequency_mpi
+# or, when running the module from a source checkout:
+#   mpiexec -n 24 python -m mqed.Dyadic_GF.main_nlayer \
+#     --config-name DBP_DBR_single_frequency_mpi
+#
+# The MPI runner automatically splits Rx into contiguous chunks when there are
+# fewer energies than ranks. No extra scheduler option is required. Output keeps
+# the usual shape (energy, Rx, 3, 3) and the original Rx ordering.
+
+hydra:
+  job:
+    name: DBP_DBR_single_frequency_Rx_MPI
+
+materials:
+  air:
+    source_type: constant
+    constant_value: 1.0+0.0j
+  DBP:
+    source_type: constant
+    constant_value: 3.0+0.0j
+  MgF2:
+    source_type: constant
+    constant_value: 1.95+0.0j
+  ZnS:
+    source_type: constant
+    constant_value: 5.20+0.0j
+  Si:
+    source_type: constant
+    constant_value: 15.8+0.24j
+
+stack:
+  # Layer indices are zero-based. The DBP spacer below is layer 10.
+  source_layer: 10
+  layers:
+    - {name: bottom_air, material: air, thickness_m: null}
+    - {name: Silicon_substrate, material: Si, thickness_nm: 180000.0}
+    - {name: ZnS_1, material: ZnS, thickness_nm: 90.0}
+    - {name: MgF2_1, material: MgF2, thickness_nm: 148.0}
+    - {name: ZnS_2, material: ZnS, thickness_nm: 90.0}
+    - {name: MgF2_2, material: MgF2, thickness_nm: 148.0}
+    - {name: ZnS_3, material: ZnS, thickness_nm: 90.0}
+    - {name: MgF2_3, material: MgF2, thickness_nm: 148.0}
+    - {name: ZnS_4, material: ZnS, thickness_nm: 90.0}
+    - {name: MgF2_4, material: MgF2, thickness_nm: 148.0}
+    - {name: DBP_emitter_spacer, material: DBP, thickness_nm: 20.0}
+    - {name: top_air, material: air, thickness_m: null}
+
+simulation:
+  spectral_param: energy_eV
+  energy_eV:
+    # min=max and points=1 means exactly one frequency. Override both values
+    # together, for example: simulation.energy_eV.min=1.9 simulation.energy_eV.max=1.9
+    min: 2.0
+    max: 2.0
+    points: 1
+  position:
+    # zD and zA are measured within stack.source_layer.
+    zD_nm: 5.0
+    zA_nm: 5.0
+    Rx_nm:
+      # np.linspace semantics: 0..120 nm inclusive with 121 points gives 1 nm spacing.
+      # Setting points: 120 would give 120 samples, not a 1 nm inclusive grid.
+      min: 0.0
+      max: 120.0
+      points: 121
+  integration:
+    # componentwise is the accuracy-oriented DBP/DBR choice used by the original
+    # DBP_z_5nm config. Each Rx point is independent, so it benefits directly from
+    # Rx-aware MPI. Validate a few points before launching a large production run.
+    method: componentwise
+    qmax: null
+    epsabs: 1.0e-10
+    epsrel: 1.0e-10
+    limit: 400
+    split_propagating: false
+
+    # The remaining fields retain supported defaults and make CLI method changes
+    # possible without editing this file.
+    dcim_q_start_factor: 0.0
+    dcim_q_stop_factor: 8.0
+    dcim_sample_count: 128
+    dcim_image_count: 16
+    hybrid_direct_q_stop_factor: 3.0
+    hybrid_tail_q_stop_factor: 8.0
+    hybrid_sample_count: 160
+    hybrid_image_count: 18
+    hybrid_validation_rtol: 5.0e-2
+    hybrid_validate_tail: true
+    hybrid_fallback_to_direct: true
+    fixed_grid_points: 2048
+    pole_search_real_min_factor: 0.0
+    pole_search_real_max_factor: 20.0
+    pole_search_imag_min_factor: -2.0
+    pole_search_imag_max_factor: 3.0e-5
+    pole_search_max_depth: 15
+    pole_search_contour_points: 96
+    pole_search_residual_tol: 1.0e-8
+    pole_search_branch_guard_factor: 1.0e-4
+    pole_residue_radius_factor: 1.0e-5
+    pole_residue_points: 192
+    branch_cut_t_limit_factor: 8.0
+    branch_cut_side_offset_factor: 1.0e-6
+    branch_cut_layers: auto
+    branch_cut_sample_count: 128
+    branch_cut_image_count: 16
+    branch_cut_validation_rtol: 5.0e-2
+    branch_cut_validate: true
+    branch_cut_fallback_to_singularity_aware: true
+    branch_cut_include_poles: true
+    branch_cut_prefactor: "1.0+0.0j"
+    branch_cut_jump_sign: 1.0
+    branch_cut_use_hankel: true
+    pole_subtraction_validate: true
+    pole_subtraction_validation_rtol: 5.0e-2
+    pole_subtraction_validation_atol: 1.0e-12
+    pole_subtraction_fallback_to_singularity_aware: true
+    pole_subtraction_include_poles: true
+    pole_subtraction_residue_method: contour
+
+parallel:
+  backend: mpi
+  # With mpi_auto_launch=false, mpi_nproc is informational; `mpiexec -n` controls
+  # the rank count. Start with 8-24 ranks and avoid using more ranks than Rx points.
+  mpi_nproc: 24
+  mpi_auto_launch: false
+  mpi_exec: mpiexec
+  # For a direct local invocation without mpiexec, set mpi_auto_launch=true and
+  # run: mqed_GF_NLayer --config-name DBP_DBR_single_frequency_mpi
+  n_jobs: -1
+
+output:
+  prefix: "DBP_DBR_single_frequency_z_${simulation.position.zD_nm}nm"
+  # componentwise cannot provide same-run TE/TM decomposition; keep this false.
+  save_polarization_components: false
