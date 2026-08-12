@@ -14,7 +14,7 @@ from mqed.Dyadic_GF.main_mie import (
     run_from_config,
     spectral_grid,
 )
-from mqed.utils.dgf_data import load_gf_h5, save_gf_pair_h5
+from mqed.utils.dgf_data import load_gf_h5, save_gf_pair_h5, save_gf_ring_circulant_h5
 from mqed.utils.emitter_geometry import equatorial_ring_nearest_neighbor_chord_nm
 
 
@@ -115,6 +115,151 @@ def test_mie_pair_output_saves_generated_ring_orientations(tmp_path):
     assert data["G_total"].shape == (1, 2, 2, 3, 3)
     assert np.allclose(data["emitter_positions_nm"], [[5.0, 0.0, 0.0], [-5.0, 0.0, 0.0]])
     assert np.allclose(data["emitter_orientations"], [[0.0, 1.0, 0.0], [0.0, -1.0, 0.0]], atol=1e-12)
+
+
+def test_mie_ring_circulant_output_matches_projected_pair_first_row(tmp_path):
+    base_config = {
+        "simulation": {
+            "spectral_param": "wavelength_nm",
+            "wavelength_nm": 600.0,
+            "nmax": 2,
+            "geometry": {"boundary": "sphere", "radius_nm": 1.0},
+            "emitter_ring": {
+                "emitter_count": 3,
+                "sphere_radius_nm": 1.0,
+                "emitter_surface_gap_nm": 4.0,
+                "orientation": "out_of_plane",
+            },
+            "strict_regions": True,
+        },
+        "materials": {"regions": [{"n": 1.0}, {"n": 1.5}]},
+        "parallel": {"backend": "sequential"},
+        "output": {"directory": str(tmp_path), "prefix": "mie_ring"},
+    }
+    pair_config = {**base_config, "output": {**base_config["output"], "layout": "pair"}}
+    ring_config = {
+        **base_config,
+        "output": {**base_config["output"], "layout": "ring_circulant"},
+    }
+    pair_path = tmp_path / "pair.h5"
+    ring_path = tmp_path / "ring.h5"
+
+    from mqed.Dyadic_GF.main_mie import run_config
+
+    run_config(pair_config, tmp_path, pair_path)
+    run_config(ring_config, tmp_path, ring_path)
+    pair_data = load_gf_h5(str(pair_path))
+    ring_data = load_gf_h5(str(ring_path))
+    orientations = pair_data["emitter_orientations"]
+    expected = np.array([
+        _projected_pair(pair_data["G_total"][0], orientations, 0, source_index)
+        for source_index in range(orientations.shape[0])
+    ])
+
+    assert ring_data["gf_layout"] == "ring_circulant"
+    assert ring_data["G_total"].shape == (1, 3)
+    assert np.allclose(ring_data["G_total"][0], expected)
+    assert pair_data["G_total"].nbytes == 27 * ring_data["G_total"].nbytes
+
+
+def test_mie_ring_circulant_requires_generated_ring_geometry(tmp_path):
+    config = {
+        "simulation": {
+            "spectral_param": "wavelength_nm",
+            "wavelength_nm": 600.0,
+            "nmax": 1,
+            "geometry": {"boundary": "sphere", "radius_nm": 1.0},
+            "emitter_positions_nm": [[0.0, 0.0, 5.0]],
+            "emitter_orientations": [[0.0, 0.0, 1.0]],
+        },
+        "materials": {"regions": [{"n": 1.0}, {"n": 1.0}]},
+        "parallel": {"backend": "sequential"},
+        "output": {"layout": "ring_circulant"},
+    }
+
+    from mqed.Dyadic_GF.main_mie import run_config
+
+    with pytest.raises(ValueError, match="requires simulation.emitter_ring"):
+        run_config(config, tmp_path, tmp_path / "invalid.h5")
+
+
+def test_mie_ring_circulant_rejects_mpi_before_auto_launch(tmp_path, monkeypatch):
+    config = {
+        "simulation": {
+            "spectral_param": "wavelength_nm",
+            "wavelength_nm": 600.0,
+            "nmax": 1,
+            "geometry": {"boundary": "sphere", "radius_nm": 1.0},
+            "emitter_ring": {
+                "emitter_count": 2,
+                "sphere_radius_nm": 1.0,
+                "emitter_surface_gap_nm": 4.0,
+                "orientation": "out_of_plane",
+            },
+        },
+        "materials": {"regions": [{"n": 1.0}, {"n": 1.0}]},
+        "parallel": {"backend": "mpi", "mpi_auto_launch": True},
+        "output": {"layout": "ring_circulant"},
+    }
+
+    def fail_if_called(_parallel):
+        pytest.fail("MPI auto-launch must not run for ring_circulant.")
+
+    monkeypatch.setattr("mqed.Dyadic_GF.main_mie._maybe_auto_launch_mpi", fail_if_called)
+    from mqed.Dyadic_GF.main_mie import run_config
+
+    with pytest.raises(ValueError, match="supports sequential and joblib"):
+        run_config(config, tmp_path, tmp_path / "invalid_mpi.h5")
+
+
+def test_mie_ring_circulant_hdf5_rejects_non_row_shape(tmp_path):
+    output_path = tmp_path / "invalid_ring.h5"
+
+    with pytest.raises(ValueError, match="Gtot must have shape"):
+        save_gf_ring_circulant_h5(
+            str(output_path),
+            np.zeros((1, 2, 2), dtype=complex),
+            np.zeros((1, 2), dtype=complex),
+            np.array([1.0]),
+            np.zeros((2, 3)),
+            np.tile([0.0, 0.0, 1.0], (2, 1)),
+            0.0,
+            0.0,
+        )
+    assert not output_path.exists()
+
+
+def test_mie_ring_circulant_hdf5_rejects_nonfinite_projected_values(tmp_path):
+    output_path = tmp_path / "invalid_ring_nonfinite.h5"
+    with pytest.raises(ValueError, match="finite values"):
+        save_gf_ring_circulant_h5(
+            output_path,
+            np.array([[np.nan + 0.0j]]),
+            np.zeros((1, 1), dtype=complex),
+            np.array([2.0]),
+            np.zeros((1, 3)),
+            np.array([[0.0, 0.0, 1.0]]),
+            0.0,
+            0.0,
+        )
+    assert not output_path.exists()
+
+
+def test_ring_circulant_loader_rejects_oversized_data_before_read(tmp_path):
+    h5_path = tmp_path / "ring_size_limit.h5"
+    save_gf_ring_circulant_h5(
+        str(h5_path),
+        np.ones((1, 2), dtype=complex),
+        np.ones((1, 2), dtype=complex),
+        np.array([2.0]),
+        np.array([[1.0, 0.0, 0.0], [-1.0, 0.0, 0.0]]),
+        np.array([[0.0, 0.0, 1.0], [0.0, 0.0, 1.0]]),
+        0.0,
+        0.0,
+    )
+
+    with pytest.raises(ValueError, match="exceeding the configured"):
+        load_gf_h5(str(h5_path), max_ring_bytes=1)
 
 
 def test_mie_pair_hdf5_orientations_are_optional_and_backward_compatible(tmp_path):
@@ -472,6 +617,16 @@ def test_gf_sphere_example_config_defines_equatorial_out_of_plane_ring():
     assert np.allclose(orientations, np.tile([0.0, 0.0, 1.0], (15, 1)))
     assert np.isclose(equatorial_ring_nearest_neighbor_chord_nm(15, 10.0), 4.158, atol=5e-4)
     assert simulation["sphere_example"]["dipole_moment_debye"] == 24.0
+
+
+def test_gf_sphere_ring_circulant_example_is_explicit_opt_in():
+    config = OmegaConf.to_container(
+        OmegaConf.load(Path("configs/Dyadic_GF/GF_sphere_ring_circulant_example.yaml")),
+        resolve=True,
+    )
+
+    assert config["output"]["layout"] == "ring_circulant"
+    assert config["output"]["prefix"] == "mie_silver_sphere_ring_circulant"
 
 
 def test_gf_sphere_example_direct_output_matches_emission_input_default():

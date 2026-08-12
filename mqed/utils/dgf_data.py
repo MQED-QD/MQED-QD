@@ -1,7 +1,7 @@
 r"""
 HDF5 I/O for dyadic Green's function data.
 
-Two storage layouts are supported, distinguished by the HDF5 attribute
+Four storage layouts are supported, distinguished by the HDF5 attribute
 ``gf_layout`` on the root group:
 
 Separation-indexed (``gf_layout = "separation"``, legacy default)
@@ -54,6 +54,13 @@ Scan-indexed (``gf_layout = "scan"``)
         source_position_nm     (3,)           float64
         position_fixed         group  {zD_meters, zA_meters}
 
+Projected circulant ring (``gf_layout = "ring_circulant"``)
+    For an evenly spaced emitter ring around a concentric spherical medium,
+    the dipole-projected scalar Green matrix is circulant. Only its observer-0
+    row is stored, with shape ``(M, N)``. Entry ``[m, k]`` represents the
+    projected coupling from source ``k`` to observer ``0``; the full scalar
+    matrix follows as ``G[m, i, j] = row[m, (j-i) mod N]``.
+
 Backward compatibility: files written by older planar code (no ``gf_layout``
 attribute) are treated as separation-indexed, while older Mie scan files are
 recognized from their explicit position datasets and ``G_total`` aliases.
@@ -65,6 +72,95 @@ from typing import Any, Dict
 from loguru import logger
 
 from mqed.utils.emitter_geometry import normalize_orientation_vectors
+
+
+DEFAULT_MAX_RING_LOAD_BYTES = 2 * 1024**3
+
+
+def _dataset_nbytes(dataset: h5py.Dataset) -> int:
+    return int(dataset.size) * int(dataset.dtype.itemsize)
+
+
+def _preflight_ring_circulant_datasets(
+    h5: h5py.File,
+    total_key: str,
+    vacuum_key: str,
+    max_bytes: int,
+) -> None:
+    if max_bytes <= 0:
+        raise ValueError("max_ring_bytes must be positive.")
+
+    representation = h5.attrs.get("green_representation", "")
+    if isinstance(representation, bytes):
+        representation = representation.decode()
+    if representation != "dipole_projected_scalar_circulant_row":
+        raise ValueError(
+            "ring_circulant files must declare "
+            "green_representation='dipole_projected_scalar_circulant_row'."
+        )
+
+    required_keys = {
+        "energy_eV",
+        "emitter_positions_nm",
+        "emitter_orientations",
+        total_key,
+        vacuum_key,
+    }
+    missing = sorted(key for key in required_keys if key not in h5)
+    if missing:
+        raise ValueError(f"ring_circulant file is missing required datasets: {missing}.")
+
+    energy_dataset = h5["energy_eV"]
+    positions_dataset = h5["emitter_positions_nm"]
+    orientations_dataset = h5["emitter_orientations"]
+    total_dataset = h5[total_key]
+    vacuum_dataset = h5[vacuum_key]
+    if energy_dataset.ndim != 1 or energy_dataset.shape[0] == 0:
+        raise ValueError("ring_circulant energy_eV must have shape (M,) with M > 0.")
+    if positions_dataset.ndim != 2 or positions_dataset.shape[1:] != (3,):
+        raise ValueError("ring_circulant emitter_positions_nm must have shape (N, 3).")
+    if positions_dataset.shape[0] == 0:
+        raise ValueError("ring_circulant emitter_positions_nm must contain at least one emitter.")
+    if orientations_dataset.shape != positions_dataset.shape:
+        raise ValueError(
+            "ring_circulant emitter_orientations must match emitter_positions_nm shape."
+        )
+
+    expected_shape = (energy_dataset.shape[0], positions_dataset.shape[0])
+    if total_dataset.shape != expected_shape or vacuum_dataset.shape != expected_shape:
+        raise ValueError(
+            f"ring_circulant Green arrays must have shape {expected_shape}; "
+            f"got total {total_dataset.shape} and vacuum {vacuum_dataset.shape}."
+        )
+
+    datasets = [
+        energy_dataset,
+        positions_dataset,
+        orientations_dataset,
+        total_dataset,
+        vacuum_dataset,
+    ]
+    structure_key = (
+        "green_function_structure"
+        if "green_function_structure" in h5
+        else "G_structure" if "G_structure" in h5 else None
+    )
+    if structure_key is not None:
+        structure_dataset = h5[structure_key]
+        if structure_dataset.shape != expected_shape:
+            raise ValueError(
+                f"ring_circulant structure data must have shape {expected_shape}; "
+                f"got {structure_dataset.shape}."
+            )
+        datasets.append(structure_dataset)
+
+    required_bytes = sum(_dataset_nbytes(dataset) for dataset in datasets)
+    if required_bytes > max_bytes:
+        raise ValueError(
+            "ring_circulant datasets require approximately "
+            f"{required_bytes / 1024**2:.1f} MiB in memory, exceeding the "
+            f"configured {max_bytes / 1024**2:.1f} MiB limit."
+        )
 
 
 # ── Separation-indexed (legacy) ──────────────────────────────────────
@@ -226,6 +322,82 @@ def save_gf_pair_h5(
         )
 
 
+def save_gf_ring_circulant_h5(
+    h5_path: str,
+    Gtot: np.ndarray,
+    Gvac: np.ndarray,
+    E: np.ndarray,
+    emitter_positions_nm: np.ndarray,
+    emitter_orientations: np.ndarray,
+    zD: float,
+    zA: float,
+    *,
+    Gstructure: np.ndarray | None = None,
+    wavelength_m: np.ndarray | None = None,
+    observer_region: np.ndarray | None = None,
+    attrs: Dict[str, Any] | None = None,
+) -> None:
+    """Save a dipole-projected circulant Green row for a symmetric ring.
+
+    The Green arrays have shape ``(M, N)`` and already include the left and
+    right emitter-orientation projections. This layout is not a dyadic tensor
+    and must only be used when cyclic symmetry has been established.
+    """
+    positions = np.asarray(emitter_positions_nm, dtype=float)
+    if positions.ndim != 2 or positions.shape[1:] != (3,) or positions.shape[0] == 0:
+        raise ValueError("emitter_positions_nm must have shape (N, 3) with N > 0.")
+    if not np.all(np.isfinite(positions)):
+        raise ValueError("emitter_positions_nm must be finite.")
+    orientations = normalize_orientation_vectors(emitter_orientations, positions.shape[0])
+    energy = np.asarray(E, dtype=float)
+    if energy.ndim != 1 or energy.size == 0 or not np.all(np.isfinite(energy)):
+        raise ValueError("E must be a non-empty finite one-dimensional energy grid.")
+
+    expected_shape = (energy.size, positions.shape[0])
+    total = np.asarray(Gtot)
+    vacuum = np.asarray(Gvac)
+    if total.shape != expected_shape:
+        raise ValueError(f"Gtot must have shape {expected_shape}; got {total.shape}.")
+    if vacuum.shape != expected_shape:
+        raise ValueError(f"Gvac must have shape {expected_shape}; got {vacuum.shape}.")
+    if not np.all(np.isfinite(total)) or not np.all(np.isfinite(vacuum)):
+        raise ValueError("Gtot and Gvac must contain only finite values.")
+    structure = None if Gstructure is None else np.asarray(Gstructure)
+    if structure is not None and structure.shape != expected_shape:
+        raise ValueError(f"Gstructure must have shape {expected_shape}; got {structure.shape}.")
+    if structure is not None and not np.all(np.isfinite(structure)):
+        raise ValueError("Gstructure must contain only finite values.")
+    wavelengths = None if wavelength_m is None else np.asarray(wavelength_m, dtype=float)
+    if wavelengths is not None and wavelengths.shape != (energy.size,):
+        raise ValueError(f"wavelength_m must have shape ({energy.size},); got {wavelengths.shape}.")
+    regions = None if observer_region is None else np.asarray(observer_region)
+    if regions is not None and regions.shape != expected_shape:
+        raise ValueError(f"observer_region must have shape {expected_shape}; got {regions.shape}.")
+
+    reserved_attrs = {"gf_layout", "green_representation"}
+    if attrs is not None and reserved_attrs.intersection(attrs):
+        raise ValueError("attrs cannot override gf_layout or green_representation.")
+
+    with h5py.File(h5_path, "w") as f:
+        f.attrs["gf_layout"] = "ring_circulant"
+        f.attrs["green_representation"] = "dipole_projected_scalar_circulant_row"
+        f.create_dataset("green_function_total", data=total)
+        f.create_dataset("green_function_vacuum", data=vacuum)
+        f.create_dataset("energy_eV", data=energy)
+        f.create_dataset("emitter_positions_nm", data=positions)
+        f.create_dataset("emitter_orientations", data=orientations)
+        pos = f.create_group("position_fixed")
+        pos.attrs["zD_meters"] = zD
+        pos.attrs["zA_meters"] = zA
+        _write_optional_common_metadata(
+            f,
+            Gstructure=structure,
+            wavelength_m=wavelengths,
+            observer_region=regions,
+            attrs=attrs,
+        )
+
+
 # ── Fixed-source scan layout ─────────────────────────────────────────
 
 def save_gf_scan_h5(
@@ -300,24 +472,29 @@ def _write_optional_common_metadata(
 
 # ── Unified loader ───────────────────────────────────────────────────
 
-def load_gf_h5(h5_path: str) -> Dict[str, np.ndarray]:
+def load_gf_h5(
+    h5_path: str,
+    *,
+    max_ring_bytes: int = DEFAULT_MAX_RING_LOAD_BYTES,
+) -> Dict[str, np.ndarray]:
     """Load dyadic Green's function from HDF5, auto-detecting layout.
 
     Returns:
         Dictionary with keys that depend on the layout:
 
-        **Common keys** (both layouts):
+        **Common keys**:
             - ``G_total``:  Total Green's function array.
             - ``G_vac``:    Vacuum Green's function array.
             - ``energy_eV``: Energy array, shape ``(M,)``.
             - ``zD``:       Source z-position (meters).
             - ``zA``:       Observer z-position (meters).
-            - ``gf_layout``: ``"separation"`` or ``"pair"``.
+            - ``gf_layout``: ``"separation"``, ``"pair"``, ``"scan"``, or
+              ``"ring_circulant"``.
 
         **Separation-indexed** adds:
             - ``Rx_nm``: Separation grid, shape ``(K,)``.
 
-        **Pair-indexed** adds:
+        **Pair-indexed and ring-circulant** add:
             - ``emitter_positions_nm``: Emitter coordinates, shape ``(N, 3)``.
             - ``emitter_orientations``: Optional emitter orientations, shape ``(N, 3)``.
     """
@@ -331,6 +508,8 @@ def load_gf_h5(h5_path: str) -> Dict[str, np.ndarray]:
 
             total_key = "green_function_total" if "green_function_total" in f else "G_total"
             vacuum_key = "green_function_vacuum" if "green_function_vacuum" in f else "G_vacuum"
+            if layout == "ring_circulant":
+                _preflight_ring_circulant_datasets(f, total_key, vacuum_key, max_ring_bytes)
             Gtot = f[total_key][:]
             Gvac = f[vacuum_key][:]
             E = f["energy_eV"][:].astype(float)
@@ -364,14 +543,36 @@ def load_gf_h5(h5_path: str) -> Dict[str, np.ndarray]:
             if "green_function_scattering_tm" in f:
                 result["G_scattering_tm"] = f["green_function_scattering_tm"][:]
 
-            if layout == "pair":
+            if layout in {"pair", "ring_circulant"}:
                 result["emitter_positions_nm"] = f["emitter_positions_nm"][:].astype(float)
                 if "emitter_orientations" in f:
                     result["emitter_orientations"] = f["emitter_orientations"][:].astype(float)
-                logger.success(
-                    f"Loaded pair-indexed GF from {h5_path}: "
-                    f"{Gtot.shape[1]} emitters, {len(E)} energies"
-                )
+                if layout == "ring_circulant":
+                    expected_shape = (E.size, result["emitter_positions_nm"].shape[0])
+                    if Gtot.shape != expected_shape or Gvac.shape != expected_shape:
+                        raise ValueError(
+                            f"ring_circulant Green arrays must have shape {expected_shape}; "
+                            f"got total {Gtot.shape} and vacuum {Gvac.shape}."
+                        )
+                    if "emitter_orientations" not in result:
+                        raise ValueError("ring_circulant files require emitter_orientations.")
+                    if result["emitter_orientations"].shape != result["emitter_positions_nm"].shape:
+                        raise ValueError(
+                            "ring_circulant emitter_orientations must match emitter_positions_nm shape."
+                        )
+                    if not all(
+                        np.all(np.isfinite(values))
+                        for values in (
+                            Gtot,
+                            Gvac,
+                            E,
+                            result["emitter_positions_nm"],
+                            result["emitter_orientations"],
+                        )
+                    ):
+                        raise ValueError("ring_circulant datasets must contain only finite values.")
+                label = "projected circulant-ring" if layout == "ring_circulant" else "pair-indexed"
+                logger.success(f"Loaded {label} GF from {h5_path}: {Gtot.shape[1]} emitters, {len(E)} energies")
             elif layout == "scan":
                 if "observer_positions_nm" in f:
                     result["observer_positions_nm"] = f["observer_positions_nm"][:].astype(float)

@@ -65,7 +65,7 @@ try:  # installed as a sibling file or as mqed.Dyadic_GF.GF_Mie
 except Exception:  # pragma: no cover
     from mqed.Dyadic_GF.GF_Mie import MieGreenFunction, c, eV_to_J, hbar  # type: ignore
 
-from mqed.utils.dgf_data import save_gf_pair_h5, save_gf_scan_h5
+from mqed.utils.dgf_data import save_gf_pair_h5, save_gf_ring_circulant_h5, save_gf_scan_h5
 from mqed.utils.emitter_geometry import (
     generate_equatorial_ring_from_config,
     normalize_orientation_vectors,
@@ -379,13 +379,18 @@ def output_layout_from_config(config: Mapping[str, Any]) -> str:
         "pair": "pair",
         "pair_tensor": "pair",
         "mqed_pair": "pair",
+        "ring_circulant": "ring_circulant",
+        "circulant_ring": "ring_circulant",
+        "projected_ring": "ring_circulant",
         "scan": "scan",
         "source_scan": "scan",
         "matlab": "scan",
         "matlab_reproduction": "scan",
     }
     if raw not in aliases:
-        raise ValueError("output.layout must be 'pair'/'pair_tensor' or 'scan'/'matlab_reproduction'.")
+        raise ValueError(
+            "output.layout must be 'pair', 'ring_circulant', or 'scan'/'matlab_reproduction'."
+        )
     return aliases[raw]
 
 
@@ -719,6 +724,114 @@ def _compute_one_pair_energy(
             regions[observer_index, source_index] = result.observer_region
 
     return index, total, vacuum, structure, regions
+
+
+def _compute_one_ring_circulant_energy(
+    index: int,
+    energy_eV: float,
+    wavelength_m: float,
+    wavelength_nm: float,
+    config: Mapping[str, Any],
+    emitter_positions: np.ndarray,
+    emitter_orientations: np.ndarray,
+    base_dir: Path,
+) -> tuple[int, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    simulation = config["simulation"]
+    omega = energy_eV * eV_to_J / hbar
+    resolver = MaterialResolver(base_dir)
+    nr = build_refractive_indices(config, resolver, energy_eV, wavelength_nm, omega)
+    calculator = MieGreenFunction(
+        refractive_indices=nr,
+        radii_m=radii_m_from_config(simulation),
+        omega=omega,
+        nmax=int(simulation["nmax"]),
+        geometry=geometry_name_from_config(simulation),
+        strict_regions=bool(simulation.get("strict_regions", True)),
+    )
+
+    observer = emitter_positions[0]
+    observer_orientation = emitter_orientations[0]
+    n_emitters = emitter_positions.shape[0]
+    total = np.zeros(n_emitters, dtype=complex)
+    vacuum = np.zeros_like(total)
+    structure = np.zeros_like(total)
+    regions = np.zeros(n_emitters, dtype=int)
+    for source_index, source in enumerate(emitter_positions):
+        result = calculator.calculate_components(observer, source)
+        source_orientation = emitter_orientations[source_index]
+        total[source_index] = observer_orientation @ (result.total @ source_orientation)
+        vacuum[source_index] = observer_orientation @ (result.vacuum @ source_orientation)
+        structure[source_index] = observer_orientation @ (result.structure @ source_orientation)
+        regions[source_index] = result.observer_region
+    return index, total, vacuum, structure, regions
+
+
+def run_ring_circulant_sequential(
+    energy_eV: np.ndarray,
+    wavelength_m: np.ndarray,
+    wavelength_nm: np.ndarray,
+    config: Mapping[str, Any],
+    emitter_positions: np.ndarray,
+    emitter_orientations: np.ndarray,
+    base_dir: Path,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    n_energy = energy_eV.size
+    n_emitters = emitter_positions.shape[0]
+    total = np.zeros((n_energy, n_emitters), dtype=complex)
+    vacuum = np.zeros_like(total)
+    structure = np.zeros_like(total)
+    regions = np.zeros((n_energy, n_emitters), dtype=int)
+    for index in tqdm(range(n_energy), desc="Energies", ncols=100):
+        _, tot, vac, st, reg = _compute_one_ring_circulant_energy(
+            index,
+            float(energy_eV[index]),
+            float(wavelength_m[index]),
+            float(wavelength_nm[index]),
+            config,
+            emitter_positions,
+            emitter_orientations,
+            base_dir,
+        )
+        total[index] = tot
+        vacuum[index] = vac
+        structure[index] = st
+        regions[index] = reg
+    return total, vacuum, structure, regions, energy_eV
+
+
+def run_ring_circulant_joblib(
+    energy_eV: np.ndarray,
+    wavelength_m: np.ndarray,
+    wavelength_nm: np.ndarray,
+    config: Mapping[str, Any],
+    emitter_positions: np.ndarray,
+    emitter_orientations: np.ndarray,
+    base_dir: Path,
+    n_jobs: int,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    from joblib import Parallel, delayed
+
+    raw = Parallel(n_jobs=n_jobs, prefer="processes")(
+        delayed(_compute_one_ring_circulant_energy)(
+            index,
+            float(energy_eV[index]),
+            float(wavelength_m[index]),
+            float(wavelength_nm[index]),
+            config,
+            emitter_positions,
+            emitter_orientations,
+            base_dir,
+        )
+        for index in tqdm(range(energy_eV.size), desc="Submit energies", ncols=100)
+    )
+    shape = (energy_eV.size, emitter_positions.shape[0])
+    total = np.zeros(shape, dtype=complex)
+    vacuum = np.zeros_like(total)
+    structure = np.zeros_like(total)
+    regions = np.zeros(shape, dtype=int)
+    for index, tot, vac, st, reg in raw:
+        total[index], vacuum[index], structure[index], regions[index] = tot, vac, st, reg
+    return total, vacuum, structure, regions, energy_eV
 
 
 def run_sequential(
@@ -1098,7 +1211,7 @@ def output_path_from_config(config: Mapping[str, Any], config_path: Path) -> Pat
     simulation = config["simulation"]
     energy, _, _ = spectral_grid(simulation)
     layout = output_layout_from_config(config)
-    if layout == "pair":
+    if layout in {"pair", "ring_circulant"}:
         position_suffix = f"_emitters_{resolve_emitter_geometry_m(simulation)[0].shape[0]}pts"
     else:
         observers = observer_positions_m(simulation)
@@ -1131,11 +1244,55 @@ def run_config(config: Mapping[str, Any], config_base_dir: Path, output_override
     config_base_dir = config_base_dir.resolve()
     out = output_override.resolve() if output_override is not None else output_path_from_config(config, config_base_dir / "GF_Mie.yaml")
 
+    if layout == "ring_circulant" and backend == "mpi":
+        raise ValueError("ring_circulant currently supports sequential and joblib backends.")
+
     if backend == "mpi":
         _maybe_auto_launch_mpi(parallel)
 
-    if layout == "pair":
+    if layout in {"pair", "ring_circulant"}:
         emitters, emitter_orientations = resolve_emitter_geometry_m(simulation)
+        if layout == "ring_circulant":
+            if "emitter_ring" not in simulation:
+                raise ValueError("ring_circulant layout requires simulation.emitter_ring.")
+            if emitter_orientations is None:
+                raise ValueError("ring_circulant layout requires emitter orientations.")
+            if geometry_name_from_config(simulation) not in {"sphere", "coreshell", "simplecavity"}:
+                raise ValueError("ring_circulant layout requires a concentric spherical geometry.")
+            logger.info(
+                "Grid: {} energies x {} projected ring representatives | geometry={} | nmax={}",
+                energy_eV.size,
+                emitters.shape[0],
+                geometry_name_from_config(simulation),
+                simulation["nmax"],
+            )
+            if backend == "sequential":
+                total, vacuum, structure, regions, _ = run_ring_circulant_sequential(
+                    energy_eV, wavelength_m, wavelength_nm, config, emitters,
+                    emitter_orientations, config_base_dir,
+                )
+            elif backend == "joblib":
+                total, vacuum, structure, regions, _ = run_ring_circulant_joblib(
+                    energy_eV, wavelength_m, wavelength_nm, config, emitters,
+                    emitter_orientations, config_base_dir, int(parallel.get("n_jobs", -1)),
+                )
+            else:
+                raise ValueError("parallel.backend must be 'sequential', 'joblib', or 'mpi'.")
+
+            out.parent.mkdir(parents=True, exist_ok=True)
+            reference_z = float(emitters[0, 2])
+            save_gf_ring_circulant_h5(
+                str(out), total, vacuum, energy_eV, emitters * 1e9, emitter_orientations,
+                zD=reference_z, zA=reference_z, Gstructure=structure,
+                wavelength_m=wavelength_m, observer_region=regions,
+                attrs=_hdf5_attrs(
+                    config,
+                    "Dipole-projected circulant Green row for a symmetric spherical emitter ring.",
+                ),
+            )
+            logger.success("Mie projected circulant-ring simulation complete: {}", out)
+            return out
+
         logger.info(
             "Grid: {} energies x {}x{} emitter pairs | geometry={} | nmax={}",
             energy_eV.size,
