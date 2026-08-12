@@ -1,10 +1,10 @@
-﻿Dyadic\_GF
-==========
+﻿analysis
+========
 
 ..
    Also see https://stackoverflow.com/questions/2701998/automatically-document-all-modules-recursively-with-sphinx-autodoc
 
-.. automodule:: mqed.Dyadic_GF
+.. automodule:: mqed.analysis
    :members:
    :private-members:
    :special-members:
@@ -19,13 +19,9 @@
    :template: module_template.rst
    :recursive:
 
-   GF_Mie
-   GF_NLayer
-   GF_Sommerfeld
-   data_provider
-   dcim
-   main
-   main_mie
-   main_nlayer
-   sommerfeld_singularities
+   FE
+   RET
+   emission_spectrum
+   plot_dbr_couplings
+   spectral_density
 

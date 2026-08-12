@@ -19,6 +19,7 @@
    :template: module_template.rst
    :recursive:
 
+   plot_emission_spectrum
    plot_ipr
    plot_msd
    plot_pr

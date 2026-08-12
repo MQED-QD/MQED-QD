@@ -23,6 +23,7 @@
    SI_unit
    au_unit
    dgf_data
+   emitter_geometry
    enhancement
    file_utils
    hydra_local
