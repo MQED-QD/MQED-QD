@@ -21,14 +21,15 @@ All lengths are SI, so a pole in the q plane has units of 1/m.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Callable, Sequence
+from math import pi
+from typing import Callable, Sequence, Union
 
 import numpy as np
 from scipy.integrate import quad_vec
 from scipy.optimize import root
 from scipy.special import hankel1, jv
 
-ArrayLikeComplex = complex | np.ndarray
+ArrayLikeComplex = Union[complex, np.ndarray]
 
 
 @dataclass(frozen=True)
@@ -501,7 +502,7 @@ def pole_integral_contribution(
     residue: PoleResidue,
     rho: float,
     orders: Sequence[int],
-    prefactor: complex = 1j * np.pi,
+    prefactor: complex = 1j * pi,
     use_hankel: bool = True,
 ) -> np.ndarray:
     """Convert kernel residues to scalar Sommerfeld-integral pole terms.

@@ -66,7 +66,7 @@ def ipr_callable(t, state, *, Nmol):
     return float(np.dot(q, q))                  # IPR_site
 
 def excited_population_norm(state, *, Nmol: int) -> float:
-    """Total excited-manifold population (sum over sites |1>...|N|)."""
+    """Total excited-manifold population summed over molecular sites."""
     if state.isket:
         amp = state.full().ravel()
         pop = np.abs(amp)**2

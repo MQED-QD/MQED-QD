@@ -176,19 +176,7 @@ class DataProvider:
         )
 
     def _setup_drude_lorentz_model(self):
-        """Set up Drude-Lorentz parameters.
-
-        Model form used in this code:
-            epsilon(omega) = eps_inf
-                             - omega_p^2 / (omega^2 + i*gamma_D*omega)
-                             + sum_j [ f_j * omega_0j^2 /
-                                      (omega_0j^2 - omega^2 - i*gamma_j*omega) ]
-
-        where each oscillator entry provides:
-            - strength (f_j)
-            - omega_0 in eV or rad/s
-            - gamma in eV or rad/s
-        """
+        """Set up validated Drude-Lorentz material parameters."""
         cfg = self.config.drude_lorentz_config
         self.dl_eps_inf = self._require_finite(cfg.eps_inf, "drude_lorentz_config.eps_inf")
         self.dl_omega_p = self._read_omega_parameter(cfg, "omega_p")
