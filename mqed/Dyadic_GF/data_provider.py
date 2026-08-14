@@ -117,11 +117,10 @@ class DataProvider:
             logger.info(f"Loading dispersive material data from: {filepath}")
             logger.info(f"Excel sheet name: {excel_cfg.sheet_name}")
 
-            df = pd.read_excel(filepath, sheet_name=excel_cfg.sheet_name)
-            
-            lambda_nm = df.iloc[:, 0].values
-            epsilon_real = df.iloc[:, 1].values
-            epsilon_imag = df.iloc[:, 2].values
+            lambda_nm, epsilon_real, epsilon_imag = self._read_excel_material_table(
+                filepath,
+                excel_cfg.sheet_name,
+            )
             epsilon_complex = epsilon_real + 1j * epsilon_imag
 
             # Convert wavelength to angular frequency (omega)
@@ -148,6 +147,44 @@ class DataProvider:
         except Exception as e:
             logger.error(f"Failed to load or process Excel data: {e}")
             raise
+
+    @staticmethod
+    def _read_excel_material_table(filepath, sheet_name):
+        dataframe = pd.read_excel(filepath, sheet_name=sheet_name, header=None)
+        if dataframe.shape[1] < 3:
+            raise ValueError("Excel material sheet must contain at least three columns.")
+        if dataframe.empty:
+            raise ValueError("Excel material sheet must contain data rows.")
+
+        material_columns = dataframe.iloc[:, :3].copy()
+        first_row = pd.to_numeric(material_columns.iloc[0], errors="coerce")
+        if first_row.isna().all():
+            material_columns = material_columns.iloc[1:].reset_index(drop=True)
+        elif first_row.isna().any():
+            raise ValueError(
+                "Excel material sheet first row must be either three labels or three numeric values."
+            )
+
+        numeric_columns = material_columns.apply(pd.to_numeric, errors="coerce")
+        if numeric_columns.empty or numeric_columns.isna().any().any():
+            raise ValueError(
+                "Excel material wavelength, epsilon_real, and epsilon_imag columns "
+                "must contain only numeric data."
+            )
+
+        lambda_nm = numeric_columns.iloc[:, 0].to_numpy(dtype=float)
+        epsilon_real = numeric_columns.iloc[:, 1].to_numpy(dtype=float)
+        epsilon_imag = numeric_columns.iloc[:, 2].to_numpy(dtype=float)
+        if not np.all(np.isfinite(lambda_nm)) or np.any(lambda_nm <= 0.0):
+            raise ValueError("Excel material wavelength values must be finite and positive.")
+        if np.unique(lambda_nm).size != lambda_nm.size:
+            raise ValueError("Excel material sheet contains duplicate wavelength values.")
+        if not np.all(np.isfinite(epsilon_real)) or not np.all(np.isfinite(epsilon_imag)):
+            raise ValueError("Excel material epsilon values must be finite.")
+        if lambda_nm.size < 4:
+            raise ValueError("Excel material sheet needs at least four rows for cubic interpolation.")
+
+        return lambda_nm, epsilon_real, epsilon_imag
 
     def _setup_constant_epsilon(self):
         """Sets up the provider for a non-dispersive material."""

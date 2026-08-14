@@ -1,8 +1,10 @@
 import numpy as np
+import pandas as pd
 import pytest
 from omegaconf import OmegaConf
 
-from mqed.Dyadic_GF.data_provider import DataProvider
+import mqed.Dyadic_GF.data_provider as data_provider_module
+from mqed.Dyadic_GF.data_provider import C_METERS_PER_SEC, DataProvider
 
 
 HBAR_EV_S = 6.582119569e-16
@@ -10,6 +12,22 @@ HBAR_EV_S = 6.582119569e-16
 
 def _omega_from_ev(value_eV):
     return value_eV / HBAR_EV_S
+
+
+def _excel_config(filepath, sheet_name):
+    return OmegaConf.create(
+        {
+            "source_type": "excel",
+            "excel_config": {
+                "filepath": filepath,
+                "sheet_name": sheet_name,
+            },
+        }
+    )
+
+
+def _patch_material_root(monkeypatch, root):
+    monkeypatch.setattr(data_provider_module.resources, "files", lambda package: root)
 
 
 def test_constant_source_returns_configured_value():
@@ -134,3 +152,67 @@ def test_unknown_source_type_raises_clear_error():
 
     with pytest.raises(ValueError, match="Unknown material source_type"):
         DataProvider(cfg)
+
+
+def test_excel_loader_preserves_labeled_sheet_first_data_row(tmp_path, monkeypatch):
+    workbook = tmp_path / "materials.xlsx"
+    rows = [
+        [300.0, 2.10, 0.01],
+        [400.0, 2.20, 0.02],
+        [500.0, 2.30, 0.03],
+        [600.0, 2.40, 0.04],
+    ]
+    pd.DataFrame(
+        rows,
+        columns=["wavelength_nm", "epsilon_real", "epsilon_imag"],
+    ).to_excel(workbook, sheet_name="Labeled", index=False)
+    _patch_material_root(monkeypatch, tmp_path)
+
+    provider = DataProvider(_excel_config("materials.xlsx", "Labeled"))
+    omega_300_nm = 2 * np.pi * C_METERS_PER_SEC / 300e-9
+
+    assert np.isclose(provider.get_epsilon(omega_300_nm), 2.10 + 0.01j)
+    assert np.isclose(provider.omega_max, omega_300_nm)
+
+
+def test_excel_loader_preserves_headerless_sheet_first_numeric_row(tmp_path, monkeypatch):
+    workbook = tmp_path / "materials.xlsx"
+    rows = [
+        [300.0, 1.10, 0.01],
+        [400.0, 1.20, 0.02],
+        [500.0, 1.30, 0.03],
+        [600.0, 1.40, 0.04],
+    ]
+    pd.DataFrame(rows).to_excel(
+        workbook,
+        sheet_name="Legacy",
+        index=False,
+        header=False,
+    )
+    _patch_material_root(monkeypatch, tmp_path)
+
+    provider = DataProvider(_excel_config("materials.xlsx", "Legacy"))
+    omega_300_nm = 2 * np.pi * C_METERS_PER_SEC / 300e-9
+
+    assert np.isclose(provider.get_epsilon(omega_300_nm), 1.10 + 0.01j)
+    assert np.isclose(provider.omega_max, omega_300_nm)
+
+
+def test_excel_loader_rejects_duplicate_wavelengths(tmp_path, monkeypatch):
+    workbook = tmp_path / "materials.xlsx"
+    rows = [
+        [300.0, 1.10, 0.01],
+        [400.0, 1.20, 0.02],
+        [400.0, 1.25, 0.03],
+        [600.0, 1.40, 0.04],
+    ]
+    pd.DataFrame(rows).to_excel(
+        workbook,
+        sheet_name="Legacy",
+        index=False,
+        header=False,
+    )
+    _patch_material_root(monkeypatch, tmp_path)
+
+    with pytest.raises(ValueError, match="duplicate wavelength"):
+        DataProvider(_excel_config("materials.xlsx", "Legacy"))
