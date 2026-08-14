@@ -1,5 +1,7 @@
 import numpy as np
 import pytest
+from scipy.integrate import IntegrationWarning
+
 from mqed.Dyadic_GF.GF_NLayer import LayerSpec, NLayerGreenFunction
 from mqed.Dyadic_GF.GF_Sommerfeld import Greens_function_analytical
 from mqed.utils.dgf_data import load_gf_h5, save_gf_h5
@@ -468,6 +470,57 @@ def test_componentwise_quadrature_has_zero_scattering_for_no_contrast_stack():
     assert solver.last_componentwise_report["method"] == "componentwise"
 
 
+def test_componentwise_warning_reports_point_component_and_interval(monkeypatch):
+    from mqed.Dyadic_GF import GF_NLayer as nlayer_module
+
+    def warning_quad(func, lower, upper, **kwargs):
+        import warnings
+
+        warnings.warn("forced quadrature warning", IntegrationWarning)
+        return 0.0, 1.0
+
+    monkeypatch.setattr(nlayer_module, "quad", warning_quad)
+    solver = NLayerGreenFunction(
+        layers=[
+            LayerSpec(epsilon=2.25 + 0.0j, thickness_m=None),
+            LayerSpec(epsilon=2.25 + 0.0j, thickness_m=80e-9),
+            LayerSpec(epsilon=2.25 + 0.0j, thickness_m=None),
+        ],
+        source_layer=1,
+        omega=2.0e15,
+        qmax=2.0e7,
+        integration_method="componentwise",
+        pole_search_max_depth=2,
+    )
+    context = {
+        "rank": 7,
+        "energy_index": 3,
+        "energy_eV": 2.0,
+        "rx_index": 9,
+        "rx_m": 20e-9,
+    }
+
+    with pytest.warns(IntegrationWarning, match="forced quadrature warning") as caught:
+        solver.compute_scattering_tensor_componentwise(
+            20e-9,
+            0.0,
+            40e-9,
+            40e-9,
+            warning_context=context,
+        )
+
+    warning_text = str(caught[0].message)
+    assert "rank=7" in warning_text
+    assert "energy_index=3" in warning_text
+    assert "energy_eV=2" in warning_text
+    assert "rx_index=9" in warning_text
+    assert "rx_nm=20" in warning_text
+    assert "tensor=(0, 0)" in warning_text
+    assert "part=real" in warning_text
+    assert "interval=[" in warning_text
+    assert solver.last_componentwise_report["warning_context"] == context
+
+
 def test_compute_integrals_rejects_componentwise_api_ambiguity():
     solver = NLayerGreenFunction(
         layers=[
@@ -850,7 +903,7 @@ def test_main_nlayer_passes_singularity_aware_options(monkeypatch):
 
 def test_compute_one_energy_passes_componentwise_method(monkeypatch):
     main_nlayer = pytest.importorskip("mqed.Dyadic_GF.main_nlayer")
-    captured = {}
+    captured = {"warning_contexts": []}
 
     class AttrDict(dict):
         def __getattr__(self, name):
@@ -863,8 +916,16 @@ def test_compute_one_energy_passes_componentwise_method(monkeypatch):
         def __init__(self, **kwargs):
             captured.update(kwargs)
 
-        def calculate_total_Green_function(self, x, y, z_observer, z_source):
+        def calculate_total_Green_function(
+            self,
+            x,
+            y,
+            z_observer,
+            z_source,
+            warning_context=None,
+        ):
             assert captured["integration_method"] == "componentwise"
+            captured["warning_contexts"].append(warning_context)
             return np.eye(3, dtype=complex) * (1.0 + x + y + z_observer + z_source)
 
         def vacuum_component(self, x, y, z_observer, z_source):
@@ -902,12 +963,30 @@ def test_compute_one_energy_passes_componentwise_method(monkeypatch):
         stack_cfg=AttrDict({"source_layer": 1}),
         materials_cfg=AttrDict({}),
         integ_cfg=integ_cfg,
+        rank=7,
+        rx_indices=np.array([4, 9]),
     )
 
     assert total.shape == (2, 3, 3)
     assert vacuum.shape == (2, 3, 3)
     assert captured["integration_method"] == "componentwise"
     assert captured["qmax_factor"] == 30.0
+    assert captured["warning_contexts"] == [
+        {
+            "rank": 7,
+            "energy_index": 0,
+            "energy_eV": 2.0,
+            "rx_index": 4,
+            "rx_m": 0.0,
+        },
+        {
+            "rank": 7,
+            "energy_index": 0,
+            "energy_eV": 2.0,
+            "rx_index": 9,
+            "rx_m": 10e-9,
+        },
+    ]
 
 
 def test_compute_one_energy_opt_in_returns_structure_and_polarization_arrays(monkeypatch):

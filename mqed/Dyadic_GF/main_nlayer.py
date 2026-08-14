@@ -150,6 +150,8 @@ def _compute_one_energy(
     integ_cfg,
     rx_progress_desc: str | None = None,
     save_polarization_components: bool = False,
+    rank: int | None = None,
+    rx_indices: np.ndarray | None = None,
 ):
     omega = 2 * np.pi * c / lambda_m
     integration_method = (
@@ -262,6 +264,13 @@ def _compute_one_energy(
         return idx, total, vacuum
 
     rx_iter = enumerate(rx_values_m)
+    global_rx_indices = (
+        np.arange(len(rx_values_m), dtype=int)
+        if rx_indices is None
+        else np.asarray(rx_indices, dtype=int)
+    )
+    if global_rx_indices.shape != (len(rx_values_m),):
+        raise ValueError("rx_indices must contain one global index per Rx value.")
     if rx_progress_desc is not None:
         rx_iter = enumerate(tqdm(rx_values_m, desc=rx_progress_desc, ncols=100, leave=False))
 
@@ -279,12 +288,28 @@ def _compute_one_energy(
                 z_source=z_source,
             )
         else:
-            total[rx_index] = calculator.calculate_total_Green_function(
-                x=rx_m,
-                y=0.0,
-                z_observer=z_observer,
-                z_source=z_source,
-            )
+            if integration_method == "componentwise":
+                warning_context = {
+                    "rank": rank,
+                    "energy_index": int(idx),
+                    "energy_eV": float(energy_eV),
+                    "rx_index": int(global_rx_indices[rx_index]),
+                    "rx_m": float(rx_m),
+                }
+                total[rx_index] = calculator.calculate_total_Green_function(
+                    x=rx_m,
+                    y=0.0,
+                    z_observer=z_observer,
+                    z_source=z_source,
+                    warning_context=warning_context,
+                )
+            else:
+                total[rx_index] = calculator.calculate_total_Green_function(
+                    x=rx_m,
+                    y=0.0,
+                    z_observer=z_observer,
+                    z_source=z_source,
+                )
             vacuum[rx_index] = calculator.vacuum_component(
                 x=rx_m,
                 y=0.0,
@@ -579,6 +604,8 @@ def _run_mpi(energy_ev_array, target_lambdas_m, rx_values_m, cfg):
             materials_cfg=materials_plain,
             integ_cfg=integ_plain,
             save_polarization_components=save_components,
+            rank=rank,
+            rx_indices=rx_indices,
         )
         local_results.append((result[0], rx_indices, *result[1:]))
 

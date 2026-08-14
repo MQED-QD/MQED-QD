@@ -11,13 +11,14 @@ are non-negative heights above the top-stack interface.
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 from typing import Callable, Optional, Sequence, Union
 
 import numpy as np
 from loguru import logger
 from numpy.linalg import LinAlgError
-from scipy.integrate import quad, quad_vec
+from scipy.integrate import IntegrationWarning, quad, quad_vec
 from scipy.special import hankel1, jv
 
 from mqed.Dyadic_GF.dcim import (
@@ -1009,6 +1010,7 @@ class NLayerGreenFunction:
         y: float,
         z_observer: float,
         z_source: float,
+        warning_context: Optional[dict] = None,
     ) -> np.ndarray:
         r"""Integrate final tensor entries with independent scalar error control.
 
@@ -1041,25 +1043,27 @@ class NLayerGreenFunction:
                 for lower, upper in zip(edges[:-1], edges[1:]):
                     if upper <= lower:
                         continue
-                    real_value, real_error = quad(
+                    real_value, real_error = self._componentwise_quad(
                         lambda q, r=row, c=column: float(
                             np.real(tensor_integrand(q)[r, c])
                         ),
                         lower,
                         upper,
-                        epsabs=self.epsabs,
-                        epsrel=self.epsrel,
-                        limit=self.limit,
+                        row=row,
+                        column=column,
+                        part="real",
+                        warning_context=warning_context,
                     )
-                    imag_value, imag_error = quad(
+                    imag_value, imag_error = self._componentwise_quad(
                         lambda q, r=row, c=column: float(
                             np.imag(tensor_integrand(q)[r, c])
                         ),
                         lower,
                         upper,
-                        epsabs=self.epsabs,
-                        epsrel=self.epsrel,
-                        limit=self.limit,
+                        row=row,
+                        column=column,
+                        part="imag",
+                        warning_context=warning_context,
                     )
                     values[row, column] += real_value + 1j * imag_value
                     real_errors[row, column] += real_error
@@ -1073,10 +1077,55 @@ class NLayerGreenFunction:
             "pole_count": len(poles),
             "poles": poles,
             "qmax": q_stop,
+            "warning_context": warning_context,
+            "intervals": list(zip(edges[:-1], edges[1:])),
             "real_error_estimates": real_errors,
             "imag_error_estimates": imag_errors,
         }
         return values
+
+    def _componentwise_quad(
+        self,
+        integrand: Callable[[float], float],
+        lower: float,
+        upper: float,
+        row: int,
+        column: int,
+        part: str,
+        warning_context: Optional[dict],
+    ) -> tuple[float, float]:
+        with warnings.catch_warnings(record=True) as caught_warnings:
+            warnings.simplefilter("always", IntegrationWarning)
+            value, error = quad(
+                integrand,
+                lower,
+                upper,
+                epsabs=self.epsabs,
+                epsrel=self.epsrel,
+                limit=self.limit,
+            )
+
+        context = warning_context or {}
+        for caught in caught_warnings:
+            if not issubclass(caught.category, IntegrationWarning):
+                warnings.warn(caught.message, caught.category, stacklevel=2)
+                continue
+            rx_m = context.get("rx_m", np.nan)
+            rx_nm = float(rx_m) * 1e9 if np.isfinite(rx_m) else np.nan
+            message = (
+                "N-layer componentwise quadrature warning: "
+                f"rank={context.get('rank')}, "
+                f"energy_index={context.get('energy_index')}, "
+                f"energy_eV={context.get('energy_eV')}, "
+                f"rx_index={context.get('rx_index')}, rx_nm={rx_nm:.9g}, "
+                f"tensor=({row}, {column}), part={part}, "
+                f"interval=[{lower:.9g}, {upper:.9g}], "
+                f"epsabs={self.epsabs:.3g}, epsrel={self.epsrel:.3g}, "
+                f"limit={self.limit}: {caught.message}"
+            )
+            warnings.warn(message, IntegrationWarning, stacklevel=3)
+
+        return value, error
 
     @staticmethod
     def _relative_error_summary(candidate: np.ndarray, reference: np.ndarray) -> tuple[np.ndarray, float]:
@@ -2303,7 +2352,14 @@ class NLayerGreenFunction:
         prefactor = np.exp(1j * k_layer * r_mag) / (4 * np.pi * r_mag * k_layer**2)
         return prefactor * (term1 + term2 + term3)
 
-    def scatter_component(self, x: float, y: float, z_observer: float, z_source: float):
+    def scatter_component(
+        self,
+        x: float,
+        y: float,
+        z_observer: float,
+        z_source: float,
+        warning_context: Optional[dict] = None,
+    ):
         r"""Scattered Green tensor assembled from TE and TM angular spectra.
 
         .. math::
@@ -2317,6 +2373,7 @@ class NLayerGreenFunction:
                 y,
                 z_observer,
                 z_source,
+                warning_context=warning_context,
             )
         rho = np.sqrt(x**2 + y**2)
         integrals = self.compute_integrals(rho, z_observer, z_source)
@@ -2426,6 +2483,7 @@ class NLayerGreenFunction:
         y: float,
         z_observer: float,
         z_source: float,
+        warning_context: Optional[dict] = None,
     ):
         r"""Total source-layer dyadic Green tensor.
 
@@ -2443,6 +2501,7 @@ class NLayerGreenFunction:
             y,
             z_observer,
             z_source,
+            warning_context=warning_context,
         )
 
     def calculate_total_Green_functions_for_x_values(
