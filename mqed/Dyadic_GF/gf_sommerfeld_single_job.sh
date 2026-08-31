@@ -42,7 +42,7 @@ CONFIG_NAME="${GF_CONFIG_NAME:-GF_Sommerfeld_customed}"
 
 # ── Launch ───────────────────────────────────────────────────────────────────
 # We pass Hydra config overrides on the command line.  The key points:
-#   • parallel.backend=mpi          — distribute energy points across ranks
+#   • parallel.backend=mpi          — distribute complete energy rows by default
 #   • parallel.mpi_auto_launch=false — we already launched via mpirun
 #   • parallel.mpi_nproc            — tell the program how many ranks exist
 #   • simulation.energy_eV.*        — override the energy sweep range

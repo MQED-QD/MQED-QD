@@ -14,7 +14,8 @@
 #  -------
 #  This script launches one SGE job for the N-layer dyadic Green's function
 #  solver.  The job computes a configured photon-energy/Rx grid for one
-#  multilayer stack using MPI parallelism across the energy axis.
+#  multilayer stack. MPI normally distributes energy rows and can split Rx
+#  chunks when too few energies are available to occupy all ranks.
 #
 #  This script launches `mqed_GF_NLayer` under `mpirun` and tells Hydra not to
 #  auto-launch MPI a second time:
@@ -120,7 +121,7 @@ echo "========================================================================"
 
 # -- Launch --------------------------------------------------------------------
 # We pass only run-control Hydra overrides on the command line.  The key points:
-#   - parallel.backend=mpi              - distribute energy points across ranks
+#   - parallel.backend=mpi              - distribute energy rows or scarce-energy Rx chunks
 #   - parallel.mpi_auto_launch=false    - mpirun already launched the ranks
 #   - parallel.mpi_nproc                - record the allocated MPI rank count
 #   - hydra.run.dir                     - stable output directory for this job
