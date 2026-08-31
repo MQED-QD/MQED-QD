@@ -9,6 +9,3 @@ validate\_gf\_h5
    :private-members:
    :special-members:
    :exclude-members: __weakref__, __hash__
-
-
-
