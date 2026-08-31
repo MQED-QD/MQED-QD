@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.4.4 - 2026-08-31
+
+### Material data and integration diagnostics
+
+- Added fused-silica optical data and support for labeled or headerless dielectric-function spreadsheets.
+- Added energy, wavelength, and position context to Sommerfeld integration warnings so problematic Green-tensor samples can be reproduced directly.
+- Added the `mqed_validate_gf_h5` command to validate separation-indexed Green tensors after warning-heavy calculations, including dataset shape, finite-value, reconstruction, and metadata checks.
+
+### Flattened energy/Rx scheduling
+
+- Added a shared, non-nested scheduler for Sommerfeld and N-layer Joblib/MPI calculations, with `energy`, `auto`, and explicit `flattened` work-unit modes.
+- Added contiguous Rx chunking for one- or few-frequency calculations while preserving complete energy rows by default for the two-layer Sommerfeld workflow and for N-layer `fixed_grid` integration.
+- Added strict sliced-result index, shape, uniqueness, and complete-coverage validation while preserving the existing `(energy, Rx, 3, 3)` HDF5 tensor layout.
+- Added annotated flattened-scheduler configurations and tutorial guidance for two-layer and N-layer calculations.
+
+### Validation and HPC safety
+
+- Added regression coverage for scheduler decomposition, Joblib/MPI reconstruction, polarization components, Hydra configuration composition, invalid chunks, and duplicate or missing work.
+- Hardened the Sommerfeld SGE job-array launcher by validating numeric TSV fields and passing conversion values to `awk` as data rather than executable program text.
+- Verified sequential and flattened two-layer Green tensors agree exactly on a representative physics calculation, and retained all existing N-layer scheduler behavior.
+
 ## 1.4.3 - 2026-08-12
 
 ### Compact Mie ring-circulant workflows
