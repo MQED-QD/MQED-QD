@@ -204,6 +204,16 @@ simulation:
 
 parallel:
   backend: sequential
+  # Task scheduler for parallel backends:
+  #   backend_default: preserve legacy behavior (joblib=energy, MPI=auto)
+  #   energy: one work unit contains one energy and the complete Rx grid
+  #   flattened: one work unit contains one energy and one contiguous Rx chunk
+  #   auto: split Rx only when there are fewer energies than workers/ranks
+  # fixed_grid always keeps the complete Rx row to reuse one sampled q grid.
+  scheduler: backend_default
+  # Maximum Rx points per flattened work unit. null chooses balanced chunks
+  # from the worker count; a positive integer gives reproducible chunk sizes.
+  rx_chunk_size: null
   n_jobs: -1
   mpi_nproc: 4
   mpi_auto_launch: true

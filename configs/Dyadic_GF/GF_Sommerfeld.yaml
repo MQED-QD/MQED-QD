@@ -97,7 +97,7 @@ simulation:
     split_propagating: false
 
 # ── Parallel execution ─────────────────────────────────────────────
-# Controls how the multi-frequency loop is parallelized.
+# Controls how the energy/Rx grid is parallelized.
 #
 #   backend:  "sequential"  – no parallelism (default, simplest)
 #             "joblib"      – shared-memory multiprocessing via joblib
@@ -109,16 +109,30 @@ simulation:
 #             -1 = use all available CPU cores (recommended).
 #             Ignored when backend != "joblib".
 #
+#   scheduler: Work-unit strategy for joblib and MPI.
+#              "backend_default" preserves the historical Sommerfeld behavior:
+#                  one task = one energy + the complete Rx grid.
+#              "energy" always uses complete Rx rows.
+#              "flattened" uses one energy + one contiguous Rx chunk per task.
+#              "auto" splits Rx only when energies cannot occupy all workers.
+#
+#   rx_chunk_size: Number of contiguous Rx points per flattened task.
+#                  null balances chunks automatically from the worker count.
+#                  Values around 5-15 are a reasonable starting point for
+#                  grids containing roughly 15-50 Rx positions.
+#
 #   mpi_nproc:      Number of MPI ranks to spawn (if auto-launching).
 #   mpi_auto_launch: If true AND not already running under MPI,
 #                    re-launch the script with mpiexec automatically.
 #   mpi_exec:       Path to mpiexec binary.
 #
-# NOTE: Parallelization is over the *energy* (frequency) axis.
-#       Each energy point is fully independent — no communication
-#       is needed between workers.
+# Flattening repeats material/solver setup for every Rx chunk. Prefer "energy"
+# for dense spectral sweeps and "auto" or "flattened" for one/few energies with
+# many expensive Rx quadratures.
 parallel:
   backend: sequential
+  scheduler: backend_default
+  rx_chunk_size: null
   n_jobs: -1
   mpi_nproc: 4
   mpi_auto_launch: true

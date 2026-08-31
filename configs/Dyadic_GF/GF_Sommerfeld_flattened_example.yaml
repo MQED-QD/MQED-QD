@@ -1,0 +1,43 @@
+# Two-layer Sommerfeld example for a scarce-energy, many-Rx calculation.
+#
+# Run with:
+#   mqed_GF_Sommerfeld --config-name GF_Sommerfeld_flattened_example
+#
+# Two energies and 50 Rx positions with rx_chunk_size=10 produce 10 independent
+# tasks in one joblib process pool. The saved tensor order remains [2, 50, 3, 3].
+defaults:
+  - GF_Sommerfeld
+  - _self_
+
+hydra:
+  job:
+    name: Dyadic_GF_Sommerfeld_flattened
+
+# A constant material keeps this example self-contained and avoids an external
+# spreadsheet lookup. Replace it with excel/Drude/Drude-Lorentz as needed.
+material:
+  source_type: constant
+  constant_value: -10.0+0.5j
+
+simulation:
+  energy_eV:
+    min: 1.80
+    max: 1.90
+    points: 2
+  position:
+    zD: 5.0e-9
+    zD_nm: 5
+    zA: 5.0e-9
+    Rx_nm:
+      start: 0.0
+      stop: 49.0
+      points: 50
+
+parallel:
+  backend: joblib
+  scheduler: flattened
+  n_jobs: -1
+  rx_chunk_size: 10
+
+output:
+  prefix: Sommerfeld_GF_flattened_example

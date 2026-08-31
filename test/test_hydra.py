@@ -5,6 +5,7 @@ This is a test script to verify if Hydra works well.
 from pathlib import Path
 import numpy as np
 from hydra import initialize_config_dir, compose
+from mqed.Dyadic_GF import main, main_nlayer
 from mqed.Lindblad.run_quantum_dynamics import app_run, build_initial_ket
 from mqed.Dyadic_GF.main_mie import resolve_emitter_geometry_m
 from mqed.utils.hydra_local import prepare_hydra_config_path
@@ -172,3 +173,79 @@ def test_nlayer_polarization_flag_defaults_false():
     cfg = _compose(cfg_dir, "GF_NLayer_five_layer")
 
     assert cfg.output.save_polarization_components is False
+
+
+def test_nlayer_flattened_scheduler_example_composes():
+    cfg_dir = Path(__file__).resolve().parents[1] / "configs" / "Dyadic_GF"
+
+    cfg = _compose(cfg_dir, "GF_NLayer_flattened_example")
+
+    assert cfg.parallel.backend == "joblib"
+    assert cfg.parallel.scheduler == "flattened"
+    assert cfg.parallel.rx_chunk_size == 10
+    assert cfg.simulation.energy_eV.segments[0].points == 3
+    assert len(cfg.simulation.position.Rx_nm) == 50
+    assert cfg.simulation.position.Rx_nm[-1] == 588
+    energy_eV, _ = main_nlayer._energy_grid(cfg.simulation)
+    tasks = main_nlayer._task_slices(
+        n_energy=len(energy_eV),
+        n_rx=len(cfg.simulation.position.Rx_nm),
+        worker_count=24,
+        integration_method=cfg.simulation.integration.method,
+        scheduler=cfg.parallel.scheduler,
+        rx_chunk_size=cfg.parallel.rx_chunk_size,
+    )
+    assert len(tasks) == 15
+
+
+def test_nlayer_default_scheduler_preserves_backend_behavior():
+    cfg_dir = Path(__file__).resolve().parents[1] / "configs" / "Dyadic_GF"
+
+    cfg = _compose(cfg_dir, "GF_NLayer_five_layer")
+
+    assert cfg.parallel.scheduler == "backend_default"
+    assert cfg.parallel.rx_chunk_size is None
+
+
+def test_sommerfeld_flattened_scheduler_example_composes():
+    cfg_dir = Path(__file__).resolve().parents[1] / "configs" / "Dyadic_GF"
+
+    cfg = _compose(cfg_dir, "GF_Sommerfeld_flattened_example")
+    energy_eV = main.build_grid(cfg.simulation.energy_eV)
+    rx_nm = main.build_position_grid(cfg.simulation.position.Rx_nm)
+    tasks = main.task_slices(
+        n_energy=len(energy_eV),
+        n_rx=len(rx_nm),
+        worker_count=8,
+        integration_method="direct",
+        scheduler=cfg.parallel.scheduler,
+        rx_chunk_size=cfg.parallel.rx_chunk_size,
+    )
+
+    assert cfg.parallel.backend == "joblib"
+    assert cfg.parallel.scheduler == "flattened"
+    assert cfg.parallel.rx_chunk_size == 10
+    assert len(energy_eV) == 2
+    assert len(rx_nm) == 50
+    assert len(tasks) == 10
+
+
+def test_sommerfeld_default_scheduler_preserves_energy_rows():
+    cfg_dir = Path(__file__).resolve().parents[1] / "configs" / "Dyadic_GF"
+
+    cfg = _compose(cfg_dir, "GF_Sommerfeld")
+
+    assert cfg.parallel.scheduler == "backend_default"
+    assert cfg.parallel.rx_chunk_size is None
+
+
+def test_sommerfeld_existing_examples_preserve_energy_rows():
+    cfg_dir = Path(__file__).resolve().parents[1] / "configs" / "Dyadic_GF"
+
+    for config_name in (
+        "GF_Sommerfeld_example_single_freq",
+        "GF_Sommerfeld_example_multi_freq",
+    ):
+        cfg = _compose(cfg_dir, config_name)
+        assert cfg.parallel.scheduler == "backend_default"
+        assert cfg.parallel.rx_chunk_size is None

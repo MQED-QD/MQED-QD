@@ -114,11 +114,12 @@ simulation:
 #                    re-launch the script with mpiexec automatically.
 #   mpi_exec:       Path to mpiexec binary.
 #
-# NOTE: Parallelization is over the *energy* (frequency) axis.
-#       Each energy point is fully independent — no communication
-#       is needed between workers.
+# The default scheduler preserves complete energy rows. For one/few energies
+# with many Rx points, set scheduler to auto or flattened explicitly.
 parallel:
   backend: sequential
+  scheduler: backend_default
+  rx_chunk_size: null
   n_jobs: -1
   mpi_nproc: 4
   mpi_auto_launch: true

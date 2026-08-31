@@ -1,0 +1,37 @@
+defaults:
+  - GF_five_layer_example_multi_freq
+  - _self_
+
+# Example: calculate a deliberately small three-energy grid at 50 horizontal
+# separations using one flat joblib process pool. The scheduler creates tasks shaped as
+#   (one energy, up to 10 contiguous Rx points)
+# rather than nesting an Rx process pool inside an energy process pool.
+simulation:
+  # Flattening is useful when the energy rows alone cannot occupy all workers.
+  # Production spectra should replace this short demonstration grid with the
+  # required spectral window and choose energy/auto scheduling when it is large.
+  energy_eV:
+    segments:
+      - min: 2.8
+        max: 3.0
+        points: 3
+  position:
+    zD_nm: 300.0
+    zA_nm: 300.0
+    Rx_nm: [0, 12, 24, 36, 48, 60, 72, 84, 96, 108,
+            120, 132, 144, 156, 168, 180, 192, 204, 216, 228,
+            240, 252, 264, 276, 288, 300, 312, 324, 336, 348,
+            360, 372, 384, 396, 408, 420, 432, 444, 456, 468,
+            480, 492, 504, 516, 528, 540, 552, 564, 576, 588]
+
+parallel:
+  backend: joblib
+  scheduler: flattened
+  n_jobs: -1
+  rx_chunk_size: 10
+  mpi_nproc: 4
+  mpi_auto_launch: true
+  mpi_exec: mpiexec
+
+output:
+  prefix: "NLayer_GF_flattened_50Rx"
