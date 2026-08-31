@@ -66,6 +66,7 @@ mqed_plot_spec_dens = "mqed.plotting.plot_spectral_density:plot_spectral_density
 mqed_calc_emission_spectrum = "mqed.analysis.emission_spectrum:compute_and_save_emission_spectrum"
 mqed_plot_emission_spectrum = "mqed.plotting.plot_emission_spectrum:plot_emission_spectrum"
 mqed_plot_dbr_couplings = "mqed.analysis.plot_dbr_couplings:main"
+mqed_validate_gf_h5 = "mqed.analysis.validate_gf_h5:main"
 
 [tool.setuptools]
 include-package-data = true
