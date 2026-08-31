@@ -266,10 +266,10 @@ our project directory.
 Parallel execution
 ------------------
 
-When computing the Green's function over many frequencies (e.g. a 200-point
-spectral density sweep), the sequential loop can take tens of minutes.
-Because each energy point is **completely independent**, the frequency axis
-can be parallelized with no inter-worker communication.
+When computing the Green's function over many frequencies or lateral
+separations, each energy/Rx pair is independent. The default scheduler keeps
+the complete Rx row together for each energy, while an optional flattened
+scheduler divides scarce-energy calculations into contiguous Rx chunks.
 
 MQED-QD supports two parallel backends, selectable via the ``parallel``
 configuration group.
@@ -300,6 +300,39 @@ one core for their computer to avoid accidental shutdown.
    On a machine with 8 cores, a 200-energy sweep that takes ~30 min
    sequentially will finish in ~4 min with ``parallel.backend=joblib``.
 
+**Flattened energy/Rx scheduling**
+
+Energy-only scheduling is efficient for dense spectral sweeps because every
+worker constructs the frequency-specific material and Sommerfeld calculator
+only once. It can leave cores idle for one or a few energies, however. In that
+case use one non-nested flattened scheduler:
+
+.. code-block:: yaml
+
+   parallel:
+     backend: joblib
+     scheduler: flattened
+     n_jobs: -1
+     rx_chunk_size: 10
+
+Each work unit contains one energy and at most ten contiguous Rx positions.
+The worker still performs the same adaptive Sommerfeld quadrature at every Rx;
+only task distribution changes. The HDF5 tensors are validated and restored to
+the original ``(n_energy, n_rx, 3, 3)`` order.
+
+The runnable example uses two energies and 50 Rx positions:
+
+.. code-block:: bash
+
+   mqed_GF_Sommerfeld --config-name GF_Sommerfeld_flattened_example
+
+Use ``scheduler: auto`` when you want Rx splitting only if there are fewer
+energies than workers. ``scheduler: backend_default`` and ``scheduler: energy``
+both preserve complete energy rows for this two-layer solver. With roughly
+15--50 Rx positions, chunks of 5--15 are a useful starting range; set
+``rx_chunk_size: null`` to balance chunks automatically. Avoid very small
+chunks because material and solver setup is repeated for every chunk.
+
 **MPI (distributed parallelism)**
 
 Best for HPC clusters with multi-node allocation.  Requires
@@ -327,8 +360,10 @@ communicator and re-launches itself under ``mpiexec``:
    # inside configs/Dyadic_GF/ and run with MPI parallelism.
 
 
-Energy points are scattered round-robin across MPI ranks. Only rank 0
-writes the final HDF5 file. User can adjust the number of ranks with ``parallel.mpi_nproc``.
+Scheduler tasks are scattered round-robin across MPI ranks. The default keeps
+complete energy rows; ``parallel.scheduler=auto`` or ``flattened`` can split Rx
+when energies are scarce. Only rank 0 writes the final HDF5 file. User can
+adjust the number of ranks with ``parallel.mpi_nproc``.
 User can also choose their own YAML file with the ``GF_CONFIG_NAME`` environment variable 
 (e.g. ``GF_Sommerfeld_custom.yaml``) when submitting the job script.
 
@@ -345,6 +380,12 @@ User can also choose their own YAML file with the ``GF_CONFIG_NAME`` environment
    * - ``parallel.n_jobs``
      - Number of joblib workers (``-1`` = all cores)
      - ``-1``
+   * - ``parallel.scheduler``
+     - ``backend_default``, ``energy``, ``flattened``, or ``auto``
+     - ``backend_default``
+   * - ``parallel.rx_chunk_size``
+     - Rx points per flattened task (``null`` = automatic balancing)
+     - ``null``
    * - ``parallel.mpi_nproc``
      - Number of MPI ranks for auto-launch
      - ``4``

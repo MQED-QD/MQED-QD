@@ -273,6 +273,47 @@ hybrid DCIM results:
 HPC launcher
 ============
 
+Flattened energy/Rx scheduling
+------------------------------
+
+For a small energy grid with many horizontal points, opt into a single
+flattened scheduler. Each work unit contains one energy and one contiguous Rx
+chunk; there is no nested process pool:
+
+.. code-block:: yaml
+
+   parallel:
+     backend: joblib
+     scheduler: flattened
+     n_jobs: -1
+     rx_chunk_size: 10
+
+The annotated, runnable example
+``configs/Dyadic_GF/GF_NLayer_flattened_example.yaml`` defines three energies
+and 50 horizontal points, so its 15 work units demonstrate the scarce-energy
+case without repeating setup across a production-sized spectrum. It can be
+launched with:
+
+.. code-block:: bash
+
+   mqed_GF_NLayer --config-name GF_NLayer_flattened_example
+
+Use ``rx_chunk_size`` to control scheduling overhead. For 15--50 horizontal
+points, chunks of roughly 5--15 points are a practical starting range. Set it
+to ``null`` to let the runner create enough balanced chunks to occupy otherwise
+idle workers. The final HDF5 ordering and shape remain ``[M, K, 3, 3]``.
+For a dense production energy sweep that already fills the workers, prefer
+``scheduler: energy`` or ``scheduler: auto`` to avoid rebuilding the
+frequency-specific solver for multiple Rx chunks at the same energy.
+
+The same keys work with ``parallel.backend=mpi``. The default
+``scheduler: backend_default`` retains legacy behavior: joblib schedules whole
+energy rows, while MPI splits Rx only when there are too few energies to fill
+the ranks. ``scheduler: auto`` explicitly selects the latter policy for either
+backend. With ``integration.method=fixed_grid``, the runner always keeps all Rx
+points for an energy together so that the expensive sampled q kernels are
+reused.
+
 For many-frequency sweeps, use the bundled SGE/MPI launcher:
 
 .. code-block:: bash
