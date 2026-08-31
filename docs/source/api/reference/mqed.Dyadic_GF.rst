@@ -27,5 +27,6 @@
    main
    main_mie
    main_nlayer
+   parallel_slicing
    sommerfeld_singularities
 
