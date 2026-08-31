@@ -1182,6 +1182,162 @@ def test_mpi_task_slices_split_multiple_scarce_energies():
         assert assigned == [0, 1, 2]
 
 
+def test_flattened_task_slices_use_explicit_contiguous_rx_chunks():
+    main_nlayer = pytest.importorskip("mqed.Dyadic_GF.main_nlayer")
+
+    tasks = main_nlayer._task_slices(
+        n_energy=2,
+        n_rx=7,
+        worker_count=4,
+        integration_method="direct",
+        scheduler="flattened",
+        rx_chunk_size=3,
+    )
+
+    assert [energy_index for energy_index, _ in tasks] == [0, 0, 0, 1, 1, 1]
+    assert [indices.tolist() for _, indices in tasks] == [
+        [0, 1, 2],
+        [3, 4, 5],
+        [6],
+        [0, 1, 2],
+        [3, 4, 5],
+        [6],
+    ]
+
+
+def test_flattened_task_slices_keep_fixed_grid_rows_intact():
+    main_nlayer = pytest.importorskip("mqed.Dyadic_GF.main_nlayer")
+
+    tasks = main_nlayer._task_slices(
+        n_energy=2,
+        n_rx=7,
+        worker_count=8,
+        integration_method="fixed_grid",
+        scheduler="flattened",
+        rx_chunk_size=2,
+    )
+
+    assert [energy_index for energy_index, _ in tasks] == [0, 1]
+    assert all(indices.tolist() == list(range(7)) for _, indices in tasks)
+
+
+@pytest.mark.parametrize("value", [0, -1, True, 1.5, 2.0])
+def test_rx_chunk_size_rejects_invalid_values(value):
+    main_nlayer = pytest.importorskip("mqed.Dyadic_GF.main_nlayer")
+
+    with pytest.raises(ValueError, match="positive integer or null"):
+        main_nlayer._rx_chunk_size({"rx_chunk_size": value})
+
+
+def test_run_joblib_flattened_restores_full_grid(monkeypatch):
+    main_nlayer = pytest.importorskip("mqed.Dyadic_GF.main_nlayer")
+    calls = []
+
+    def fake_compute_one_energy(idx, energy_eV, rx_values_m, rx_indices, **kwargs):
+        calls.append((idx, rx_indices.copy(), rx_values_m.copy()))
+        total = np.asarray(
+            [np.eye(3, dtype=complex) * (100 * idx + rx_index) for rx_index in rx_indices]
+        )
+        vacuum = np.asarray(
+            [np.eye(3, dtype=complex) * (200 * idx + rx_index) for rx_index in rx_indices]
+        )
+        return idx, total, vacuum
+
+    monkeypatch.setattr(main_nlayer, "_compute_one_energy", fake_compute_one_energy)
+    cfg = main_nlayer.OmegaConf.create(
+        {
+            "simulation": {
+                "position": {"zD_nm": 40.0, "zA_nm": 40.0},
+                "integration": {"method": "direct"},
+            },
+            "stack": {"source_layer": 1, "layers": []},
+            "materials": {},
+            "parallel": {
+                "backend": "joblib",
+                "scheduler": "flattened",
+                "rx_chunk_size": 2,
+            },
+            "output": {"save_polarization_components": False},
+        }
+    )
+    rx_values_m = np.arange(5, dtype=float) * 1e-9
+
+    total, vacuum = main_nlayer._run_joblib(
+        np.array([1.0, 2.0]),
+        np.array([600e-9, 500e-9]),
+        rx_values_m,
+        cfg,
+        n_jobs=1,
+    )
+
+    assert len(calls) == 6
+    assert [indices.tolist() for _, indices, _ in calls[:3]] == [[0, 1], [2, 3], [4]]
+    assert total.shape == (2, 5, 3, 3)
+    assert vacuum.shape == total.shape
+    for energy_index in range(2):
+        for rx_index in range(5):
+            assert np.allclose(
+                total[energy_index, rx_index],
+                np.eye(3) * (100 * energy_index + rx_index),
+            )
+            assert np.allclose(
+                vacuum[energy_index, rx_index],
+                np.eye(3) * (200 * energy_index + rx_index),
+            )
+
+
+def test_run_joblib_flattened_restores_polarization_components(monkeypatch):
+    main_nlayer = pytest.importorskip("mqed.Dyadic_GF.main_nlayer")
+
+    def fake_compute_one_energy(idx, rx_indices, **kwargs):
+        vacuum = np.asarray(
+            [np.eye(3, dtype=complex) * (10 + rx_index) for rx_index in rx_indices]
+        )
+        scattering_te = np.asarray(
+            [np.eye(3, dtype=complex) * (20 + rx_index) for rx_index in rx_indices]
+        )
+        scattering_tm = np.asarray(
+            [np.eye(3, dtype=complex) * (30 + rx_index) for rx_index in rx_indices]
+        )
+        structure = scattering_te + scattering_tm
+        total = vacuum + structure
+        return idx, total, vacuum, structure, scattering_te, scattering_tm
+
+    monkeypatch.setattr(main_nlayer, "_compute_one_energy", fake_compute_one_energy)
+    cfg = main_nlayer.OmegaConf.create(
+        {
+            "simulation": {
+                "position": {"zD_nm": 40.0, "zA_nm": 40.0},
+                "integration": {"method": "direct"},
+            },
+            "stack": {"source_layer": 1, "layers": []},
+            "materials": {},
+            "parallel": {
+                "backend": "joblib",
+                "scheduler": "flattened",
+                "rx_chunk_size": 2,
+            },
+            "output": {"save_polarization_components": True},
+        }
+    )
+
+    assembled = main_nlayer._run_joblib(
+        np.array([1.0]),
+        np.array([600e-9]),
+        np.arange(5, dtype=float) * 1e-9,
+        cfg,
+        n_jobs=1,
+    )
+
+    total, vacuum, structure, scattering_te, scattering_tm = assembled
+    assert total.shape == (1, 5, 3, 3)
+    assert np.allclose(structure, scattering_te + scattering_tm)
+    assert np.allclose(total, vacuum + structure)
+    for rx_index in range(5):
+        assert np.allclose(scattering_te[0, rx_index], np.eye(3) * (20 + rx_index))
+        assert np.allclose(scattering_tm[0, rx_index], np.eye(3) * (30 + rx_index))
+
+
 def test_assemble_mpi_results_restores_rx_order_with_empty_rank():
     main_nlayer = pytest.importorskip("mqed.Dyadic_GF.main_nlayer")
 

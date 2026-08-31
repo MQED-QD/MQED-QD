@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 from pathlib import Path
 
 import hydra
@@ -17,6 +16,12 @@ from mqed.Dyadic_GF.main import (
     _maybe_auto_launch_mpi,
     build_grid,
     build_position_grid,
+)
+from mqed.Dyadic_GF.parallel_slicing import (
+    assemble_sliced_results as _assemble_sliced_results,
+    rx_chunk_size as _rx_chunk_size,
+    scheduler_for_backend as _scheduler_for_backend,
+    task_slices as _task_slices,
 )
 from mqed.utils.SI_unit import c, eV_to_J, hbar
 from mqed.utils.dgf_data import save_gf_h5
@@ -374,6 +379,7 @@ def _run_sequential(energy_ev_array, target_lambdas_m, rx_values_m, cfg):
 
 def _run_joblib(energy_ev_array, target_lambdas_m, rx_values_m, cfg, n_jobs: int):
     from joblib import Parallel, delayed
+    from joblib.parallel import effective_n_jobs
     from mqed.utils.joblib_track import tqdm_joblib
 
     sim_params = cfg.simulation
@@ -384,41 +390,64 @@ def _run_joblib(energy_ev_array, target_lambdas_m, rx_values_m, cfg, n_jobs: int
     materials_plain = OmegaConf.create(OmegaConf.to_container(cfg.materials, resolve=True))
     integ_cfg = getattr(sim_params, "integration", None)
     integ_plain = OmegaConf.create(OmegaConf.to_container(integ_cfg, resolve=True)) if integ_cfg else None
+    integration_method = (
+        "direct"
+        if integ_plain is None
+        else str(integ_plain.get("method", "direct")).strip().lower()
+    )
+    parallel_cfg = cfg.get("parallel", {})
+    scheduler = _scheduler_for_backend(parallel_cfg, "joblib")
+    rx_chunk_size = _rx_chunk_size(parallel_cfg)
+    tasks = _task_slices(
+        n_energy=len(energy_ev_array),
+        n_rx=len(rx_values_m),
+        worker_count=effective_n_jobs(n_jobs),
+        integration_method=integration_method,
+        scheduler=scheduler,
+        rx_chunk_size=rx_chunk_size,
+    )
+    logger.info(
+        "Joblib backend: scheduler={}, {} work units for {} energies × {} Rx points",
+        scheduler,
+        len(tasks),
+        len(energy_ev_array),
+        len(rx_values_m),
+    )
+    if integration_method == "fixed_grid" and scheduler == "flattened":
+        logger.info(
+            "fixed_grid keeps one task per energy despite scheduler=flattened to preserve "
+            "shared q-grid batching."
+        )
 
-    with tqdm_joblib(tqdm(total=len(energy_ev_array), desc="Energies (joblib)", ncols=100)):
+    with tqdm_joblib(tqdm(total=len(tasks), desc="N-layer tasks (joblib)", ncols=100)):
         raw_results = Parallel(n_jobs=n_jobs, prefer="processes")(
             delayed(_compute_one_energy)(
                 idx=energy_index,
                 energy_eV=energy_ev_array[energy_index],
                 lambda_m=target_lambdas_m[energy_index],
-                rx_values_m=rx_values_m,
+                rx_values_m=rx_values_m[rx_indices],
                 z_observer=z_observer,
                 z_source=z_source,
                 stack_cfg=stack_plain,
                 materials_cfg=materials_plain,
                 integ_cfg=integ_plain,
                 save_polarization_components=save_components,
+                rx_indices=rx_indices,
             )
-            for energy_index in range(len(energy_ev_array))
+            for energy_index, rx_indices in tasks
         )
 
-    results_total = np.zeros((len(energy_ev_array), len(rx_values_m), 3, 3), dtype=complex)
-    results_vacuum = np.zeros_like(results_total)
-    if save_components:
-        results_structure = np.zeros_like(results_total)
-        results_scattering_te = np.zeros_like(results_total)
-        results_scattering_tm = np.zeros_like(results_total)
-        for idx, total, vacuum, structure, scattering_te, scattering_tm in raw_results:
-            results_total[idx] = total
-            results_vacuum[idx] = vacuum
-            results_structure[idx] = structure
-            results_scattering_te[idx] = scattering_te
-            results_scattering_tm[idx] = scattering_tm
-        return results_total, results_vacuum, results_structure, results_scattering_te, results_scattering_tm
-    for idx, total, vacuum in raw_results:
-        results_total[idx] = total
-        results_vacuum[idx] = vacuum
-    return results_total, results_vacuum
+    sliced_results = [
+        (result[0], rx_indices, *result[1:])
+        for (_, rx_indices), result in zip(tasks, raw_results)
+    ]
+    return _assemble_sliced_results(
+        [sliced_results],
+        len(energy_ev_array),
+        len(rx_values_m),
+        save_components,
+        worker_label="Joblib",
+    )
 
 
 def _mpi_task_slices(
@@ -445,103 +474,23 @@ def _mpi_task_slices(
         Ordered ``(energy_index, rx_indices)`` work units. Every energy/Rx pair
         appears exactly once.
     """
-    if n_energy < 1 or n_rx < 1:
-        raise ValueError("MPI decomposition requires at least one energy and one Rx point.")
-    if size < 1:
-        raise ValueError("MPI decomposition requires at least one rank.")
-
-    all_rx_indices = np.arange(n_rx, dtype=int)
-    if integration_method == "fixed_grid" or n_energy >= size:
-        return [(energy_index, all_rx_indices.copy()) for energy_index in range(n_energy)]
-
-    chunks_per_energy = min(n_rx, math.ceil(size / n_energy))
-    tasks = []
-    for energy_index in range(n_energy):
-        for rx_indices in np.array_split(all_rx_indices, chunks_per_energy):
-            if rx_indices.size:
-                tasks.append((energy_index, rx_indices))
-    return tasks
+    return _task_slices(
+        n_energy=n_energy,
+        n_rx=n_rx,
+        worker_count=size,
+        integration_method=integration_method,
+        scheduler="auto",
+    )
 
 
 def _assemble_mpi_results(all_results, n_energy: int, n_rx: int, save_components: bool):
-    results_total = np.zeros((n_energy, n_rx, 3, 3), dtype=complex)
-    results_vacuum = np.zeros_like(results_total)
-    coverage = np.zeros((n_energy, n_rx), dtype=np.uint16)
-    if save_components:
-        results_structure = np.zeros_like(results_total)
-        results_scattering_te = np.zeros_like(results_total)
-        results_scattering_tm = np.zeros_like(results_total)
-
-    for rank_results in all_results:
-        for result in rank_results:
-            expected_fields = 7 if save_components else 4
-            if len(result) != expected_fields:
-                raise ValueError(
-                    f"MPI worker result must contain {expected_fields} fields; got {len(result)}."
-                )
-            energy_index, rx_indices, total, vacuum = result[:4]
-            if (
-                isinstance(energy_index, (bool, np.bool_))
-                or not isinstance(energy_index, (int, np.integer))
-                or not 0 <= int(energy_index) < n_energy
-            ):
-                raise ValueError(
-                    f"MPI worker returned invalid energy index {energy_index!r}; "
-                    f"expected an integer in [0, {n_energy})."
-                )
-            energy_index = int(energy_index)
-            rx_indices = np.asarray(rx_indices)
-            if rx_indices.ndim != 1 or rx_indices.size == 0:
-                raise ValueError("MPI worker Rx indices must be a non-empty one-dimensional array.")
-            if not np.issubdtype(rx_indices.dtype, np.integer):
-                raise ValueError("MPI worker Rx indices must contain integers without coercion.")
-            rx_indices = rx_indices.astype(int, copy=False)
-            if np.any(rx_indices < 0) or np.any(rx_indices >= n_rx):
-                raise ValueError(
-                    f"MPI worker Rx indices must be in [0, {n_rx}); got {rx_indices.tolist()}."
-                )
-            if np.unique(rx_indices).size != rx_indices.size:
-                raise ValueError(
-                    f"MPI worker Rx indices must be unique within each slice; "
-                    f"got {rx_indices.tolist()}."
-                )
-            if total.shape != (len(rx_indices), 3, 3) or vacuum.shape != total.shape:
-                raise ValueError(
-                    "MPI worker returned incompatible Green-function slice shapes: "
-                    f"total={total.shape}, vacuum={vacuum.shape}, Rx count={len(rx_indices)}."
-                )
-            results_total[energy_index, rx_indices] = total
-            results_vacuum[energy_index, rx_indices] = vacuum
-            coverage[energy_index, rx_indices] += 1
-            if save_components:
-                _, _, _, _, structure, scattering_te, scattering_tm = result
-                if not (
-                    structure.shape == total.shape
-                    and scattering_te.shape == total.shape
-                    and scattering_tm.shape == total.shape
-                ):
-                    raise ValueError("MPI polarization slices must match the total slice shape.")
-                results_structure[energy_index, rx_indices] = structure
-                results_scattering_te[energy_index, rx_indices] = scattering_te
-                results_scattering_tm[energy_index, rx_indices] = scattering_tm
-
-    if not np.all(coverage == 1):
-        missing = np.argwhere(coverage == 0)
-        duplicate = np.argwhere(coverage > 1)
-        raise RuntimeError(
-            "MPI result coverage must contain every energy/Rx pair exactly once; "
-            f"missing={missing.tolist()}, duplicate={duplicate.tolist()}."
-        )
-
-    if save_components:
-        return (
-            results_total,
-            results_vacuum,
-            results_structure,
-            results_scattering_te,
-            results_scattering_tm,
-        )
-    return results_total, results_vacuum
+    return _assemble_sliced_results(
+        all_results,
+        n_energy,
+        n_rx,
+        save_components,
+        worker_label="MPI",
+    )
 
 
 def _run_mpi(energy_ev_array, target_lambdas_m, rx_values_m, cfg):
@@ -565,19 +514,29 @@ def _run_mpi(energy_ev_array, target_lambdas_m, rx_values_m, cfg):
         if integ_plain is None
         else str(integ_plain.get("method", "direct")).strip().lower()
     )
-    tasks = _mpi_task_slices(n_energy, n_rx, size, integration_method)
+    parallel_cfg = cfg.get("parallel", {})
+    scheduler = _scheduler_for_backend(parallel_cfg, "mpi")
+    tasks = _task_slices(
+        n_energy=n_energy,
+        n_rx=n_rx,
+        worker_count=size,
+        integration_method=integration_method,
+        scheduler=scheduler,
+        rx_chunk_size=_rx_chunk_size(parallel_cfg),
+    )
     local_tasks = tasks[rank::size]
     if rank == 0:
         logger.info(
-            "MPI backend: {} ranks, {} energies × {} Rx points, {} work units "
+            "MPI backend: {} ranks, scheduler={}, {} energies × {} Rx points, {} work units "
             "(rank 0 handles {})",
             size,
+            scheduler,
             n_energy,
             n_rx,
             len(tasks),
             len(local_tasks),
         )
-        if integration_method == "fixed_grid" and n_energy < size:
+        if integration_method == "fixed_grid" and scheduler != "energy":
             logger.info(
                 "fixed_grid keeps one task per energy to preserve shared q-grid batching; "
                 "some MPI ranks may remain idle."
@@ -653,6 +612,8 @@ def run_simulation(cfg: DictConfig) -> None:
     energy_ev_array, target_lambdas_m = _energy_grid(sim_params)
     rx_values_nm = build_position_grid(sim_params.position.Rx_nm)
     rx_values_m = rx_values_nm * 1e-9
+    if len(energy_ev_array) < 1 or len(rx_values_m) < 1:
+        raise ValueError("N-layer simulation requires at least one energy and one Rx point.")
     parallel_cfg = cfg.get("parallel", {})
     backend = parallel_cfg.get("backend", "sequential") if parallel_cfg else "sequential"
     logger.info("Grid: {} energies × {} Rx points | backend={}", len(energy_ev_array), len(rx_values_m), backend)

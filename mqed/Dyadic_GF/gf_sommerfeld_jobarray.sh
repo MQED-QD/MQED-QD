@@ -16,7 +16,7 @@
 #  This script launches one SGE array task per row in a TSV parameter file.
 #  Each task computes the dyadic Green's function over a range of photon
 #  energies for a specific geometry (donor/acceptor height, material, etc.)
-#  using MPI parallelism across the energy axis.
+#  using MPI parallelism across complete energy rows by default.
 #
 #  The sweep parameters are read from a TSV file (default:
 #  `mqed/Dyadic_GF/gf_sommerfeld_params.tsv`), one data row per array task
@@ -182,14 +182,26 @@ for var in LABEL ENERGY_MIN ENERGY_MAX ENERGY_PTS ZD_NM ZA_NM MATERIAL; do
   fi
 done
 
+NUMBER_PATTERN='^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$'
+for var in ENERGY_MIN ENERGY_MAX ZD_NM ZA_NM; do
+  if [[ ! "${!var}" =~ ${NUMBER_PATTERN} ]]; then
+    echo "ERROR: Field '${var}' must be a finite number; got '${!var}'." >&2
+    exit 1
+  fi
+done
+if [[ ! "${ENERGY_PTS}" =~ ^[1-9][0-9]*$ ]]; then
+  echo "ERROR: Field 'ENERGY_PTS' must be a positive integer; got '${ENERGY_PTS}'." >&2
+  exit 1
+fi
+
 # ── Convert nm → metres for the physics keys ─────────────────────────────────
 # The config has two separate keys:
 #   simulation.position.zD_nm  → used only in the output filename template
 #   simulation.position.zD     → the actual height in metres used by the solver
 # We derive the metre values from the TSV's nm values so the user only has to
 # think in nanometres.
-ZD_M="$(awk "BEGIN {printf \"%.10e\", ${ZD_NM} * 1.0e-9}")"
-ZA_M="$(awk "BEGIN {printf \"%.10e\", ${ZA_NM} * 1.0e-9}")"
+ZD_M="$(awk -v value="${ZD_NM}" 'BEGIN {printf "%.10e", value * 1.0e-9}')"
+ZA_M="$(awk -v value="${ZA_NM}" 'BEGIN {printf "%.10e", value * 1.0e-9}')"
 
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo "========================================================================"
@@ -208,7 +220,7 @@ echo "========================================================================"
 
 # ── Launch ───────────────────────────────────────────────────────────────────
 # We pass Hydra config overrides on the command line.  The key points:
-#   • parallel.backend=mpi          — distribute energy points across ranks
+#   • parallel.backend=mpi          — distribute complete energy rows by default
 #   • parallel.mpi_auto_launch=false — we already launched via mpirun
 #   • parallel.mpi_nproc            — tell the program how many ranks exist
 #   • simulation.energy_eV.*        — override the energy sweep range

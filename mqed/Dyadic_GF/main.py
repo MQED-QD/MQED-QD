@@ -3,10 +3,11 @@ Sommerfeld Green's function simulation — multi-frequency, multi-Rx grid.
 
 Execution Model
 ---------------
-The frequency axis is embarrassingly parallel: each energy point requires
-an independent ``Greens_function_analytical`` instance (with its own
-ε(ω)) and loops over all Rx positions.  Three execution backends are
-supported, controlled by ``parallel.backend`` in the Hydra config:
+Each energy/Rx pair is independent. By default, parallel backends retain one
+complete Rx row per energy so that frequency-specific material and solver
+setup is performed only once. For scarce-energy, many-Rx jobs, the optional
+flattened scheduler divides each energy row into contiguous Rx chunks. Three
+execution backends are supported, controlled by ``parallel.backend``:
 
   * ``sequential`` — plain for-loop (default, zero dependencies).
   * ``joblib``     — multiprocessing via joblib (shared-memory, good
@@ -17,8 +18,8 @@ For ``joblib``, the worker function :func:`_compute_one_energy` is
 called via ``Parallel(delayed(...))``.  ``DataProvider`` is re-created
 inside each worker to avoid pickling issues with interpolation objects.
 
-For ``mpi``, energies are scattered round-robin across ranks; each rank
-writes its chunk and rank 0 gathers and saves.
+For ``mpi``, energy rows or flattened Rx chunks are distributed round-robin
+across ranks; rank 0 validates, restores, and saves the complete grid.
 """
 
 import sys
@@ -33,6 +34,12 @@ from tqdm import tqdm
 
 from mqed.Dyadic_GF.data_provider import DataProvider
 from mqed.Dyadic_GF.GF_Sommerfeld import Greens_function_analytical
+from mqed.Dyadic_GF.parallel_slicing import (
+    assemble_sliced_results,
+    rx_chunk_size,
+    scheduler_for_backend,
+    task_slices,
+)
 from mqed.utils.SI_unit import eV_to_J, hbar, c
 from mqed.utils.dgf_data import save_gf_h5
 from hydra.core.hydra_config import HydraConfig
@@ -255,20 +262,35 @@ def _run_sequential(
 
 
 def _run_joblib(
-    energy_eV_array, target_lambdas_m, rx_values_m, sim_params, material_cfg, n_jobs
+    energy_eV_array,
+    target_lambdas_m,
+    rx_values_m,
+    sim_params,
+    material_cfg,
+    n_jobs,
+    parallel_cfg=None,
 ):
-    """Joblib backend — parallelize over energy axis.
-
-    Each energy is dispatched as an independent task to a pool of
-    ``n_jobs`` processes.  Communication is via return values (no
-    shared memory needed).
-    """
+    """Run one process pool over energy rows or contiguous Rx slices."""
     from joblib import Parallel, delayed
+    from joblib.parallel import effective_n_jobs
     from mqed.utils.joblib_track import tqdm_joblib
 
     nE = len(energy_eV_array)
     nR = len(rx_values_m)
     integ_cfg = getattr(sim_params, "integration", None)
+    scheduler = scheduler_for_backend(
+        parallel_cfg,
+        "joblib",
+        backend_default_scheduler="energy",
+    )
+    tasks = task_slices(
+        n_energy=nE,
+        n_rx=nR,
+        worker_count=effective_n_jobs(n_jobs),
+        integration_method="direct",
+        scheduler=scheduler,
+        rx_chunk_size=rx_chunk_size(parallel_cfg),
+    )
 
     # OmegaConf containers are not always pickle-friendly — convert to
     # plain dicts/primitives for cross-process transfer.
@@ -283,30 +305,40 @@ def _run_joblib(
     material_cfg_dc = OmegaConf.create(material_cfg_plain)
     integ_cfg_dc = OmegaConf.create(integ_cfg_plain) if integ_cfg_plain is not None else None
 
-    logger.info(f"Joblib backend: dispatching {nE} energies across {n_jobs} workers")
+    logger.info(
+        "Joblib backend: scheduler={}, {} work units for {} energies × {} Rx points",
+        scheduler,
+        len(tasks),
+        nE,
+        nR,
+    )
 
-    with tqdm_joblib(tqdm(total=nE, desc="Energies (joblib)", ncols=100)):
+    with tqdm_joblib(tqdm(total=len(tasks), desc="Sommerfeld tasks (joblib)", ncols=100)):
         raw_results = Parallel(n_jobs=n_jobs, prefer="processes")(
             delayed(_compute_one_energy)(
-                idx=i,
-                energy_eV=energy_eV_array[i],
-                lambda_m=target_lambdas_m[i],
-                rx_values_m=rx_values_m,
+                idx=energy_index,
+                energy_eV=energy_eV_array[energy_index],
+                lambda_m=target_lambdas_m[energy_index],
+                rx_values_m=rx_values_m[rx_indices],
                 zD=sim_params.position.zD,
                 zA=sim_params.position.zA,
                 material_cfg=material_cfg_dc,
                 integ_cfg=integ_cfg_dc,
             )
-            for i in range(nE)
+            for energy_index, rx_indices in tasks
         )
 
-    results_total = np.zeros((nE, nR, 3, 3), dtype=complex)
-    results_vacuum = np.zeros((nE, nR, 3, 3), dtype=complex)
-    for idx, tot, vac in raw_results:
-        results_total[idx] = tot
-        results_vacuum[idx] = vac
-
-    return results_total, results_vacuum
+    sliced_results = [
+        (result[0], rx_indices, *result[1:])
+        for (_, rx_indices), result in zip(tasks, raw_results)
+    ]
+    return assemble_sliced_results(
+        [sliced_results],
+        nE,
+        nR,
+        save_components=False,
+        worker_label="Joblib",
+    )
 
 
 def _maybe_auto_launch_mpi(parallel_cfg):
@@ -334,9 +366,9 @@ def _maybe_auto_launch_mpi(parallel_cfg):
 
 
 def _run_mpi(
-    energy_eV_array, target_lambdas_m, rx_values_m, sim_params, material_cfg, parallel_cfg
+    energy_eV_array, target_lambdas_m, rx_values_m, sim_params, material_cfg, parallel_cfg=None
 ):
-    """MPI backend — scatter energies round-robin across ranks.
+    """Distribute energy rows or contiguous Rx slices across MPI ranks.
 
     Rank 0 gathers all partial results and returns the full arrays.
     Non-root ranks return ``(None, None)``.
@@ -350,40 +382,67 @@ def _run_mpi(
     nE = len(energy_eV_array)
     nR = len(rx_values_m)
     integ_cfg = getattr(sim_params, "integration", None)
+    scheduler = scheduler_for_backend(
+        parallel_cfg,
+        "mpi",
+        backend_default_scheduler="energy",
+    )
+    tasks = task_slices(
+        n_energy=nE,
+        n_rx=nR,
+        worker_count=size,
+        integration_method="direct",
+        scheduler=scheduler,
+        rx_chunk_size=rx_chunk_size(parallel_cfg),
+    )
 
-    # Round-robin assignment: rank k handles energies k, k+size, k+2*size, ...
-    local_indices = list(range(rank, nE, size))
+    local_tasks = tasks[rank::size]
 
     if rank == 0:
-        logger.info(f"MPI backend: {size} ranks, {nE} energies ({len(local_indices)} per rank avg)")
+        logger.info(
+            "MPI backend: {} ranks, scheduler={}, {} energies × {} Rx points, {} work units "
+            "(rank 0 handles {})",
+            size,
+            scheduler,
+            nE,
+            nR,
+            len(tasks),
+            len(local_tasks),
+        )
 
     local_results = []
-    for i in local_indices:
-        if rank == 0:
-            logger.info(f"[rank {rank}] Energy {i+1}/{nE}: {energy_eV_array[i]:.3f} eV")
+    for i, rx_indices in local_tasks:
+        logger.info(
+            "[rank {}] Energy {}/{}: {:.3f} eV, {} Rx points",
+            rank,
+            i + 1,
+            nE,
+            energy_eV_array[i],
+            len(rx_indices),
+        )
         idx, tot, vac = _compute_one_energy(
             idx=i,
             energy_eV=energy_eV_array[i],
             lambda_m=target_lambdas_m[i],
-            rx_values_m=rx_values_m,
+            rx_values_m=rx_values_m[rx_indices],
             zD=sim_params.position.zD,
             zA=sim_params.position.zA,
             material_cfg=material_cfg,
             integ_cfg=integ_cfg,
         )
-        local_results.append((idx, tot, vac))
+        local_results.append((idx, rx_indices, tot, vac))
 
     # Gather all partial results on rank 0
     all_results = comm.gather(local_results, root=0)
 
     if rank == 0:
-        results_total = np.zeros((nE, nR, 3, 3), dtype=complex)
-        results_vacuum = np.zeros((nE, nR, 3, 3), dtype=complex)
-        for rank_results in all_results:
-            for idx, tot, vac in rank_results:
-                results_total[idx] = tot
-                results_vacuum[idx] = vac
-        return results_total, results_vacuum
+        return assemble_sliced_results(
+            all_results,
+            nE,
+            nR,
+            save_components=False,
+            worker_label="MPI",
+        )
 
     return None, None
 
@@ -432,6 +491,8 @@ def run_simulation(cfg: DictConfig) -> None:
     # ── Build Rx grid ──
     rx_values_nm = build_position_grid(sim_params.position.Rx_nm)
     rx_values_m = rx_values_nm * 1e-9
+    if len(energy_ev_array) < 1 or len(rx_values_m) < 1:
+        raise ValueError("Sommerfeld simulation requires at least one energy and one Rx point.")
     logger.info(
         f"Grid: {len(energy_ev_array)} energies × {len(rx_values_m)} Rx points  |  backend={backend}"
     )
@@ -444,7 +505,13 @@ def run_simulation(cfg: DictConfig) -> None:
     elif backend == "joblib":
         n_jobs = parallel_cfg.get("n_jobs", -1)
         results_total, results_vacuum = _run_joblib(
-            energy_ev_array, target_lambdas_m, rx_values_m, sim_params, material_cfg, n_jobs,
+            energy_ev_array,
+            target_lambdas_m,
+            rx_values_m,
+            sim_params,
+            material_cfg,
+            n_jobs,
+            parallel_cfg,
         )
     elif backend == "mpi":
         results_total, results_vacuum = _run_mpi(
