@@ -7,18 +7,17 @@ near plasmonic interfaces using macroscopic quantum electrodynamics.
 Latest Update
 -------------
 
-**Version 1.4.3** adds a compact ``ring_circulant`` Mie layout for
-symmetry-compatible spherical emitter rings. It stores one dipole-projected
-cyclic Green-function row and supports emission spectra, spectral densities,
-pair-style plotting, projected DDI construction, and stationary Lindblad
-dynamics with periodic coupling filters.
+**Version 1.4.4** adds a shared flattened energy/Rx scheduler for two-layer
+Sommerfeld and N-layer Green-tensor calculations. One- or few-frequency jobs
+can distribute contiguous horizontal-distance chunks across Joblib workers or
+MPI ranks, while backward-compatible energy-row defaults and N-layer
+``fixed_grid`` kernel reuse remain intact.
 
-N-layer MPI jobs can now distribute horizontal-distance chunks across ranks
-when a single- or few-frequency sweep would otherwise leave most ranks idle.
-Whole-energy batching remains in place for ``fixed_grid`` integration so its
-sampled Sommerfeld kernels are still reused across the complete Rx grid.
-Annotated sphere-ring and single-frequency DBP/DBR examples document both
-workflows.
+Integration warnings now include energy, wavelength, and position context, and
+the new ``mqed_validate_gf_h5`` command checks separation-indexed HDF5 tensors
+for valid shapes, finite values, metadata, and component consistency. Material
+loading also supports labeled and headerless spreadsheets and includes bundled
+fused-silica optical data.
 
 .. image:: _static/workflow_diagram.png
    :width: 600

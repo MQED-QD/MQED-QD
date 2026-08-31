@@ -16,13 +16,13 @@ near plasmonic interfaces using macroscopic quantum electrodynamics (MQED).
 
 ## Latest Update
 
-**Version 1.4.3** adds compact projected Mie ring workflows and improves MPI utilization for single-frequency N-layer distance sweeps.
+**Version 1.4.4** adds flattened energy/Rx scheduling, stronger integration diagnostics, and post-run Green-tensor validation.
 
-- **Ring-circulant Mie output** stores one dipole-projected cyclic Green-function row for symmetry-compatible spherical emitter rings instead of the full pair-indexed Cartesian tensor.
-- **Downstream ring analysis** supports emission spectra, spectral densities, pair-style plotting, projected DDI construction, and stationary Lindblad dynamics with periodic coupling filters.
-- **Validated compact data** carries explicit representation and emitter-geometry provenance, with shape, finite-value, and memory-allocation guards.
-- **Rx-aware N-layer MPI** distributes horizontal-distance chunks across ranks when a small energy grid would otherwise leave most ranks idle, while preserving fixed-grid kernel reuse.
-- **Annotated examples and tutorials** cover the compact sphere-ring workflow and a single-frequency, 121-point DBP/DBR MPI sweep.
+- **Flattened Sommerfeld and N-layer scheduling** distributes contiguous horizontal-distance chunks when one or a few energies would otherwise leave Joblib workers or MPI ranks idle.
+- **Backward-compatible defaults** retain complete energy rows for two-layer calculations and preserve whole-row N-layer `fixed_grid` kernel reuse.
+- **Actionable integration warnings** include energy, wavelength, and position context for reproducing difficult quadrature samples.
+- **Green-tensor validation CLI** checks separation-indexed HDF5 shapes, finite values, metadata, and total/vacuum/structure consistency after warning-heavy runs.
+- **Improved material loading** supports labeled and headerless dielectric spreadsheets and includes fused-silica optical data.
 
 See `CHANGELOG.md` for the full release notes.
 
@@ -105,6 +105,7 @@ For step-by-step walkthroughs, see the
 | `mqed_calc_emission_spectrum` | Experimental emission-spectrum calculation; not literature-validated yet |
 | `mqed_plot_emission_spectrum` | Plot experimental emission-spectrum output |
 | `mqed_plot_dbr_couplings` | Plot physical DBR couplings versus separation from Green tensors |
+| `mqed_validate_gf_h5` | Validate separation-indexed Green tensors after quadrature warnings |
 | `mqed_lindblad` | Lindblad master-equation dynamics |
 | `mqed_nhse` | Non-Hermitian dynamics (recommended for large systems) |
 | `mqed_plot_msd` | Plot mean-squared displacement |
