@@ -24,3 +24,4 @@
    emission_spectrum
    plot_dbr_couplings
    spectral_density
+   validate_gf_h5

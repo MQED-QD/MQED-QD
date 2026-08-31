@@ -54,6 +54,9 @@ Installing the package registers the following entry points:
    * - ``mqed_plot_dbr_couplings``
      - Plot signed or absolute physical :math:`V_{ij}` and
        :math:`\hbar\Gamma_{ij}` versus separation from Green-tensor HDF5 data.
+   * - ``mqed_validate_gf_h5``
+     - Check separation-indexed Green tensors for non-finite values and
+       isolated spectral excursions after quadrature warnings.
    * - ``mqed_lindblad``
      - Time evolution with Lindblad master equation.
    * - ``mqed_nhse``
