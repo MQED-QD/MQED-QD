@@ -676,6 +676,47 @@ class NLayerGreenFunction:
         r_plus = self.reflection_coefficient(q, "up", polarization)
         return 1 - r_minus * r_plus * np.exp(2j * beta_j * d_j)
 
+    def _pole_characteristic(self, q, polarization: str):
+        """Return a ratio-free, scale-normalized modal characteristic.
+
+        Clearing the recursive-reflection denominators prevents their poles
+        from cancelling modal zeros in argument-principle searches. The
+        positive real scale preserves both zeros and contour phase while
+        making residual tolerances independent of recursion depth.
+        """
+        if self._is_top_exterior_source():
+            numerator, denominator = self._effective_reflection_terms(
+                self.source_layer,
+                -1,
+                q,
+                polarization,
+            )
+            scale = max(abs(numerator), abs(denominator), 1.0)
+            return denominator / scale
+
+        d_j = self._source_layer_thickness()
+        beta_j = self._kz(self.source_layer, q)
+        minus_numerator, minus_denominator = self._effective_reflection_terms(
+            self.source_layer,
+            -1,
+            q,
+            polarization,
+        )
+        plus_numerator, plus_denominator = self._effective_reflection_terms(
+            self.source_layer,
+            +1,
+            q,
+            polarization,
+        )
+        denominator_product = minus_denominator * plus_denominator
+        numerator_product = (
+            minus_numerator
+            * plus_numerator
+            * np.exp(2j * beta_j * d_j)
+        )
+        scale = max(abs(denominator_product), abs(numerator_product), 1.0)
+        return (denominator_product - numerator_product) / scale
+
     def branch_points(self) -> np.ndarray:
         r"""Layer light-line branch points in the complex q plane.
 
@@ -719,7 +760,8 @@ class NLayerGreenFunction:
     ) -> list[SommerfeldPole]:
         r"""Locate source-layer guided/surface-wave pole candidates.
 
-        Poles are zeros of the source-layer Airy denominator
+        Poles are zeros of the ratio-free source-layer modal characteristic,
+        which has the same physical zeros as the Airy denominator
 
         .. math::
 
@@ -745,18 +787,27 @@ class NLayerGreenFunction:
                 cfg.contour_points_per_side,
                 cfg.max_depth,
                 cfg.min_box_size,
+                cfg.winding_tol,
+                cfg.denominator_floor,
+                cfg.root_tol,
                 cfg.residual_tol,
                 cfg.dedup_tol,
+                cfg.max_boxes,
+                tuple(complex(point) for point in cfg.skip_branch_points),
+                cfg.branch_point_guard,
             )
             if use_cache and key in self._pole_cache:
                 all_poles.extend(self._pole_cache[key])
                 continue
+
             def denominator(q, polarization=pol):
-                return self.airy_denominator(q, polarization)
+                return self._pole_characteristic(q, polarization)
 
             poles = find_poles_by_winding(denominator, pol, cfg)
             if use_cache:
                 self._pole_cache[key] = poles
+                if len(self._pole_cache) > 32:
+                    self._pole_cache.pop(next(iter(self._pole_cache)))
             all_poles.extend(poles)
         all_poles.sort(key=lambda pole: (np.real(pole.q), np.imag(pole.q), pole.polarization))
         return all_poles

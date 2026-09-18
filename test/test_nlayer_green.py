@@ -19,7 +19,7 @@ from mqed.Dyadic_GF.sommerfeld_singularities import (
     residue_vector_by_contour,
     residue_vector_by_limit,
 )
-from mqed.utils.SI_unit import c
+from mqed.utils.SI_unit import c, eV_to_J, hbar
 
 
 def test_nlayer_reflection_reduces_to_bare_interfaces():
@@ -388,6 +388,223 @@ def test_winding_pole_search_finds_artificial_simple_root():
     assert poles[0].polarization == "p"
     assert np.isclose(poles[0].q, target)
     assert poles[0].residual < 1e-10
+
+
+def test_winding_pole_search_keeps_root_away_from_guarded_branch_point():
+    target = 1.15 + 4.0e-6j
+    config = PoleSearchConfig(
+        real_min=0.0,
+        real_max=2.0,
+        imag_min=-2.0,
+        imag_max=3.0e-5,
+        contour_points_per_side=12,
+        max_depth=12,
+        min_box_size=1e-8,
+        residual_tol=1e-10,
+        dedup_tol=1e-6,
+        skip_branch_points=(1.0 + 0.0j,),
+        branch_point_guard=1e-4,
+    )
+
+    poles = find_poles_by_winding(lambda q: q - target, "s", config)
+
+    assert len(poles) == 1
+    assert poles[0].polarization == "s"
+    assert np.isclose(poles[0].q, target)
+    assert poles[0].residual < 1e-10
+
+
+def test_winding_pole_search_does_not_starve_root_away_from_branch_guard():
+    target = 1.8 - 1.0j
+    config = PoleSearchConfig(
+        real_min=0.0,
+        real_max=2.0,
+        imag_min=-2.0,
+        imag_max=0.25,
+        contour_points_per_side=12,
+        max_depth=18,
+        min_box_size=1e-8,
+        residual_tol=1e-10,
+        dedup_tol=1e-6,
+        max_boxes=1000,
+        skip_branch_points=(1.0 + 0.0j,),
+        branch_point_guard=1e-3,
+    )
+
+    poles = find_poles_by_winding(lambda q: q - target, "s", config)
+
+    assert len(poles) == 1
+    assert np.isclose(poles[0].q, target)
+
+
+def test_pole_search_config_rejects_invalid_resource_limits():
+    with pytest.raises(ValueError, match="between 2 and 4096"):
+        PoleSearchConfig(
+            real_min=0.0,
+            real_max=1.0,
+            imag_min=-1.0,
+            imag_max=0.0,
+            contour_points_per_side=4097,
+        )
+
+    with pytest.raises(ValueError, match="must be finite"):
+        PoleSearchConfig(
+            real_min=0.0,
+            real_max=np.inf,
+            imag_min=-1.0,
+            imag_max=0.0,
+        )
+
+
+def test_winding_pole_search_warns_when_box_budget_is_exhausted():
+    config = PoleSearchConfig(
+        real_min=0.0,
+        real_max=3.0,
+        imag_min=-1.0,
+        imag_max=0.25,
+        contour_points_per_side=12,
+        max_depth=5,
+        max_boxes=1,
+    )
+
+    with pytest.warns(RuntimeWarning, match="returning partial results"):
+        poles = find_poles_by_winding(lambda q: q - (2.0 - 0.25j), "p", config)
+
+    assert poles == []
+
+
+def test_find_poles_uses_ratio_free_finite_layer_characteristic():
+    omega = 2.42 * eV_to_J / hbar
+    solver = NLayerGreenFunction(
+        layers=[
+            LayerSpec(epsilon=-10.509755 + 0.313058j, thickness_m=None),
+            LayerSpec(epsilon=5.2 + 0.0j, thickness_m=90e-9),
+            LayerSpec(epsilon=1.95 + 0.0j, thickness_m=148e-9),
+            LayerSpec(epsilon=5.2 + 0.0j, thickness_m=90e-9),
+            LayerSpec(epsilon=1.95 + 0.0j, thickness_m=148e-9),
+            LayerSpec(epsilon=5.2 + 0.0j, thickness_m=90e-9),
+            LayerSpec(epsilon=1.95 + 0.0j, thickness_m=148e-9),
+            LayerSpec(epsilon=5.2 + 0.0j, thickness_m=90e-9),
+            LayerSpec(epsilon=1.95 + 0.0j, thickness_m=148e-9),
+            LayerSpec(epsilon=3.0 + 0.0j, thickness_m=20e-9),
+            LayerSpec(epsilon=1.0 + 0.0j, thickness_m=None),
+        ],
+        source_layer=9,
+        omega=omega,
+        pole_search_real_max_factor=2.0,
+        pole_search_imag_min_factor=-1e-3,
+        pole_search_imag_max_factor=3e-5,
+        pole_search_max_depth=15,
+        pole_search_contour_points=96,
+        pole_search_residual_tol=1e-8,
+        pole_search_branch_guard_factor=1e-4,
+    )
+    expected = (1.152203244 + 4.0915e-6j) * solver.k0
+    search_config = PoleSearchConfig.from_k0(
+        solver.k0,
+        real_min_factor=0.0,
+        real_max_factor=2.0,
+        imag_min_factor=-1e-3,
+        imag_max_factor=3e-5,
+        contour_points_per_side=24,
+        max_depth=12,
+        residual_tol=1e-8,
+        skip_branch_points=tuple(solver.branch_points()),
+        branch_point_guard_factor=1e-4,
+    )
+
+    poles = solver.find_poles(
+        polarizations=("s",),
+        config=search_config,
+        use_cache=False,
+    )
+
+    matching = [pole for pole in poles if abs(pole.q - expected) < 1e-6 * solver.k0]
+
+    assert len(matching) == 1, [pole.q / solver.k0 for pole in poles]
+    assert matching[0].polarization == "s"
+    assert matching[0].residual < search_config.residual_tol
+    assert abs(solver._pole_characteristic(matching[0].q, "s")) < search_config.residual_tol
+
+
+def test_find_poles_cache_distinguishes_branch_guard_config(monkeypatch):
+    solver = NLayerGreenFunction(
+        layers=[
+            LayerSpec(epsilon=1.0 + 0.0j, thickness_m=None),
+            LayerSpec(epsilon=2.25 + 0.0j, thickness_m=80e-9),
+            LayerSpec(epsilon=1.0 + 0.0j, thickness_m=None),
+        ],
+        source_layer=1,
+        omega=2.0e15,
+    )
+    target = 1.2 * solver.k0 - 0.01j * solver.k0
+    monkeypatch.setattr(solver, "_pole_characteristic", lambda q, polarization: q - target)
+    common = {
+        "real_min_factor": 1.0,
+        "real_max_factor": 1.4,
+        "imag_min_factor": -0.1,
+        "imag_max_factor": 0.05,
+        "contour_points_per_side": 12,
+        "max_depth": 8,
+        "residual_tol": 1e-8,
+    }
+    guarded = PoleSearchConfig.from_k0(
+        solver.k0,
+        skip_branch_points=(target,),
+        branch_point_guard_factor=1e-3,
+        **common,
+    )
+    unguarded = PoleSearchConfig.from_k0(solver.k0, **common)
+
+    assert solver.find_poles(("s",), config=guarded) == []
+    poles = solver.find_poles(("s",), config=unguarded)
+
+    assert len(poles) == 1
+    assert np.isclose(poles[0].q, target)
+
+
+def test_find_poles_cache_is_bounded(monkeypatch):
+    solver = NLayerGreenFunction(
+        layers=[
+            LayerSpec(epsilon=1.0 + 0.0j, thickness_m=None),
+            LayerSpec(epsilon=2.25 + 0.0j, thickness_m=80e-9),
+            LayerSpec(epsilon=1.0 + 0.0j, thickness_m=None),
+        ],
+        source_layer=1,
+        omega=2.0e15,
+    )
+    monkeypatch.setattr(solver, "_pole_characteristic", lambda q, polarization: 1.0 + 0.0j)
+
+    for index in range(40):
+        config = PoleSearchConfig.from_k0(
+            solver.k0,
+            real_min_factor=1.0 + index * 1e-3,
+            real_max_factor=1.5 + index * 1e-3,
+            imag_min_factor=-0.1,
+            imag_max_factor=0.05,
+            contour_points_per_side=4,
+            max_depth=1,
+        )
+        solver.find_poles(("s",), config=config)
+
+    assert len(solver._pole_cache) == 32
+
+
+def test_top_exterior_pole_characteristic_is_normalized_without_changing_public_denominator():
+    solver = NLayerGreenFunction(
+        layers=[
+            LayerSpec(epsilon=-10.0 + 0.5j, thickness_m=None),
+            LayerSpec(epsilon=1.0 + 0.0j, thickness_m=None),
+        ],
+        source_layer=1,
+        omega=2.0e15,
+    )
+    q = 1.2 * solver.k0
+    numerator, denominator = solver._effective_reflection_terms(1, -1, q, "p")
+
+    assert solver.airy_denominator(q, "p") == denominator
+    expected = denominator / max(abs(numerator), abs(denominator), 1.0)
+    assert solver._pole_characteristic(q, "p") == expected
 
 
 def test_pole_residue_helpers_recover_artificial_vector_residue():
