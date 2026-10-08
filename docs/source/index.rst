@@ -7,17 +7,15 @@ near plasmonic interfaces using macroscopic quantum electrodynamics.
 Latest Update
 -------------
 
-**Version 1.4.4** adds a shared flattened energy/Rx scheduler for two-layer
-Sommerfeld and N-layer Green-tensor calculations. One- or few-frequency jobs
-can distribute contiguous horizontal-distance chunks across Joblib workers or
-MPI ranks, while backward-compatible energy-row defaults and N-layer
-``fixed_grid`` kernel reuse remain intact.
+**Version 1.4.5** adds the Rakić (1998) Lorentz–Drude dielectric model and
+published five-oscillator fits for silver and gold. Select the Ag model in the
+Sommerfeld configuration or use the Au example configuration; existing Drude
+and Drude–Lorentz calculations remain unchanged. See the
+:doc:`Sommerfeld tutorial <tutorials/GF_Sommerfeld>` for the model equation,
+units, and Hydra commands.
 
-Integration warnings now include energy, wavelength, and position context, and
-the new ``mqed_validate_gf_h5`` command checks separation-indexed HDF5 tensors
-for valid shapes, finite values, metadata, and component consistency. Material
-loading also supports labeled and headerless spreadsheets and includes bundled
-fused-silica optical data.
+This release also improves N-layer pole searching and adds regression coverage
+for both the metal fits and corrected pole-search behavior.
 
 .. image:: _static/workflow_diagram.png
    :width: 600

@@ -16,13 +16,11 @@ near plasmonic interfaces using macroscopic quantum electrodynamics (MQED).
 
 ## Latest Update
 
-**Version 1.4.4** adds flattened energy/Rx scheduling, stronger integration diagnostics, and post-run Green-tensor validation.
+**Version 1.4.5** adds Rakić (1998) Lorentz–Drude optical fits for silver and gold and improves N-layer pole searching.
 
-- **Flattened Sommerfeld and N-layer scheduling** distributes contiguous horizontal-distance chunks when one or a few energies would otherwise leave Joblib workers or MPI ranks idle.
-- **Backward-compatible defaults** retain complete energy rows for two-layer calculations and preserve whole-row N-layer `fixed_grid` kernel reuse.
-- **Actionable integration warnings** include energy, wavelength, and position context for reproducing difficult quadrature samples.
-- **Green-tensor validation CLI** checks separation-indexed HDF5 shapes, finite values, metadata, and total/vacuum/structure consistency after warning-heavy runs.
-- **Improved material loading** supports labeled and headerless dielectric spreadsheets and includes fused-silica optical data.
+- **Published metal fits** provide the five-oscillator Rakić parameters for Ag and Au in Sommerfeld Hydra configurations.
+- **Opt-in model selection** leaves the existing Drude and Drude–Lorentz dielectric models unchanged; see the [Sommerfeld tutorial](https://mqed-qd.github.io/MQED-QD/tutorials/GF_Sommerfeld.html) for usage and units.
+- **N-layer pole search** includes corrected search behavior with regression coverage.
 
 See `CHANGELOG.md` for the full release notes.
 
