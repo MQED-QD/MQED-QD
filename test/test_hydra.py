@@ -4,8 +4,10 @@ This is a test script to verify if Hydra works well.
 # tests/test_hydra_wiring.py
 from pathlib import Path
 import numpy as np
+import pytest
 from hydra import initialize_config_dir, compose
 from mqed.Dyadic_GF import main, main_nlayer
+from mqed.Dyadic_GF.data_provider import DataProvider
 from mqed.Lindblad.run_quantum_dynamics import app_run, build_initial_ket
 from mqed.Dyadic_GF.main_mie import resolve_emitter_geometry_m
 from mqed.utils.hydra_local import prepare_hydra_config_path
@@ -32,6 +34,38 @@ def test_overrides_apply():
     assert cfg.solver.method == "NonHermitian"
     assert abs(cfg.simulation.t_ps.stop - 12.5) < 1e-12
     assert cfg.output.filename == "test.h5"
+
+
+@pytest.mark.parametrize("config_name,overrides,plasma,drude_weight,damping,oscillators", [
+    (
+        "GF_Sommerfeld", ["material.source_type=rakic_lorentz_drude"], 9.01, 0.845, 0.048,
+        [(0.065, 0.816, 3.886), (0.124, 4.481, 0.452), (0.011, 8.185, 0.065),
+         (0.840, 9.083, 0.916), (5.646, 20.29, 2.419)],
+    ),
+    (
+        "GF_Sommerfeld_rakic_Au", [], 9.03, 0.760, 0.053,
+        [(0.024, 0.415, 0.241), (0.010, 0.830, 0.345), (0.071, 2.969, 0.870),
+         (0.601, 4.304, 2.494), (4.384, 13.32, 2.214)],
+    ),
+])
+@pytest.mark.parametrize("energy_ev", [1.5, 2.5, 4.0])
+def test_sommerfeld_rakic_config_composes_and_evaluates(
+    config_name, overrides, plasma, drude_weight, damping, oscillators, energy_ev
+):
+    cfg_dir = Path(__file__).parent / "../configs/Dyadic_GF"
+    cfg = _compose(cfg_dir, config_name, overrides=overrides)
+    omega = energy_ev / 6.582119569e-16
+    epsilon = DataProvider(cfg.material).get_epsilon(omega)
+    expected = 1 - drude_weight * plasma**2 / (energy_ev**2 + 1j * damping * energy_ev)
+    for strength, omega_0, linewidth in oscillators:
+        expected += strength * plasma**2 / (
+            omega_0**2 - energy_ev**2 - 1j * linewidth * energy_ev
+        )
+
+    assert cfg.material.rakic_lorentz_drude_config.drude_strength == drude_weight
+    assert len(cfg.material.rakic_lorentz_drude_config.oscillators) == 5
+    assert np.isclose(epsilon, expected)
+    assert epsilon.imag > 0
 
 def test_smoke_writes_to_tmp(tmp_path):
     cfg_dir = Path(__file__).parent / "../configs/Lindblad"

@@ -15,6 +15,7 @@ material:
   #   - constant        : fixed complex epsilon independent of frequency
   #   - Drude           : eps_inf - omega_p^2 / (omega^2 + i*gamma*omega)
   #   - Drude-Lorentz   : Drude term + Lorentz oscillators
+  #   - rakic_lorentz_drude : Rakić metal fit (f0 Drude weight, shared omega_p numerator)
   #
   # Notes on model parameter units:
   #   For every frequency-like parameter, provide exactly one key in either
@@ -57,6 +58,24 @@ material:
       - strength: 0.20
         omega_0_eV: 4.9
         gamma_eV: 0.35
+
+  # --- Rakić et al., Applied Optics 37, 5271 (1998), Table 2: silver (Ag) ---
+  # Used only if source_type is 'rakic_lorentz_drude'. All frequency parameters
+  # below are energies in eV (converted to angular frequency by DataProvider).
+  # eps = eps_inf - f0*omega_p^2/(omega^2 + i*gamma*omega)
+  #       + sum_j f_j*omega_p^2/(omega_0j^2 - omega^2 - i*gamma_j*omega)
+  # For gold (Au), select GF_Sommerfeld_rakic_Au.yaml instead.
+  rakic_lorentz_drude_config:
+    eps_inf: 1.0
+    omega_p_eV: 9.01
+    gamma_eV: 0.048
+    drude_strength: 0.845
+    oscillators:
+      - {strength: 0.065, omega_0_eV: 0.816, gamma_eV: 3.886}
+      - {strength: 0.124, omega_0_eV: 4.481, gamma_eV: 0.452}
+      - {strength: 0.011, omega_0_eV: 8.185, gamma_eV: 0.065}
+      - {strength: 0.840, omega_0_eV: 9.083, gamma_eV: 0.916}
+      - {strength: 5.646, omega_0_eV: 20.29, gamma_eV: 2.419}
 
 simulation:
   material: "Ag" # Material surface

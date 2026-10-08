@@ -1,0 +1,21 @@
+# Rakić et al., Applied Optics 37, 5271 (1998), Au Lorentz-Drude fit (Table 2).
+defaults:
+  - GF_Sommerfeld
+  - _self_
+
+material:
+  source_type: rakic_lorentz_drude
+  rakic_lorentz_drude_config:
+    eps_inf: 1.0
+    omega_p_eV: 9.03
+    gamma_eV: 0.053
+    drude_strength: 0.760
+    oscillators:
+      - {strength: 0.024, omega_0_eV: 0.415, gamma_eV: 0.241}
+      - {strength: 0.010, omega_0_eV: 0.830, gamma_eV: 0.345}
+      - {strength: 0.071, omega_0_eV: 2.969, gamma_eV: 0.870}
+      - {strength: 0.601, omega_0_eV: 4.304, gamma_eV: 2.494}
+      - {strength: 4.384, omega_0_eV: 13.32, gamma_eV: 2.214}
+
+simulation:
+  material: Au
