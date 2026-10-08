@@ -120,6 +120,23 @@ def circulant_row_to_pair(
     return row[:, offsets]
 
 
+def _nearest_separation_index(
+    rx_nm: np.ndarray,
+    separation_nm: float,
+    tolerance_nm: float,
+    alpha: int,
+    beta: int,
+) -> int:
+    nearest = int(np.argmin(np.abs(rx_nm - separation_nm)))
+    if not np.isclose(rx_nm[nearest], separation_nm, rtol=0.0, atol=tolerance_nm):
+        raise ValueError(
+            f"No Rx_nm entry for emitter pair ({alpha},{beta}) separation "
+            f"{separation_nm:g} nm within {tolerance_nm:g} nm; nearest is "
+            f"Rx_nm[{nearest}]={rx_nm[nearest]:g} nm."
+        )
+    return nearest
+
+
 def project_separation_green_to_pair(
     G_separation: np.ndarray,
     Rx_nm: np.ndarray,
@@ -142,15 +159,8 @@ def project_separation_green_to_pair(
     for alpha in range(n_emitters):
         for beta in range(n_emitters):
             separation_nm = abs(alpha - beta) * d_nm
-            matches = np.where(np.isclose(Rx_nm, separation_nm, rtol=0.0, atol=tolerance_nm))[0]
-            if matches.size == 0:
-                nearest = int(np.argmin(np.abs(Rx_nm - separation_nm)))
-                raise ValueError(
-                    f"No Rx_nm entry for emitter pair ({alpha},{beta}) separation "
-                    f"{separation_nm:g} nm within {tolerance_nm:g} nm; nearest is "
-                    f"Rx_nm[{nearest}]={Rx_nm[nearest]:g} nm."
-                )
-            tensor = G_separation[:, int(matches[0]), :, :]
+            index = _nearest_separation_index(Rx_nm, separation_nm, tolerance_nm, alpha, beta)
+            tensor = G_separation[:, index, :, :]
             projected[:, alpha, beta] = np.einsum(
                 "a,mab,b->m", orientations[alpha], tensor, orientations[beta]
             )
@@ -174,15 +184,8 @@ def _separation_tensor_to_pair(
     for alpha in range(n_emitters):
         for beta in range(n_emitters):
             separation_nm = abs(alpha - beta) * d_nm
-            matches = np.where(np.isclose(Rx_nm, separation_nm, rtol=0.0, atol=tolerance_nm))[0]
-            if matches.size == 0:
-                nearest = int(np.argmin(np.abs(Rx_nm - separation_nm)))
-                raise ValueError(
-                    f"No Rx_nm entry for emitter pair ({alpha},{beta}) separation "
-                    f"{separation_nm:g} nm within {tolerance_nm:g} nm; nearest is "
-                    f"Rx_nm[{nearest}]={Rx_nm[nearest]:g} nm."
-                )
-            pair[:, alpha, beta] = G_separation[:, int(matches[0])]
+            index = _nearest_separation_index(Rx_nm, separation_nm, tolerance_nm, alpha, beta)
+            pair[:, alpha, beta] = G_separation[:, index]
     return pair
 
 
