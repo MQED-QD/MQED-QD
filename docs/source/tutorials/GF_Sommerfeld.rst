@@ -170,6 +170,9 @@ The dielectric source is selected by ``material.source_type``:
 - ``constant``: use a fixed complex permittivity (Useful for non-dispersive material)
 - ``Drude``: use the Drude model
 - ``Drude-Lorentz``: use Drude + Lorentz oscillators
+- ``rakic_lorentz_drude``: use the Rakić metal Lorentz–Drude fit with a
+  dimensionless Drude weight ``drude_strength`` (``f0``) and oscillator
+  numerators ``strength * omega_p**2`` rather than ``strength * omega_0**2``
 
 Examples:
 
@@ -199,6 +202,30 @@ Examples:
        material.drude_lorentz_config.oscillators[1].strength=0.20 \
        material.drude_lorentz_config.oscillators[1].omega_0_eV=4.9 \
        material.drude_lorentz_config.oscillators[1].gamma_eV=0.35
+
+The default ``GF_Sommerfeld.yaml`` includes the silver (Ag) parameters from
+Rakić et al., *Applied Optics* **37**, 5271–5283 (1998), Table 2. Select
+them without changing the existing Drude–Lorentz model:
+
+.. code-block:: bash
+
+   mqed_GF_Sommerfeld material.source_type=rakic_lorentz_drude
+
+For the gold (Au) fit, use the included config with the Au coefficients:
+
+.. code-block:: bash
+
+   mqed_GF_Sommerfeld --config-name GF_Sommerfeld_rakic_Au
+
+The Rakić parameters are ``material.rakic_lorentz_drude_config.eps_inf``
+(default 1), ``omega_p_eV``, ``gamma_eV``, ``drude_strength``, and a nonempty
+``oscillators`` list with ``strength``, ``omega_0_eV``, and ``gamma_eV``.
+Changing ``simulation.material`` alone changes only the output label. Frequencies in
+eV represent :math:`\hbar\omega`, not rad/s. The model accepts ``*_rad_s``
+instead of ``*_eV`` for each frequency parameter, but not both. Its positive
+imaginary permittivity uses the :math:`e^{-i\omega t}` convention. The
+published study covers 0.1–6 eV; the authors note that the separate
+Brendel–Bormann model better describes noble-metal interband absorption.
 
 .. note::
 
