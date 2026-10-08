@@ -95,6 +95,80 @@ def test_drude_lorentz_source_supports_hyphenated_name():
     assert np.isclose(epsilon.imag, expected.imag)
 
 
+@pytest.mark.parametrize("source_type", ["rakic_lorentz_drude", "Rakic-Lorentz-Drude", "rakic lorentz drude"])
+def test_rakic_lorentz_drude_uses_plasma_weight_for_each_oscillator(source_type):
+    cfg = OmegaConf.create({
+        "source_type": source_type,
+        "rakic_lorentz_drude_config": {
+            "omega_p_eV": 9.01,
+            "gamma_eV": 0.048,
+            "drude_strength": 0.845,
+            "oscillators": [
+                {"strength": 0.065, "omega_0_eV": 0.816, "gamma_eV": 3.886},
+                {"strength": 0.124, "omega_0_eV": 4.481, "gamma_eV": 0.452},
+            ],
+        },
+    })
+    energy_ev = 2.5
+    expected = 1 - 0.845 * 9.01**2 / (energy_ev**2 + 1j * 0.048 * energy_ev)
+    expected += 0.065 * 9.01**2 / (0.816**2 - energy_ev**2 - 1j * 3.886 * energy_ev)
+    expected += 0.124 * 9.01**2 / (4.481**2 - energy_ev**2 - 1j * 0.452 * energy_ev)
+
+    actual = DataProvider(cfg).get_epsilon(_omega_from_ev(energy_ev))
+
+    assert np.isclose(actual, expected)
+    assert actual.imag > 0
+
+
+@pytest.mark.parametrize("key,value", [
+    ("omega_p_eV", 0), ("gamma_eV", -0.1), ("drude_strength", -0.1),
+    ("drude_strength", float("nan")),
+])
+def test_rakic_rejects_invalid_drude_parameters(key, value):
+    cfg = OmegaConf.create({
+        "source_type": "rakic_lorentz_drude",
+        "rakic_lorentz_drude_config": {
+            "omega_p_eV": 9, "gamma_eV": 0.05, "drude_strength": 0.8,
+            "oscillators": [{"strength": 0.1, "omega_0_eV": 2, "gamma_eV": 0.2}],
+        },
+    })
+    cfg.rakic_lorentz_drude_config[key] = value
+    with pytest.raises(ValueError):
+        DataProvider(cfg)
+
+
+@pytest.mark.parametrize("oscillators", [
+    [], [42], [{"strength": -1, "omega_0_eV": 2, "gamma_eV": 0.2}],
+    [{"strength": 1, "omega_0_eV": 0, "gamma_eV": 0.2}],
+    [{"strength": 1, "omega_0_eV": 2, "gamma_eV": -0.2}],
+])
+def test_rakic_rejects_invalid_oscillators(oscillators):
+    cfg = OmegaConf.create({
+        "source_type": "rakic_lorentz_drude",
+        "rakic_lorentz_drude_config": {
+            "omega_p_eV": 9, "gamma_eV": 0.05, "drude_strength": 0.8,
+            "oscillators": oscillators,
+        },
+    })
+    with pytest.raises(ValueError):
+        DataProvider(cfg)
+
+
+def test_rakic_rejects_ambiguous_unit_keys():
+    cfg = OmegaConf.create({
+        "source_type": "rakic_lorentz_drude",
+        "rakic_lorentz_drude_config": {
+            "omega_p_eV": 9, "gamma_eV": 0.05, "drude_strength": 0.8,
+            "oscillators": [{
+                "strength": 0.1, "omega_0_eV": 2,
+                "omega_0_rad_s": _omega_from_ev(2), "gamma_eV": 0.2,
+            }],
+        },
+    })
+    with pytest.raises(ValueError, match="Specify only one"):
+        DataProvider(cfg)
+
+
 def test_drude_requires_exactly_one_unit_key_per_frequency_parameter():
     cfg = OmegaConf.create(
         {

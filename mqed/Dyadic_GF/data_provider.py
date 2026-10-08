@@ -33,10 +33,12 @@ class DataProvider:
             self._setup_drude_model()
         elif self.source_type == 'drude_lorentz':
             self._setup_drude_lorentz_model()
+        elif self.source_type == 'rakic_lorentz_drude':
+            self._setup_rakic_lorentz_drude_model()
         else:
             raise ValueError(
                 f"Unknown material source_type: '{self.source_type_raw}'. "
-                "Use one of: excel, constant, Drude, Drude-Lorentz."
+                "Use one of: excel, constant, Drude, Drude-Lorentz, Rakic-Lorentz-Drude."
             )
 
     @staticmethod
@@ -47,6 +49,8 @@ class DataProvider:
             return text
         if text in {"drude-lorentz", "drudelorentz", "drude lorentz"}:
             return "drude_lorentz"
+        if text.replace(" ", "-") == "rakic-lorentz-drude":
+            return "rakic_lorentz_drude"
         return text
 
     @staticmethod
@@ -253,6 +257,53 @@ class DataProvider:
             len(self.dl_oscillators),
         )
 
+    def _setup_rakic_lorentz_drude_model(self):
+        config_name = "rakic_lorentz_drude_config"
+        if config_name not in self.config:
+            raise ValueError(f"Missing '{config_name}' in material config.")
+        cfg = self.config[config_name]
+        if not isinstance(cfg, (dict, DictConfig)):
+            raise ValueError(f"'{config_name}' must be a dict.")
+
+        self.rakic_eps_inf = self._require_finite(cfg.get("eps_inf", 1), f"{config_name}.eps_inf")
+        self.rakic_omega_p = self._require_positive(
+            self._read_omega_parameter(cfg, "omega_p"), f"{config_name}.omega_p"
+        )
+        self.rakic_gamma = self._require_nonnegative(
+            self._read_omega_parameter(cfg, "gamma"), f"{config_name}.gamma"
+        )
+        if "drude_strength" not in cfg:
+            raise ValueError(f"Missing '{config_name}.drude_strength' in material config.")
+        self.rakic_drude_strength = self._require_nonnegative(
+            cfg["drude_strength"], f"{config_name}.drude_strength"
+        )
+
+        oscillators = cfg.get("oscillators")
+        if not isinstance(oscillators, (list, ListConfig)) or not oscillators:
+            raise ValueError(f"{config_name}.oscillators must be a non-empty list.")
+
+        self.rakic_oscillators = []
+        for idx, osc in enumerate(oscillators):
+            prefix = f"{config_name}.oscillators[{idx}]"
+            if not isinstance(osc, (dict, DictConfig)):
+                raise ValueError(f"{prefix} must be a dict with strength, omega_0_*, and gamma_*.")
+            if "strength" not in osc:
+                raise ValueError(f"Missing '{prefix}.strength' in material config.")
+            self.rakic_oscillators.append({
+                "strength": self._require_nonnegative(osc["strength"], f"{prefix}.strength"),
+                "omega_0": self._require_positive(
+                    self._read_omega_parameter(osc, "omega_0"), f"{prefix}.omega_0"
+                ),
+                "gamma": self._require_nonnegative(
+                    self._read_omega_parameter(osc, "gamma"), f"{prefix}.gamma"
+                ),
+            })
+
+        logger.info(
+            "Using Rakić Lorentz-Drude model with {} oscillator(s)",
+            len(self.rakic_oscillators),
+        )
+
     def _epsilon_drude(self, omega):
         """Evaluate single-pole Drude permittivity."""
         denominator = omega**2 + 1j * self.drude_gamma * omega
@@ -269,6 +320,17 @@ class DataProvider:
             denominator = (osc["omega_0"]**2) - omega**2 - 1j * osc["gamma"] * omega
             epsilon = epsilon + numerator / denominator
 
+        return epsilon
+
+    def _epsilon_rakic_lorentz_drude(self, omega):
+        plasma_squared = self.rakic_omega_p**2
+        epsilon = self.rakic_eps_inf - self.rakic_drude_strength * plasma_squared / (
+            omega**2 + 1j * self.rakic_gamma * omega
+        )
+        for osc in self.rakic_oscillators:
+            epsilon += osc["strength"] * plasma_squared / (
+                osc["omega_0"]**2 - omega**2 - 1j * osc["gamma"] * omega
+            )
         return epsilon
 
     def get_epsilon(self, omega):
@@ -295,5 +357,8 @@ class DataProvider:
 
         elif self.source_type == 'drude_lorentz':
             return complex(self._epsilon_drude_lorentz(float(omega)))
+
+        elif self.source_type == 'rakic_lorentz_drude':
+            return complex(self._epsilon_rakic_lorentz_drude(float(omega)))
 
         raise ValueError(f"Unsupported source type at evaluation time: '{self.source_type_raw}'")
