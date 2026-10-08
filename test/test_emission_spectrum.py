@@ -309,6 +309,35 @@ def test_project_separation_green_to_pair_maps_chain_separations():
     assert np.allclose(projected[0], [[1.0, 2.0, 3.0], [2.0, 1.0, 2.0], [3.0, 2.0, 1.0]])
 
 
+def test_separation_mapping_prefers_nearest_rx_with_overlapping_tolerance(tmp_path):
+    path = tmp_path / "overlapping_rx.h5"
+    rx_nm = np.array([0.0, 1.0, 2.0])
+    tensor = np.zeros((1, 3, 3, 3), dtype=complex)
+    tensor[0, :, 2, 2] = [1.0, 2.0, 3.0]
+    with h5py.File(path, "w") as h5:
+        h5.attrs["gf_layout"] = "separation"
+        h5.create_dataset("green_function_total", data=tensor)
+        h5.create_dataset("green_function_vacuum", data=np.zeros_like(tensor))
+        h5.create_dataset("energy_eV", data=[2.0])
+        h5.create_dataset("Rx_nm", data=rx_nm)
+
+    orientations = np.tile([0.0, 0.0, 1.0], (3, 1))
+    direct = project_separation_green_to_pair(tensor, rx_nm, 3, 1.0, orientations, tolerance_nm=2.0)
+    output_path = run_from_config({
+        "input_file": str(path),
+        "n_emitters": 3,
+        "d_nm": 1.0,
+        "rx_tolerance_nm": 2.0,
+        "orientations": {"theta_deg": 0.0},
+        "transition_energy_eV": [2.0],
+    }, tmp_path)
+
+    expected = [[1.0, 2.0, 3.0], [2.0, 1.0, 2.0], [3.0, 2.0, 1.0]]
+    assert np.allclose(direct[0], expected)
+    with h5py.File(output_path, "r") as h5:
+        assert np.allclose(h5["projected_G"][0], expected)
+
+
 def test_separation_varguet_effective_uses_structure_self_and_real_vacuum_off_diagonal(tmp_path):
     path = tmp_path / "sep_varguet.h5"
     _write_separation_gf(path)
