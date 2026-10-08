@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.4.5 - 2026-10-08
+
+### Rakić metal optical response
+
+- Added a selectable Rakić (1998) Lorentz–Drude dielectric model with the published five-oscillator fits for silver and gold, without changing the existing Drude–Lorentz model.
+- Added example Sommerfeld Hydra configurations for Ag and Au, with documented eV-to-angular-frequency conventions and model selection.
+- Added formula, parameter, and configuration regression tests for both metals at multiple photon energies.
+
+### N-layer pole search
+
+- Improved N-layer pole-search handling and added regression coverage for the corrected search behavior.
+
 ## 1.4.4 - 2026-08-31
 
 ### Material data and integration diagnostics
