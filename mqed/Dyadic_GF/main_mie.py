@@ -449,7 +449,7 @@ class MaterialResolver:
         try:
             from mqed.Dyadic_GF.data_provider import DataProvider  # type: ignore
 
-            eps = DataProvider(material_cfg).get_epsilon(omega)
+            eps = DataProvider(OmegaConf.create(material_cfg)).get_epsilon(omega)
             return np.sqrt(eps)
         except Exception as exc:
             raise ValueError(

@@ -650,6 +650,22 @@ def test_gf_sphere_example_drude_silver_is_absorbing_near_lsp_band():
     assert np.imag(refractive_index**2) > 0.0
 
 
+def test_mie_resolver_accepts_rakic_gold_from_plain_yaml_mapping():
+    gold_config = OmegaConf.load("configs/Dyadic_GF/GF_Sommerfeld_rakic_Au.yaml")
+    gold = OmegaConf.to_container(gold_config.material, resolve=True)
+    energy_eV = 2.8
+    omega = energy_eV / 6.582119569e-16
+    resolver = MaterialResolver(Path("configs/Dyadic_GF"))
+
+    refractive_index = resolver.refractive_index(
+        gold, energy_eV=energy_eV, wavelength_nm=1239.841984 / energy_eV, omega=omega
+    )
+
+    assert np.isfinite(refractive_index)
+    assert np.isclose(refractive_index**2, -1.1280460919844617 + 4.412919479934102j)
+    assert refractive_index.imag > 0.0
+
+
 def test_gf_sphere_example_pair_couplings_are_circulant_by_rotation_symmetry():
     config = OmegaConf.to_container(
         OmegaConf.load(Path("configs/Dyadic_GF/GF_sphere_example.yaml")),
