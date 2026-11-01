@@ -110,6 +110,7 @@ and save the result in an HDF5 file.
       --config-name=plt_spec_dens_direct_sg \
       curves=[] \
       input_file='${oc.env:MQED_ROOT,./data}/example/spec_dens_data/spec_dens_10D_10D_Emin_0.10_Emax_6.00_359pts_height_1nm.hdf5' \
+      plot_settings.separation_values_nm=[] \
       plot_settings.separation_indices='[0,3,33]' \
       plot_settings.separation_multipliers='[1.0,1.0,100]' \
       plot_settings.filename=Spec_dens_drude.png
@@ -122,6 +123,7 @@ Or
       --config-name=plt_spec_dens_direct_sg \
       curves=[] \
       input_file='${oc.env:MQED_ROOT,./data}/example/spec_dens_data/spec_dens_10D_10D_Emin_0.10_Emax_6.00_359pts_height_1nm.hdf5' \
+      plot_settings.separation_values_nm=[] \
       plot_settings.separation_indices='[0,3,33]' \
       plot_settings.separation_multipliers='[1.0,1.0,100]' \
       plot_settings.filename=Spec_dens_drude.png
@@ -129,6 +131,8 @@ Or
 This reuses the bundled comparison plotting config
 ``configs/plots/plt_spec_dens_direct_sg.yaml`` but clears its multi-file
 ``curves`` list so the command plots the single HDF5 file produced in Step 1.
+It also clears ``separation_values_nm``: the comparison config selects physical
+distances by default, and those values override ``separation_indices``.
 For a direct-vs-singularity-aware comparison, run the same config without the
 ``curves=[]`` override.  You can modify the configuration file to adjust the
 plot settings (e.g., axis labels, title, line styles), or override specific
@@ -161,6 +165,7 @@ The configuration looks like this:
      # For separation-indexed layout: which Rx indices to plot (0-based)
      # Example: [0, 3] overlays the curves for Rx index 0 and Rx index 3.
      separation_indices: [0,3,33]
+     separation_values_nm: []
      separation_multipliers: [1.0,1.0,100]
 
      # For pair-indexed layout: which (α, β) pairs to plot
@@ -352,13 +357,45 @@ Configuration reference — plotting
 
 The plotting step is configured by one of the spectral-density plot configs,
 such as ``configs/plots/plt_spec_dens_direct_sg.yaml`` for comparing direct and
-singularity-aware quadrature.  A minimal single-file version looks like:
+singularity-aware quadrature. To compare two HDF5 resources, use a non-empty
+``curves`` list (``path`` may be absolute, or relative to the working directory):
+
+.. code-block:: yaml
+
+    input_file: /path/to/fallback.hdf5  # used only when curves is empty
+    curves:
+      - label: Direct
+        path: /path/to/direct_spectral_density.hdf5
+        color: tab:blue
+        linestyle: "-"
+      - label: Singularity-aware
+        path: /path/to/aware_spectral_density.hdf5
+        color: tab:orange
+        linestyle: "--"
+    plot_settings:
+      separation_values_nm: [0, 12, 120]
+      separation_value_tolerance_nm: 1.0e-9
+      separation_multipliers: [1.0, 1.0, 100]
+      filename: comparison.png
+
+Each file contributes its selected curves to the **same axes**. The file label
+prefixes each legend entry, and ``color`` / ``linestyle`` apply to that file's
+lines. For separation layout, select physical distances with
+``separation_values_nm`` when files have different ``Rx_nm`` ordering: the same
+distance may be index 1 in one file and index 2 in another. Physical values
+take precedence over ``separation_indices`` and are resolved independently in
+each file (unmatched values are skipped with a warning). Each file's line uses
+its own ``energy_eV`` grid; no interpolation or equal grid lengths are required.
+With ``curves: []``, plotting falls back to the single ``input_file``.
+
+A minimal single-file version looks like:
 
 .. code-block:: yaml
 
    # configs/plots/plt_spec_dens_direct_sg.yaml
 
    input_file: '${oc.env:MQED_ROOT,./outputs}/spectral_density/spectral_density.hdf5'
+   curves: []
 
    font:
      family:       Arial
@@ -371,7 +408,8 @@ singularity-aware quadrature.  A minimal single-file version looks like:
 
    plot_settings:
       separation_indices: [0]
-      scan_distance_values_nm: [0, 2, 20]
+      separation_values_nm: []
+      scan_distance_values_nm: []
       pair_indices: [[0, 0]]
       label_template:     'Rx = {Rx:.1f} nm'
       xlabel:             'Energy (eV)'
@@ -395,7 +433,11 @@ singularity-aware quadrature.  A minimal single-file version looks like:
      - Description
    * - ``input_file``
      - (see YAML)
-     - Path to the spectral density HDF5 file.
+     - Single-file fallback path, used when ``curves`` is empty.
+   * - ``curves``
+     - ``[]`` (single-file mode)
+     - Comparison resources with ``path``, ``label``, ``color`` and
+       ``linestyle`` per file; non-empty list takes precedence over ``input_file``.
    * - ``font.family``
      - ``Arial``
      - Matplotlib font family.
@@ -421,6 +463,10 @@ singularity-aware quadrature.  A minimal single-file version looks like:
      - ``[0]``
      - List of separation (Rx) indices to plot when using the
        separation-indexed GF layout.
+   * - ``plot_settings.separation_values_nm``
+     - ``[]``
+     - Physical Rx distances resolved in each HDF5 file; when non-empty,
+       overrides ``separation_indices``.
    * - ``plot_settings.pair_indices``
      - ``[[0, 0]]``
      - List of emitter-pair index pairs ``[i, j]`` to plot when using
@@ -476,6 +522,8 @@ Override any plotting parameter via Hydra:
 .. code-block:: bash
 
    python -m mqed.plotting.plot_spectral_density \
+       curves=[] \
+       plot_settings.separation_values_nm=[] \
        plot_settings.xscale=log \
        plot_settings.yscale=log \
        plot_settings.title='Log-scale Spectral Density' \

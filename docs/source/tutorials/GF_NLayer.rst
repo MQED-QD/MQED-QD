@@ -224,13 +224,18 @@ Then plot it with:
 
 .. code-block:: bash
 
-   mqed_plot_spec_dens \
-     --config-name plt_spec_dens_direct_sg \
-     input_file=/path/to/spec_dens_1D_1D_Emin_0.10_Emax_6.00_419pts_height_300nm.hdf5
+    mqed_plot_spec_dens \
+      --config-name plt_spec_dens_direct_sg \
+      curves=[] \
+      input_file=/path/to/spec_dens_nlayer_output.hdf5
 
-This plots the direct-quadrature spectral-density file.  For
+This clears the comparison config's ``curves`` list so ``input_file`` is used
+and plots only the file produced by ``mqed_calc_spec_dens`` above (replace
+``spec_dens_nlayer_output.hdf5`` with its actual output filename). For
 separation-layout files, choose curves by ``plot_settings.separation_indices``
-or by physical distances with ``plot_settings.separation_values_nm``.
+or by physical distances with ``plot_settings.separation_values_nm``. The
+config defaults to physical distances (0, 12, and 120 nm); to use indices
+instead, also set ``plot_settings.separation_values_nm=[]``.
 
 To compare multiple integration methods, run the spectral-density calculation
 for each method and then plot them together with one of the comparison configs.
