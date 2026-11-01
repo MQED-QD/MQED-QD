@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.4.6 - 2026-11-01
+
+### Separation-indexed emission spectra
+
+- Select the nearest `Rx_nm` sample within the configured tolerance when mapping emitter-pair separations to Green tensors, instead of taking the first sample inside an overlapping tolerance window.
+- Added regression coverage for both direct projection and the configured emission-spectrum workflow.
+
+### Mie material resolution
+
+- Fixed Mie material loading for plain YAML mappings by converting material settings to an OmegaConf configuration before requesting dielectric data, including Rakić gold optical fits.
+- Added a regression test for Rakić gold in the Mie material resolver.
+- The Mie and emission-spectrum workflows remain experimental and have not been validated against literature benchmarks.
+
 ## 1.4.5 - 2026-10-08
 
 ### Rakić metal optical response
