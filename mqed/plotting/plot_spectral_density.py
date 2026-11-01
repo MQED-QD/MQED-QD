@@ -5,8 +5,9 @@ Plot Spectral Density
 Plots the generalized spectral density :math:`J_{\\alpha\\beta}(\\omega)` as a
 function of energy (eV) for user-selected emitter pairs or separations.
 
-Reads spectral density data from the HDF5 file produced by
-:mod:`mqed.analysis.spectral_density`.
+Reads spectral density data from HDF5 files produced by
+:mod:`mqed.analysis.spectral_density`. A non-empty ``curves`` list overlays
+one or more files; otherwise ``input_file`` supplies the single-file fallback.
 
 Usage::
 
@@ -143,6 +144,10 @@ def _normalize_separation_values_nm(raw_selection: Any) -> list[float]:
 
 
 def _resolve_separation_indices(ps, Rx_nm) -> list[int]:
+    """Resolve requested physical Rx values in this file before considering indices.
+
+    Separate files can store the same separation at different row indices.
+    """
     values_nm = _normalize_separation_values_nm(ps.get("separation_values_nm", []))
     if not values_nm:
         return _normalize_separation_indices(ps.get("separation_indices", [0]))
@@ -902,6 +907,11 @@ def _resolve_single_input_path(cfg) -> Path:
 
 
 def _plot_dataset_on_axes(data: dict, cfg, ax, curve_cfg=None) -> None:
+    """Route a loaded file to its layout plotter on shared axes.
+
+    Each file supplies its own energy and position grids, so overlaying does
+    not require interpolation or equal grid lengths.
+    """
     J_eV = data["J_eV"]
     energy_eV = data["energy_eV"]
     gf_layout = data["gf_layout"]
@@ -934,6 +944,7 @@ def _plot_dataset_on_axes(data: dict, cfg, ax, curve_cfg=None) -> None:
 
 
 def _iter_input_curves(cfg) -> list[Any]:
+    """Select comparison resources; an empty list enables ``input_file``."""
     curves = cfg.get("curves", None)
     if curves:
         return list(curves)
@@ -956,7 +967,9 @@ def plot_spectral_density(cfg=None) -> None:
     """Plot spectral density from pre-computed HDF5 data.
 
     This is the Hydra CLI entry point.  Configuration is loaded from
-    ``configs/plots/plt_spec_dens_direct_sg.yaml`` by default.
+    ``configs/plots/plt_spec_dens_direct_sg.yaml`` by default. Non-empty
+    ``curves`` takes precedence over ``input_file``; all selected resources
+    contribute lines to the same axes before the figure is saved.
     """
     if cfg is None:
         raise ValueError("Hydra did not provide a plotting configuration.")
@@ -970,7 +983,8 @@ def plot_spectral_density(cfg=None) -> None:
     # --- Apply font config ---
     _apply_font_config(cfg)
 
-    # --- Plot ---
+    # Resolve each comparison resource independently so physical separations
+    # and energy points come from its own HDF5 file, not the first file's grid.
     ps = cfg.plot_settings
     input_curves = _iter_input_curves(cfg)
     if input_curves:

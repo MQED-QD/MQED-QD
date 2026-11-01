@@ -1,7 +1,15 @@
+import subprocess
+import sys
+from pathlib import Path
+from types import SimpleNamespace
+
+import h5py
+import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 from omegaconf import OmegaConf
 
+from mqed.plotting import plot_spectral_density as spectral_plot
 from mqed.plotting.plot_spectral_density import (
     _format_scaled_label,
     _iter_input_curves,
@@ -15,6 +23,145 @@ from mqed.plotting.plot_spectral_density import (
     _resolve_pair_indices,
     _resolve_scan_indices,
 )
+
+
+def _write_separation_h5(path, energy_eV, rx_nm, j_eV):
+    with h5py.File(path, "w") as handle:
+        handle.attrs["gf_layout"] = "separation"
+        handle.create_dataset("energy_eV", data=energy_eV)
+        handle.create_dataset("Rx_nm", data=rx_nm)
+        handle.create_dataset("J_eV", data=j_eV)
+
+
+def _run_plot_config(cfg, output_dir, monkeypatch):
+    monkeypatch.setattr(
+        spectral_plot.HydraConfig,
+        "get",
+        lambda: SimpleNamespace(runtime=SimpleNamespace(output_dir=str(output_dir))),
+    )
+    monkeypatch.setattr(spectral_plot, "setup_loggers_hydra_aware", lambda: None)
+    figures = []
+    original_close = plt.close
+
+    def capture_and_close(fig):
+        figures.append(fig)
+        original_close(fig)
+
+    monkeypatch.setattr(spectral_plot.plt, "close", capture_and_close)
+    with plt.rc_context():
+        spectral_plot.plot_spectral_density.__wrapped__(cfg)
+    return figures[0]
+
+
+def test_entrypoint_overlays_real_files_by_physical_distance(tmp_path, monkeypatch):
+    first = tmp_path / "direct.h5"
+    second = tmp_path / "aware.h5"
+    _write_separation_h5(
+        first, [1.0, 2.0], [0.0, 12.0, 120.0], [[1, 2], [3, 4], [5, 6]],
+    )
+    _write_separation_h5(
+        second, [1.5, 2.5, 3.5], [120.0, 0.0, 12.0],
+        [[50, 60, 70], [10, 20, 30], [30, 40, 50]],
+    )
+    cfg = OmegaConf.create({
+        "input_file": str(tmp_path / "unused.h5"),
+        "curves": [
+            {"path": str(first), "label": "Direct", "color": "tab:blue", "linestyle": "-"},
+            {"path": str(second), "label": "Aware", "color": "tab:orange", "linestyle": "--"},
+        ],
+        "plot_settings": {
+            "separation_indices": [0],
+            "separation_values_nm": [12.0],
+            "label_template": "Rx = {Rx:.0f} nm",
+            "figsize": [4, 3],
+            "filename": "overlay.png",
+            "dpi": 72,
+        },
+    })
+
+    fig = _run_plot_config(cfg, tmp_path, monkeypatch)
+
+    # 12 nm is index 1 in the first file and index 2 in the second: using
+    # index 1 for both would silently compare different physical separations.
+    lines = fig.axes[0].lines
+    assert len(lines) == 2
+    assert [line.get_label() for line in lines] == [
+        "Direct: Rx = 12 nm", "Aware: Rx = 12 nm",
+    ]
+    assert [text.get_text() for text in fig.axes[0].get_legend().get_texts()] == [
+        "Direct: Rx = 12 nm", "Aware: Rx = 12 nm",
+    ]
+    np.testing.assert_array_equal(lines[0].get_xdata(), [1.0, 2.0])
+    np.testing.assert_array_equal(lines[1].get_xdata(), [1.5, 2.5, 3.5])
+    np.testing.assert_array_equal(lines[0].get_ydata(), [3, 4])
+    np.testing.assert_array_equal(lines[1].get_ydata(), [30, 40, 50])
+    assert [line.get_color() for line in lines] == ["tab:blue", "tab:orange"]
+    assert [line.get_linestyle() for line in lines] == ["-", "--"]
+    assert (tmp_path / "overlay.png").stat().st_size > 0
+
+
+def test_entrypoint_empty_curves_uses_single_file_and_indices(tmp_path, monkeypatch):
+    source = tmp_path / "single.h5"
+    _write_separation_h5(
+        source, [1.0, 2.0], [0.0, 12.0, 120.0], [[1, 2], [3, 4], [5, 6]],
+    )
+    cfg = OmegaConf.create({
+        "input_file": str(source),
+        "curves": [],
+        "plot_settings": {
+            "separation_indices": [2],
+            "separation_values_nm": [],
+            "figsize": [4, 3],
+            "filename": "single.png",
+        },
+    })
+
+    fig = _run_plot_config(cfg, tmp_path, monkeypatch)
+
+    assert len(fig.axes[0].lines) == 1
+    assert fig.axes[0].lines[0].get_label() == "Rx = 120.0 nm"
+    np.testing.assert_array_equal(fig.axes[0].lines[0].get_ydata(), [5, 6])
+    assert (tmp_path / "single.png").stat().st_size > 0
+
+
+def test_entrypoint_missing_curve_file_fails_instead_of_using_input_file(tmp_path, monkeypatch):
+    source = tmp_path / "single.h5"
+    _write_separation_h5(source, [1.0], [0.0], [[1.0]])
+    cfg = OmegaConf.create({
+        "input_file": str(source),
+        "curves": [{"path": str(tmp_path / "missing.h5"), "label": "Missing"}],
+        "plot_settings": {"figsize": [4, 3]},
+    })
+
+    before = set(plt.get_fignums())
+    with pytest.raises(FileNotFoundError, match="missing.h5"):
+        _run_plot_config(cfg, tmp_path, monkeypatch)
+    for figure_number in set(plt.get_fignums()) - before:
+        plt.close(figure_number)
+
+
+def test_hydra_cli_single_file_override_saves_plot(tmp_path):
+    source = tmp_path / "cli.h5"
+    _write_separation_h5(
+        source, [1.0, 2.0], [0.0, 12.0, 120.0], [[1, 2], [3, 4], [5, 6]],
+    )
+    output_dir = tmp_path / "hydra_output"
+    result = subprocess.run(
+        [
+            sys.executable, "-m", "mqed.plotting.plot_spectral_density",
+            "--config-name=plt_spec_dens_direct_sg", "curves=[]",
+            "plot_settings.separation_values_nm=[]", "plot_settings.separation_indices=[2]",
+            "plot_settings.separation_multipliers=[1.0]", f"input_file={source}",
+            "plot_settings.filename=cli.png", f"hydra.run.dir={output_dir}",
+        ],
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (output_dir / "cli.png").stat().st_size > 0
 
 
 def test_normalize_separation_indices_supports_multiple_values():
