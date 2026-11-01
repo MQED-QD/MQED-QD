@@ -7,15 +7,15 @@ near plasmonic interfaces using macroscopic quantum electrodynamics.
 Latest Update
 -------------
 
-**Version 1.4.5** adds the Rakić (1998) Lorentz–Drude dielectric model and
-published five-oscillator fits for silver and gold. Select the Ag model in the
-Sommerfeld configuration or use the Au example configuration; existing Drude
-and Drude–Lorentz calculations remain unchanged. See the
-:doc:`Sommerfeld tutorial <tutorials/GF_Sommerfeld>` for the model equation,
-units, and Hydra commands.
+**Version 1.4.6** improves separation-indexed emission-spectrum calculations:
+when multiple ``Rx_nm`` samples fall within the configured tolerance for an
+emitter-pair separation, the nearest sample is selected. Mie material loading
+also accepts Rakić gold settings supplied as a plain YAML mapping. Both changes
+have regression coverage. The Mie and emission-spectrum workflows remain
+experimental and have not been literature-validated.
 
-This release also improves N-layer pole searching and adds regression coverage
-for both the metal fits and corrected pole-search behavior.
+See :doc:`the spectral-density tutorial <tutorials/spectral_density>` for
+Green-tensor layouts and ``CHANGELOG.md`` for the full release notes.
 
 .. image:: _static/workflow_diagram.png
    :width: 600
