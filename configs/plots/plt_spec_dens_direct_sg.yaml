@@ -14,7 +14,7 @@ hydra:
 # Path to the spectral density HDF5 file produced by
 # mqed.analysis.spectral_density. This single-file key is kept for backward
 # compatibility. For comparison plots, use the optional curves list below.
-# input_file: "${oc.env:MQED_ROOT,./data}/example/spec_dens_data/spec_dens_10D_10D_Emin_0.10_Emax_6.00_359pts_height_1nm.hdf5"
+input_file: "${oc.env:MQED_ROOT,./data}/example/spec_dens_data/spec_dens_10D_10D_Emin_0.10_Emax_6.00_359pts_height_1nm.hdf5"
 
 # Optional multi-file comparison mode. Uncomment and edit to overlay spectral
 # density curves from multiple HDF5 files, e.g. direct vs singularity_aware vs
