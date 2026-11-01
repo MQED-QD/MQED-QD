@@ -16,11 +16,11 @@ near plasmonic interfaces using macroscopic quantum electrodynamics (MQED).
 
 ## Latest Update
 
-**Version 1.4.5** adds Rakić (1998) Lorentz–Drude optical fits for silver and gold and improves N-layer pole searching.
+**Version 1.4.6** improves separation-indexed emission-spectrum analysis and Mie material selection.
 
-- **Published metal fits** provide the five-oscillator Rakić parameters for Ag and Au in Sommerfeld Hydra configurations.
-- **Opt-in model selection** leaves the existing Drude and Drude–Lorentz dielectric models unchanged; see the [Sommerfeld tutorial](https://mqed-qd.github.io/MQED-QD/tutorials/GF_Sommerfeld.html) for usage and units.
-- **N-layer pole search** includes corrected search behavior with regression coverage.
+- **Separation-indexed emission spectra** now choose the closest `Rx_nm` sample within the configured tolerance when multiple samples qualify.
+- **Mie material resolution** accepts Rakić gold material settings loaded from a plain YAML mapping.
+- Both changes have regression coverage; the Mie and emission-spectrum workflows remain experimental and are not literature-validated.
 
 See `CHANGELOG.md` for the full release notes.
 
