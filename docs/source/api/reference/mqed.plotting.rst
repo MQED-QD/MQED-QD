@@ -21,6 +21,7 @@
 
    plot_emission_spectrum
    plot_ipr
+   plot_mode_diagnostic
    plot_msd
    plot_pr
    plot_spectral_density

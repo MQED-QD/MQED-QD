@@ -37,6 +37,7 @@ Green-function solver quick choice
 
    GF_Sommerfeld
    GF_NLayer
+   mode_diagnostic
    GF_Mie
    BEM-Vacuum
    BEM-Reconstruct-GF

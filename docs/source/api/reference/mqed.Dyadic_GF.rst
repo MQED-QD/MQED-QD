@@ -27,6 +27,7 @@
    main
    main_mie
    main_nlayer
+   mode_diagnostic
    parallel_slicing
    sommerfeld_singularities
 
